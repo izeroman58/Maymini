@@ -190,7 +190,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.0';
+const APP_VER = '2.6.1';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -1539,7 +1539,7 @@ VIEWS.more = el => {
 
 /* ---------- SALES (รายเดือน: POS + นำเข้าจาก Loyverse/Excel) ---------- */
 async function monthlySales(y) {
-  const [man, days] = await Promise.all([loadTable('Sales').catch(() => []), dailySummary(y + '-01-01', y + '-12-31').catch(() => ({}))]);
+  const [man, days] = await Promise.all([quick(loadTable('Sales'), 900, S.sales || []), quick(dailySummary(y + '-01-01', y + '-12-31'), 900, {})]);
   S.sales = man;
   return TH_MF.map((m, i) => {
     const mm = String(i + 1).padStart(2, '0'), id = `M-${y}-${mm}`, r = man.find(x => x.id === id);
