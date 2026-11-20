@@ -1,6 +1,6 @@
 /* May MiniMart service worker: เปิดแอปได้แม้เน็ตหลุด (ข้อมูลยังซิงก์เมื่อกลับมาออนไลน์) */
-const V = '2.6.3', C = 'maymart-v' + V;
-const JS = ['qr', 'logic', 'cache', 'offline', 'scanner', 'printer', 'pos', 'display', 'reports', 'inventory', 'people', 'quality', 'services', 'owner'].map(n => './js/' + n + '.js?v=' + V);
+const V = '2.6.4', C = 'maymart-v' + V;
+const JS = ['qr', 'logic', 'cache', 'offline', 'scanner', 'printer', 'pos', 'display', 'reports', 'inventory', 'people', 'quality', 'services', 'owner'].map(n => './' + n + '.js?v=' + V);
 const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png'].concat(JS);
 // ติดตั้ง: โหลดของใหม่จากเซิร์ฟเวอร์จริงเสมอ (ไม่ใช้แคชของเบราว์เซอร์) กันได้ไฟล์เก่าปนไฟล์ใหม่
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => Promise.all(CORE.map(u => fetch(new Request(u, { cache: 'reload' })).then(r => { if (r.ok) return c.put(u, r); }).catch(() => { })))).then(() => self.skipWaiting())); });
