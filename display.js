@@ -70,9 +70,18 @@ VIEWS.display = (root, hash) => {
    .dsp .hd{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--red);color:#fff;font-size:clamp(14px,3.2vmin,26px);flex:none}
    .dsp .hd .sh{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
    .dsp .hd .ck{font-weight:800;font-variant-numeric:tabular-nums;font-size:clamp(20px,6vmin,48px);line-height:1}
+   .dsp [hidden]{display:none!important}
    .dsp .bd{flex:1;display:flex;min-height:0}
-   .dsp .lst{flex:1;min-width:0;min-height:0;padding:1vmin 2.5vmin;display:flex;flex-direction:column;justify-content:flex-end}
-   .dsp .gr{display:grid;grid-template-columns:minmax(0,max-content) max-content;column-gap:2.5ch;row-gap:.12em;align-items:baseline;justify-content:center;line-height:1.22;font-weight:600}
+   .dsp .lst{flex:2;min-width:0;min-height:0;padding:1.5vmin 3vmin;display:flex;flex-direction:column;justify-content:flex-start}
+   .dsp .rp{flex:1;min-width:0;background:var(--red);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.2vmin;padding:2vmin}
+   .dsp .rp .rl{font-size:clamp(16px,4.6vmin,40px);font-weight:600}
+   .dsp .rp .rv{font-size:clamp(34px,15vmin,150px);font-weight:800;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+   .dsp .rp .cu{opacity:.55}
+   .dsp .rp .rx{font-size:clamp(14px,3.8vmin,30px)}
+   .dsp .rp .co{font-size:clamp(14px,4vmin,32px)}
+   .dsp .rp .qrl{font-size:clamp(13px,3.4vmin,26px);opacity:.95}
+   .dsp .rp.hasqr .rv{font-size:clamp(28px,10vmin,110px)}
+   .dsp .gr{display:grid;grid-template-columns:minmax(0,max-content) max-content;column-gap:2.5ch;row-gap:.12em;align-items:baseline;justify-content:start;line-height:1.22;font-weight:600}
    .dsp .gr.m{grid-template-columns:max-content max-content}
    .dsp .gr>.n{display:flex;align-items:baseline;gap:.45ch;min-width:0}
    .dsp .gr>.n>b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -88,7 +97,7 @@ VIEWS.display = (root, hash) => {
    .dsp .ft .cs{font-weight:800;color:#222;white-space:nowrap;font-size:clamp(15px,4vmin,30px)}
    .dsp .side{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FFF3F4;padding:2vmin 3vmin;text-align:center;gap:1vmin}
    .dsp .qr{background:#fff;padding:1.5vmin;border-radius:2vmin;box-shadow:0 2px 10px #0001}
-   .dsp .qr img{display:block;image-rendering:pixelated;width:min(52vmin,60vw);height:auto}
+   .dsp .qr img{display:block;image-rendering:pixelated;width:min(42vh,26vw);height:auto}
    .dsp .cen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.5vmin;padding:3vmin}
    .dsp .mk{font-family:var(--flogo);font-weight:800;font-style:italic;color:var(--red);font-size:clamp(60px,24vmin,220px);line-height:1;letter-spacing:-3px}
    .dsp .huge{font-size:clamp(48px,20vmin,200px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
@@ -96,7 +105,7 @@ VIEWS.display = (root, hash) => {
    .dsp .co{background:#FFF7E0;color:#8a5a00;border-radius:1.5vmin;padding:.3em .7em;font-weight:700}
    .fsb{position:fixed;left:8px;bottom:40px;opacity:.25;border:0;background:#0002;border-radius:10px;padding:8px 12px;z-index:5}
    .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:#bbb;margin-right:.3em;vertical-align:middle}.dot.on{background:#4ade80}
-   @media (orientation:portrait){.dsp .bd{flex-direction:column}.dsp .side{order:-1}.dsp .qr img{width:min(62vw,40vh)}}
+   @media (orientation:portrait){.dsp .bd{flex-direction:column}.dsp .lst{flex:1}.dsp .rp{flex:none;padding:1.5vmin 3vmin}.dsp .qr img{width:min(56vw,34vh)}}
   </style><div class="dsp" id="d"><div class="hd"><span class="sh" id="sh"></span><span class="ck" id="ck"></span></div><div class="bd" id="bd"></div><div class="tot" id="tt" hidden></div><div class="ft"><span id="cnt"><span class="dot" id="lk"></span></span><span class="cs" id="cs"></span></div></div><button class="fsb" id="fs">⛶</button>`;
   const bd = $('#bd', root), tt = $('#tt', root);
   const tick = () => { const c = $('#ck', root); if (!c) return clearInterval(tk); c.textContent = bkk() + ' น.'; };
@@ -127,6 +136,8 @@ VIEWS.display = (root, hash) => {
     while (lo <= hi) { const m = (lo + hi) >> 1; render(0, m); if (fitsH()) { bh = m; lo = m + 1; } else hi = m - 1; }
     render(0, Math.max(best, Math.min(bh, Math.round(best * 1.2), Math.round(minF * 2.4))));
   };
+  // ย่อตัวเลขยอดรวมให้พอดีกว้างของแถบแดง
+  const fitOne = el => { if (!el) return; const W = el.parentElement.clientWidth * .92; let f = parseFloat(getComputedStyle(el).fontSize); el.style.fontSize = ''; f = parseFloat(getComputedStyle(el).fontSize); while (el.scrollWidth > W && f > 18) { f -= 2; el.style.fontSize = f + 'px'; } };
   const draw = s => {
     cur = s;
     $('#sh', root).textContent = (s && s.shop) || S.settings.shopName || 'ร้านเมย์ มินิมาร์ท';
@@ -143,15 +154,15 @@ VIEWS.display = (root, hash) => {
       return;
     }
     const amt = s.mode === 'pay' && s.amount != null ? s.amount : s.total;
-    const side = s.mode === 'pay' && s.qr ? `<div class="side"><div style="font-size:4.5vmin;font-weight:700;color:var(--red)">สแกนจ่าย</div><div class="qr"><img src="${s.qr}"></div><div style="font-size:3.4vmin;color:#555">${esc(s.qrLabel || '')}</div></div>` : '';
-    bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div>${side}`;
-    tt.hidden = false;
-    tt.innerHTML = `<div class="l">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวม'}${num(s.disc) ? `<div style="font-size:.75em;opacity:.9">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div><span class="pill" style="font-size:.7em">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co" style="font-size:.75em;margin-top:.2em">รับเงินสด ${LB(s.cashOut)}</div>` : ''}</div><div class="v">${LB(amt)}</div>`;
+    // ฝั่งขวา 1/3 สีแดง: ยอดรวม · QR ชำระเงิน · ส่วนลด · สมาชิก · เงินสดที่ลูกค้าได้รับ (แนวตั้ง: อยู่ด้านล่าง)
+    const qr = s.mode === 'pay' && s.qr ? `<div class="qr"><img src="${s.qr}"></div><div class="qrl">สแกนจ่าย${s.qrLabel ? ' · ' + esc(s.qrLabel) : ''}</div>` : '';
+    bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}</div>`;
+    tt.hidden = true;
     const items = s.items || [];
     // จำนวนที่ถูกตัดตั้งแต่ฝั่ง POS (ส่งมาแค่ 60 ล่าสุด)
     const extra = Math.max(0, (s.count || items.length) - items.length);
     const all = extra ? [{ n: `(+${extra} รายการ)`, q: 1, a: 0 }].concat(items) : items;
-    requestAnimationFrame(() => { const box = $('#lst', root), gr = $('#gr', root); if (box && gr) fit(box, gr, all); });
+    requestAnimationFrame(() => { const box = $('#lst', root), gr = $('#gr', root); if (box && gr) fit(box, gr, all); fitOne($('#rv', root)); });
   };
   const accept = s => {
     // เครื่องขายใช้เวอร์ชันใหม่กว่า → จอลูกค้าโหลดตัวเองใหม่ (ไม่ต้องไปกดรีเฟรชที่จอลูกค้า)
