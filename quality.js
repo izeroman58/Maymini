@@ -4,11 +4,11 @@
 'use strict';
 VIEWS.dataquality = async el => {
   if (ownerOnly(el)) return;
-  el.innerHTML = vhead('ความครบถ้วนของข้อมูล', '', 'more') + '<div id="dq"></div>';
-  if (!S.products.length) { try { await quick(loadProducts(), 1500); } catch (e) { } } else loadProducts().catch(() => { });
+  el.innerHTML = vhead('ความครบถ้วนของข้อมูล', '', 'more') + '<div id="dq"><div class="card center"><span class="spin dark"></span><div class="small muted">กำลังวิเคราะห์...</div></div></div>';
+  if (!S.products.length) { try { await loadProducts(); } catch (e) { } } else loadProducts().catch(() => { });
   const [orders, receipts, sales] = await Promise.all([
-    quick(fetchOrders(addDays(todayISO(), -29), todayISO()), 700, []),
-    quick(loadTable('Receipts'), 700, []), quick(loadTable('Sales'), 700, [])
+    fetchOrders(addDays(todayISO(), -29), todayISO()).catch(() => []),
+    loadTable('Receipts').catch(() => []), loadTable('Sales').catch(() => [])
   ]);
   const P = S.products.filter(p => p.available !== 'N'), N = P.length || 1;
   const isVar = p => !num(p.price);

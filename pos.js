@@ -30,7 +30,6 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .tile .pr{position:absolute;top:4px;right:6px;font-size:11px;background:rgba(0,0,0,.35);border-radius:6px;padding:0 5px}
 .tile .stack{position:absolute;top:6px;right:8px;opacity:.85}
 .tile.edit{outline:2px dashed #FFB300;outline-offset:-3px}
-.tile.mv{outline:4px solid #111;outline-offset:-4px;transform:scale(.94);box-shadow:0 0 0 4px #FFB300}
 .ptabs{display:flex;background:#fff;border-top:1px solid #DDD;padding-bottom:var(--safe-b)}
 .ptabs button{flex:1;border:0;background:none;padding:12px 4px;font-family:var(--fh);font-size:16px;color:#777;border-top:3px solid transparent;cursor:pointer;white-space:nowrap}
 .ptabs button.on{color:var(--red);border-top-color:var(--red)}
@@ -42,13 +41,8 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .ttot{padding:10px 14px;border-top:1px solid #E0E0E0}
 .ttot .kv{border:0;padding:3px 0}
 .payb{margin:0 14px calc(14px + var(--safe-b));min-height:72px;font-size:21px;border-radius:8px;background:#7CB342}
-.who2{display:flex;align-items:center;gap:8px;background:#fff;color:var(--red-d,#9b0019);border-radius:99px;padding:5px 12px 5px 8px;margin:0 6px;white-space:nowrap;font-family:var(--fh);font-size:16px;font-weight:700;box-shadow:0 1px 3px #0003}
-.who2 .ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff;font-size:14px}
-.who2 b{max-width:180px;overflow:hidden;text-overflow:ellipsis}
-.who2 .sep{width:1px;height:20px;background:#0002}
-.who2 .clk{font-variant-numeric:tabular-nums;color:#333}
-@media (max-width:700px){.who2{font-size:14px;padding:4px 10px 4px 6px;gap:6px}.who2 b{max-width:90px}.who2 .ic{width:22px;height:22px}}
-@media (max-width:520px){.who2{flex-direction:column;align-items:flex-start;gap:0;border-radius:10px;padding:2px 8px;font-size:13px;line-height:1.2;margin:0 2px}.who2 .ic,.who2 .sep{display:none}.who2 b{max-width:84px}.who2 .clk{font-size:12px}}
+.who2{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;font-size:13px;margin:0 4px;white-space:nowrap}.who2 b{font-size:14px}.who2 .clk{opacity:.9;font-size:12px}
+@media (max-width:520px){.who2 .clk{display:none}.who2 b{max-width:70px;overflow:hidden;text-overflow:ellipsis}}
 .pop{position:fixed;z-index:60;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);min-width:240px;max-width:min(320px,92vw);overflow:hidden;animation:fi .12s}
 .pop button{display:flex;width:100%;align-items:center;gap:12px;border:0;background:#fff;padding:0 18px;min-height:56px;font-size:17px;text-align:left;cursor:pointer;border-bottom:1px solid #F0F0F0}
 .pop button:last-child{border-bottom:0}.pop button:active{background:#F2F2F2}
@@ -302,7 +296,7 @@ const POS = {
     this.el = el;
     el.innerHTML = `<div class="pos" id="pos">
       <div class="pos-l"><div class="pbar"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button>${isKiosk() ? '' : `<button class="iconbtn" onclick="go('home')" title="Back to management">${I(IC.home, 22)}</button>`}<div class="ttl" id="pt"></div><span class="netpill"></span>
-        <div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 16)}</span><b>${esc(S.user.name)}</b><span class="sep"></span><span class="clk" id="pclk"></span></div>
+        <div class="who2" title="Cashier"><b>${esc(S.user.name)}</b><span class="clk" id="pclk"></span></div>
         <button class="iconbtn" id="psvc" title="Services">${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
         <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="Switch user">${I(IC.switchu, 22)}</button></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
@@ -311,7 +305,7 @@ const POS = {
     $('#pm', el).onclick = () => this.menu();
     $('#psvc', el).onclick = () => svcMenu();
     const tick = () => { const c = $('#pclk', el); if (c) c.textContent = new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) + ' น.'; };
-    tick(); clearInterval(this.clk); this.clk = setInterval(tick, 10000);
+    tick(); clearInterval(this.clk); this.clk = setInterval(tick, 15000);
     $('#ps', el).onclick = () => this.search();
     $('#pcam', el).onclick = () => openScanner((code, ctx) => { const ok = this.scan(code); ctx.showLast(ok ? `<b>${esc(this.t.items[this.lastAdded].name)}</b> · รวม ${baht(this.totals().total)}` : 'ไม่พบ ' + esc(code)); return ''; }, { continuous: true, title: 'สแกนขายสินค้า' });
     // เครื่องยิงบาร์โค้ด USB/Bluetooth/Serial — รับผ่านตัวรับกลาง (js/scanner.js)
@@ -341,12 +335,8 @@ const POS = {
       for (let i = 0; i < n; i++) html += this.tileHTML(pg.tiles[i], i);
       if (!this.edit && !pg.tiles.some(Boolean)) html = `<div style="grid-column:1/-1;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#777;text-align:center;gap:10px">${I(IC.grid, 40)}<div>ยังไม่มีปุ่มลัดในหน้านี้</div>${can('editProducts') ? '<button class="btn sm" id="ed1">ตั้งค่าปุ่มลัด</button>' : '<div class="small">ให้เจ้าของร้านตั้งค่า หรือใช้แท็บ หมวดหมู่ / ค้นหา</div>'}</div>`;
     } else if (isCat && !this.cat) {
-      const ed = this.edit ? ' edit' : '';
-      html = this.catSlots(L).map((name, i) => {
-        if (!name) return `<button class="tile empty${ed}" data-ci="${i}">${this.edit ? '<span style="color:#999;font-size:28px">+</span>' : ''}</button>`;
-        const col = catColor(name), light = /^#(E0E0E0|EEE|F[0-9A-F]{5})$/i.test(col || '');
-        return `<button class="tile${ed}${this.mv === i ? ' mv' : ''}" data-ci="${i}" style="background:${col};${light ? 'color:#333' : ''}"><span class="stack">${I('<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/>', 18)}</span>${esc(name)}</button>`;
-      }).join('');
+      const cats = S.categories.length ? S.categories : [...new Set(S.products.map(p => p.category).filter(Boolean))].map((name, i) => ({ name, color: TILE_COLORS[i % 10] }));
+      html = cats.map(c => `<button class="tile" data-cat="${esc(c.name)}" style="background:${c.color}"><span class="stack">${I('<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/>', 18)}</span>${esc(c.name)}</button>`).join('');
     } else if (isCat) {
       const color = catColor(this.cat);
       html = `<button class="tile" data-back style="background:#fff;color:#555">${I(IC.back, 28)}<br>กลับ</button>` + S.products.filter(p => (p.category || '') === this.cat && p.available !== 'N').sort((a, b) => a.name.localeCompare(b.name, 'th')).map(p => this.prodTile(p, color)).join('');
@@ -361,11 +351,9 @@ const POS = {
       $('#aq', this.el).oninput = e => { this.aq = e.target.value; drawAll(); };
       drawAll();
     } else {
-      const catGrid = isCat && !this.cat, fill = (isPage || (catGrid && this.catSlots(L).length <= L.cols * L.rows)) && !narrow;
-      const editBar = this.edit && (isPage || catGrid);
+      const fill = isPage && !narrow;
       $('#pmain', this.el).innerHTML = `<div class="pgrid ${fill ? 'fill' : ''}" style="grid-template-columns:repeat(${cols},1fr);${fill ? `grid-template-rows:repeat(${L.rows},1fr)` : 'grid-auto-rows:minmax(88px,auto)'}">${html}</div>` +
-        (editBar && isPage ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">โหมดแก้ไขหน้าขาย — แตะช่องเพื่อแก้</b><button class="btn ghost sm" id="pgn">ชื่อหน้า</button><button class="btn ghost sm" id="pga">+ หน้าใหม่</button>${L.pages.length > 1 ? '<button class="btn ghost sm" id="pgd">ลบหน้า</button>' : ''}<button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '')
-        + (editBar && catGrid ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">${this.mv != null ? '👉 แตะช่องปลายทางเพื่อย้าย/สลับ' : 'แก้ตำแหน่งหมวดหมู่ — แตะหมวดแล้วแตะช่องปลายทาง · แตะช่องว่างเพื่อเพิ่ม'}</b><button class="btn ghost sm" id="cgr">เรียงอัตโนมัติ</button><button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '') + this.tabsHTML(tabs);
+        (this.edit && isPage ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">โหมดแก้ไขหน้าขาย — แตะช่องเพื่อแก้</b><button class="btn ghost sm" id="pgn">ชื่อหน้า</button><button class="btn ghost sm" id="pga">+ หน้าใหม่</button>${L.pages.length > 1 ? '<button class="btn ghost sm" id="pgd">ลบหน้า</button>' : ''}<button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '') + this.tabsHTML(tabs);
       const ed1 = $('#ed1', this.el); if (ed1) ed1.onclick = async () => { if (await gate('editProducts')) { this.edit = true; this.render(); } };
       $$('[data-i]', this.el).forEach(b => {
         const i = +b.dataset.i; let pressT;
@@ -373,56 +361,18 @@ const POS = {
         if (can('editProducts')) { b.addEventListener('pointerdown', () => pressT = setTimeout(async () => { if (!(await gate('editProducts'))) return; this.edit = true; this.render(); navigator.vibrate && navigator.vibrate(30); }, 700)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(pressT))); }
       });
       $$('[data-cat]', this.el).forEach(b => b.onclick = () => { this.cat = b.dataset.cat; this.render(); });
-      $$('[data-ci]', this.el).forEach(b => {
-        const i = +b.dataset.ci; let pressT;
-        b.onclick = () => {
-          const slots = this.catSlots(L);
-          if (!this.edit) { if (slots[i]) { this.cat = slots[i]; this.render(); } return; }
-          if (this.mv != null) { const j = this.mv; this.mv = null; if (j !== i) { [slots[i], slots[j]] = [slots[j], slots[i]]; L.catTiles = slots; return saveL(); } return this.render(); }
-          if (slots[i]) { this.mv = i; return this.render(); }
-          this.pickCat(L, i);
-        };
-        if (can('editProducts')) { b.addEventListener('pointerdown', () => pressT = setTimeout(async () => { if (this.edit || !(await gate('editProducts'))) return; this.edit = true; this.mv = null; this.render(); navigator.vibrate && navigator.vibrate(30); }, 700)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(pressT))); }
-      });
-      const saveL = () => this.saveLayout(L);
       $$('[data-back]', this.el).forEach(b => b.onclick = () => { this.cat = null; this.render(); });
       $$('[data-sku]', this.el).forEach(b => b.onclick = () => this.add(IDX.bySku[b.dataset.sku]));
       if (this.edit) {
-        const save = () => this.saveLayout(L);
-        $('#pge', this.el).onclick = () => { this.edit = false; this.mv = null; this.render(); };
-        const cgr = $('#cgr', this.el); if (cgr) cgr.onclick = async () => { if (!(await confirmDlg('เรียงหมวดหมู่ใหม่ตามลำดับเดิมของระบบ (ล้างตำแหน่งที่จัดไว้)?', 'เรียงใหม่'))) return; L.catTiles = []; save(); };
-        if (catGrid) { $('#pgs', this.el).onclick = () => this.gridSizeDlg(L, save); }
-        if (isPage) $('#pgn', this.el).onclick = () => { const ov = sheet('ชื่อหน้า', `<input class="in" id="nm" value="${esc(L.pages[this.tab].name)}">`, '<button class="btn block" id="ok">บันทึก</button>'); $('#ok', ov).onclick = () => { L.pages[this.tab].name = $('#nm', ov).value.trim() || 'หน้า'; ov.remove(); save(); }; };
-        if (isPage) $('#pga', this.el).onclick = () => { L.pages.push({ name: 'หน้า ' + (L.pages.length + 1), tiles: [] }); this.tab = L.pages.length - 1; save(); };
+        const save = async () => { try { await saveSetting('posLayout', L); } catch (e) { toast(e.message, 1); } this.render(); };
+        $('#pge', this.el).onclick = () => { this.edit = false; this.render(); };
+        $('#pgn', this.el).onclick = () => { const ov = sheet('ชื่อหน้า', `<input class="in" id="nm" value="${esc(L.pages[this.tab].name)}">`, '<button class="btn block" id="ok">บันทึก</button>'); $('#ok', ov).onclick = () => { L.pages[this.tab].name = $('#nm', ov).value.trim() || 'หน้า'; ov.remove(); save(); }; };
+        $('#pga', this.el).onclick = () => { L.pages.push({ name: 'หน้า ' + (L.pages.length + 1), tiles: [] }); this.tab = L.pages.length - 1; save(); };
         const d = $('#pgd', this.el); if (d) d.onclick = async () => { if (await confirmDlg('ลบหน้านี้?', 'ลบ', true)) { L.pages.splice(this.tab, 1); this.tab = 0; save(); } };
-        if (isPage) $('#pgs', this.el).onclick = () => this.gridSizeDlg(L, save);
+        $('#pgs', this.el).onclick = () => { const ov = sheet('ขนาดตาราง', `<div class="grid2"><label class="f"><span>คอลัมน์</span><input class="in" type="number" id="c" min="2" max="8" value="${L.cols}"></label><label class="f"><span>แถว</span><input class="in" type="number" id="r" min="2" max="8" value="${L.rows}"></label></div>`, '<button class="btn block" id="ok">บันทึก</button>'); $('#ok', ov).onclick = () => { L.cols = Math.max(2, Math.min(8, +$('#c', ov).value)); L.rows = Math.max(2, Math.min(8, +$('#r', ov).value)); ov.remove(); save(); }; };
       }
     }
-    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { this.tab = +b.dataset.tab; this.cat = null; this.mv = null; LS.set('posTab', this.tab); this.render(); });
-  },
-  // ตำแหน่งหมวดหมู่ในแท็บ "หมวดหมู่" (จัดวางเองได้เหมือนหน้าขายบ่อย) — หมวดใหม่จะเติมช่องว่างแรกให้อัตโนมัติ
-  // บันทึกผังหน้าขาย: แสดงผลทันที แล้วส่งขึ้นเซิร์ฟเวอร์เบื้องหลัง
-  saveLayout(L) {
-    S.settings.posLayout = JSON.stringify(L); LS.set('settings', S.settings); this.render();
-    clearTimeout(this.lt); this.lt = setTimeout(() => saveSetting('posLayout', L).catch(e => toast('บันทึกผังหน้าขายไม่สำเร็จ: ' + e.message, 1)), 400);
-  },
-  catSlots(L) {
-    const all = (S.categories.length ? S.categories.map(c => c.name) : [...new Set(S.products.map(p => p.category).filter(Boolean))]);
-    const has = new Set(all), slots = (L.catTiles || []).map(n => (n && has.has(n) ? n : null));
-    const placed = new Set(slots.filter(Boolean));
-    all.forEach(n => { if (placed.has(n)) return; const k = slots.indexOf(null); if (k >= 0 && k < Math.max(slots.length, L.cols * L.rows)) slots[k] = n; else slots.push(n); placed.add(n); });
-    const n = Math.max(L.cols * L.rows, Math.ceil(slots.length / L.cols) * L.cols);
-    while (slots.length < n) slots.push(null);
-    return slots;
-  },
-  pickCat(L, i) {
-    const slots = this.catSlots(L);
-    const ov = sheet('เลือกหมวดหมู่ใส่ช่องนี้', `<div class="small muted" style="margin:-4px 0 8px">หมวดที่อยู่ช่องอื่นแล้วจะถูกย้ายมาช่องนี้</div><div class="grid2">${(S.categories.length ? S.categories : slots.filter(Boolean).map(n => ({ name: n }))).map(c => `<button class="btn" data-n="${esc(c.name)}" style="background:${catColor(c.name)};min-height:56px">${esc(c.name)}</button>`).join('')}</div>`);
-    $$('[data-n]', ov).forEach(b => b.onclick = async () => { const nm = b.dataset.n, j = slots.indexOf(nm); if (j >= 0) slots[j] = null; slots[i] = nm; L.catTiles = slots; ov.remove(); this.saveLayout(L); });
-  },
-  gridSizeDlg(L, save) {
-    const ov = sheet('ขนาดตาราง', `<div class="grid2"><label class="f"><span>คอลัมน์</span><input class="in" type="number" id="c" min="2" max="8" value="${L.cols}"></label><label class="f"><span>แถว</span><input class="in" type="number" id="r" min="2" max="8" value="${L.rows}"></label></div><div class="small muted">ใช้กับทั้งหน้าขายบ่อยและแท็บหมวดหมู่</div>`, '<button class="btn block" id="ok">บันทึก</button>');
-    $('#ok', ov).onclick = () => { L.cols = Math.max(2, Math.min(8, +$('#c', ov).value)); L.rows = Math.max(2, Math.min(8, +$('#r', ov).value)); ov.remove(); save(); };
+    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { this.tab = +b.dataset.tab; this.cat = null; LS.set('posTab', this.tab); this.render(); });
   },
   tabsHTML(tabs) { return `<div class="ptabs">${tabs.map((t, i) => `<button data-tab="${i}" class="${i === this.tab ? 'on' : ''}">${t === '☰' ? I(IC.grid, 22) : esc(t)}</button>`).join('')}</div>`; },
   prodTile(p, color) {
@@ -459,7 +409,7 @@ const POS = {
     };
     seg('tt', 't', 't'); seg('sh', 'shape', 's'); refw();
     $$('#sw .swatch', ov).forEach(s => s.onclick = () => { t.color = s.dataset.c; $$('#sw .swatch', ov).forEach(x => x.classList.toggle('on', x === s)); });
-    const save = () => { ov.remove(); this.saveLayout(L); };
+    const save = async () => { ov.remove(); try { await saveSetting('posLayout', L); } catch (e) { toast(e.message, 1); } this.render(); };
     $('#ok', ov).onclick = () => { if (!t.ref) return toast('กรุณาเลือก' + (t.t === 'c' ? 'หมวดหมู่' : 'สินค้า'), 1); t.label = $('#lb', ov).value.trim(); t.noImg = $('#ni', ov).checked; if (!t.color) delete t.color; pg.tiles[i] = t; save(); };
     $('#clr', ov).onclick = () => { pg.tiles[i] = null; save(); };
   },
@@ -551,7 +501,7 @@ const POS = {
       ['บริการ โอนเงิน/เติมเงิน/จ่ายบิล', IC.sale, () => svcMenu()],
       ['จอแสดงผลฝั่งลูกค้า', IC.monitor, () => go('displayset')],
       ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
-      can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)' + (canStrict('editProducts') ? '' : ' 🔒'), IC.edit, async () => { if (!this.edit && !(await gate('editProducts'))) return; this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }],
+      can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)' + (canStrict('editProducts') ? '' : ' 🔒'), IC.edit, async () => { if (!this.edit && !(await gate('editProducts'))) return; this.edit = !this.edit; if (this.tab >= this.layout().pages.length) this.tab = 0; this.render(); }],
       ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)],
       Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }],
       ['สลับผู้ใช้ / ออกจากระบบ', IC.switchu, () => switchUser()]

@@ -63,12 +63,6 @@ document.addEventListener('mm:data', e => {
   }, 250);
 });
 
-/* quick: รอข้อมูลไม่เกิน ms มิลลิวินาที ถ้ายังไม่มา แสดงหน้าด้วยค่าสำรองไปก่อน แล้ววาดใหม่เองเมื่อข้อมูลมาถึง (ห้ามหมุนรอนาน) */
-function quick(p, ms, fb) {
-  let late = false; const v = S.view, a = S.viewArg;
-  p.then(() => { if (late && S.view === v && S.viewArg === a) { clearTimeout(quick.t); quick.t = setTimeout(() => { if (S.view === v && !$('.ov')) { const y = scrollY; go(v, a); setTimeout(() => scrollTo(0, y), 60); } }, 200); } }, () => { });
-  return Promise.race([p.catch(() => fb), new Promise(r => setTimeout(() => { late = true; r(fb); }, ms))]);
-}
 /* ---------- ตัวโหลดข้อมูลที่ใช้แคช ---------- */
 loadTable = t => swr('t:' + t, () => api('list', { table: t }).then(r => r.rows), 20000);
 function dailySummary(from, to) { return swr('d:' + from + '|' + to, () => api('dailySummary', { from, to }).then(r => r.days), 60000); }
