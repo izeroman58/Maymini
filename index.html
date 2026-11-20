@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#D6001C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>May MiniMart — ระบบจัดการร้านเมย์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --red:#D6001C; --red-d:#A80016; --red-l:#FFE9EC; --green:#0B8A3E; --green-l:#E5F5EC;
+  --ink:#1D1B1C; --ink2:#5E5759; --ink3:#9A9294; --line:#ECE6E7; --bg:#F7F4F2; --card:#fff;
+  --amber:#B86E00; --amber-l:#FFF3DC; --blue:#1F5FBF; --blue-l:#E8F0FC;
+  --r:16px; --sh:0 1px 2px rgba(60,20,25,.06),0 4px 16px rgba(60,20,25,.06);
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Noto Sans Thai",system-ui,sans-serif}
+h1,h2,h3,.disp{font-family:Prompt,"Noto Sans Thai",sans-serif;margin:0;line-height:1.25}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--blue)}
+.hidden{display:none!important}
+/* top bar */
+.top{position:sticky;top:0;z-index:20;background:var(--red);color:#fff;padding:calc(10px + var(--safe-t)) 16px 12px;display:flex;align-items:center;gap:10px}
+.logo{display:flex;align-items:baseline;gap:4px;font-family:Prompt;font-weight:800;letter-spacing:-.5px}
+.logo small{font-size:12px;font-weight:600;opacity:.9}
+.logo b{font-size:24px;font-style:italic}
+.logo i{font-size:11px;font-style:italic;font-weight:600;opacity:.85;margin-left:2px}
+.top .sp{flex:1}
+.top .who{font-size:12px;text-align:right;line-height:1.2;opacity:.95}
+.chip-role{display:inline-block;background:rgba(255,255,255,.2);border-radius:99px;padding:1px 8px;font-size:11px;margin-top:2px}
+.net{width:8px;height:8px;border-radius:50%;background:#7CF0A6;display:inline-block;margin-right:4px}
+.net.off{background:#FFC24B}
+/* layout */
+main{max-width:860px;margin:0 auto;padding:14px 14px calc(96px + var(--safe-b))}
+.vhead{display:flex;align-items:center;gap:10px;margin:4px 2px 12px}
+.vhead h2{font-size:21px;flex:1}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
+.card h3{font-size:16px;margin-bottom:8px}
+.muted{color:var(--ink2)} .small{font-size:13px} .tiny{font-size:12px}
+.row{display:flex;gap:8px;align-items:center} .wrap{flex-wrap:wrap} .grow{flex:1;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media(max-width:420px){.grid4{grid-template-columns:repeat(2,1fr)}}
+.right{text-align:right} .center{text-align:center}
+.num{font-variant-numeric:tabular-nums}
+/* buttons */
+.btn{border:0;border-radius:12px;padding:11px 16px;background:var(--red);color:#fff;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;transition:transform .08s,filter .15s}
+.btn:active{transform:scale(.97)} .btn:disabled{opacity:.5}
+.btn.ghost{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.green{background:var(--green)} .btn.soft{background:var(--red-l);color:var(--red-d)}
+.btn.sm{min-height:34px;padding:6px 12px;font-size:13px;border-radius:10px}
+.btn.block{width:100%}
+.iconbtn{border:0;background:transparent;padding:8px;border-radius:10px;cursor:pointer;display:inline-flex}
+.iconbtn:active{background:rgba(0,0,0,.06)}
+.top .iconbtn{color:#fff}
+/* inputs */
+label.f{display:block;margin-bottom:10px}
+label.f>span{display:block;font-size:13px;color:var(--ink2);margin-bottom:4px;font-weight:500}
+.in{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;min-height:44px;outline:none}
+.in:focus{border-color:var(--red)}
+textarea.in{min-height:80px}
+.search{position:relative}
+.search .in{padding-left:40px;padding-right:48px;border-radius:14px;min-height:48px}
+.search svg.s{position:absolute;left:12px;top:13px;color:var(--ink3)}
+.search .scanbtn{position:absolute;right:4px;top:4px;height:40px;width:40px;border-radius:10px;border:0;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:5px 12px;font-size:13px;cursor:pointer}
+.chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.tag{display:inline-block;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:600}
+.tag.red{background:var(--red-l);color:var(--red-d)} .tag.green{background:var(--green-l);color:var(--green)}
+.tag.amber{background:var(--amber-l);color:var(--amber)} .tag.blue{background:var(--blue-l);color:var(--blue)} .tag.gray{background:#F0ECEC;color:var(--ink2)}
+/* list */
+.list{background:#fff;border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.item{display:flex;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.item:last-child{border-bottom:0}
+.item:active{background:#FBF8F7}
+.item .t{font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.item .m{font-size:12px;color:var(--ink3);margin-top:2px}
+.price{font-family:Prompt;font-weight:700;font-size:18px;color:var(--red);white-space:nowrap}
+.av{width:42px;height:42px;border-radius:12px;background:var(--red-l);color:var(--red-d);display:flex;align-items:center;justify-content:center;font-family:Prompt;font-weight:700;flex:none;font-size:15px}
+.empty{padding:30px 16px;text-align:center;color:var(--ink3)}
+/* stats */
+.stat{background:#fff;border-radius:14px;padding:12px;box-shadow:var(--sh)}
+.stat .k{font-size:12px;color:var(--ink2)} .stat .v{font-family:Prompt;font-weight:700;font-size:20px;margin-top:2px}
+.qa{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.qa button{border:0;background:#fff;border-radius:16px;box-shadow:var(--sh);padding:12px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12.5px;font-weight:600;cursor:pointer}
+.qa .ic{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;margin-bottom:8px;font-size:14px}
+.alert.red{background:var(--red-l);color:#7A0010} .alert.amber{background:var(--amber-l);color:#6B4000} .alert.green{background:var(--green-l);color:#05502A} .alert.blue{background:var(--blue-l);color:#123B78}
+/* bottom nav */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 6px calc(6px + var(--safe-b))}
+.nav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--ink3);padding:4px 6px;min-width:58px;cursor:pointer}
+.nav button.on{color:var(--red);font-weight:600}
+.nav .fab{margin-top:-26px;color:var(--red);font-weight:600}
+body.full .top,body.full .nav{display:none}
+body.full main{max-width:none;padding:0}
+.outbox{position:fixed;right:10px;top:calc(64px + var(--safe-t));z-index:40;background:var(--amber);color:#fff;border-radius:99px;padding:3px 10px;font-size:12px;font-weight:600;box-shadow:var(--sh)}
+.nav .fab .c{width:58px;height:58px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(214,0,28,.4);border:4px solid var(--bg)}
+/* sheet / modal */
+.ov{position:fixed;inset:0;background:rgba(20,10,12,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center;animation:fi .15s}
+@keyframes fi{from{opacity:0}}
+@keyframes su{from{transform:translateY(30px);opacity:.4}}
+.sheet{background:var(--bg);width:100%;max-width:640px;max-height:92vh;border-radius:22px 22px 0 0;display:flex;flex-direction:column;animation:su .2s}
+@media(min-width:700px){.ov{align-items:center}.sheet{border-radius:22px;max-height:88vh}}
+.sheet .sh{display:flex;align-items:center;gap:8px;padding:14px 16px 8px}
+.sheet .sh h3{flex:1;font-size:18px}
+.sheet .sb{overflow:auto;padding:4px 16px 16px}
+.sheet .sf{padding:10px 16px calc(12px + var(--safe-b));display:flex;gap:8px;border-top:1px solid var(--line);background:#fff;border-radius:0 0 22px 22px}
+.toast{position:fixed;left:50%;bottom:calc(92px + var(--safe-b));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;z-index:90;font-size:14px;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:su .2s}
+.toast.err{background:var(--red-d)}
+/* scanner */
+.scan{position:fixed;inset:0;background:#000;z-index:80;display:flex;flex-direction:column}
+.scan video{flex:1;width:100%;object-fit:cover;min-height:0}
+.scan .frame{position:absolute;left:10%;right:10%;top:30%;height:22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
+.scan .frame:after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff3049;box-shadow:0 0 8px #ff3049;animation:ln 1.6s ease-in-out infinite}
+@keyframes ln{0%,100%{transform:translateY(-34px)}50%{transform:translateY(34px)}}
+.scan .bar{position:absolute;left:0;right:0;top:0;padding:calc(12px + var(--safe-t)) 14px 12px;display:flex;gap:8px;align-items:center;color:#fff;background:linear-gradient(rgba(0,0,0,.6),transparent)}
+.scan .bot{position:absolute;left:0;right:0;bottom:0;padding:12px 14px calc(16px + var(--safe-b));background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff}
+.scan .last{background:rgba(255,255,255,.95);color:var(--ink);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+/* login */
+.login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:radial-gradient(120% 60% at 50% 0%,#FFE1E5 0%,var(--bg) 60%)}
+.login .brand{text-align:center;margin-bottom:18px}
+.login .brand .mk{font-family:Prompt;font-weight:800;font-style:italic;font-size:56px;color:var(--red);line-height:1;letter-spacing:-2px}
+.login .brand .mk small{font-size:18px;font-style:normal;vertical-align:top;margin-right:2px}
+.login .brand .mm{font-family:Prompt;font-style:italic;color:var(--red);font-weight:600}
+.pinpad{display:grid;grid-template-columns:repeat(3,72px);gap:12px;justify-content:center;margin-top:14px}
+.pinpad button{height:60px;border-radius:18px;border:0;background:#fff;box-shadow:var(--sh);font-family:Prompt;font-size:22px;font-weight:600;cursor:pointer}
+.pinpad button:active{background:var(--red-l)}
+.dots{display:flex;gap:12px;justify-content:center;margin:12px 0 4px}
+.dots i{width:14px;height:14px;border-radius:50%;background:#E3DADB}
+.dots i.on{background:var(--red)}
+/* tables */
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th{text-align:left;font-weight:600;color:var(--ink2);font-size:12px;padding:6px 6px;border-bottom:1.5px solid var(--line)}
+table.t td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+table.t input.in{min-height:36px;padding:6px 8px;border-radius:9px}
+.scroll-x{overflow-x:auto}
+canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 4px 14px rgba(0,0,0,.08);max-width:100%;image-rendering:pixelated}
+.seg{display:flex;background:#EFE9E8;border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:9px;padding:7px 6px;font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.menu .item .av{background:#F2EDEC;color:var(--ink)}
+.prog{height:8px;background:#EFE9E8;border-radius:9px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--red)}
+.kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.big-price{font-family:Prompt;font-weight:800;font-size:44px;color:var(--red);line-height:1}
+.spin{width:22px;height:22px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;display:inline-block}
+.spin.dark{border-color:#eee;border-top-color:var(--red)}
+@keyframes sp{to{transform:rotate(360deg)}}
+.busy{position:fixed;inset:0;background:rgba(255,255,255,.6);z-index:95;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;font-weight:600}
+/* print */
+#printArea{display:none}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block;position:absolute;left:0;top:0;width:100%;font-size:12px;color:#000}
+  #printArea table{width:100%;border-collapse:collapse}
+  #printArea th,#printArea td{border:1px solid #999;padding:3px 5px}
+  #printArea h2{font-size:16px;margin:8px 0}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="printArea"></div>
+
+<script>
+/* =========================================================
+   May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
+   ========================================================= */
+'use strict';
+const APP_VER = '1.0.0';
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  del(k) { try { localStorage.removeItem('mm_' + k); } catch (e) { } }
+};
+const S = {
+  apiUrl: LS.get('apiUrl', ''), token: LS.get('token', ''), user: LS.get('user', null),
+  products: LS.get('products', []), settings: LS.get('settings', {}), receipts: [], licenses: [], sales: [],
+  view: 'home', online: navigator.onLine,
+  device: LS.get('device', null), perms: LS.get('perms', {}), defs: {}, categories: LS.get('categories', []), shift: null
+};
+if (!S.device || !S.device.id) { S.device = { id: 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }; LS.set('device', S.device); }
+const devType = () => { const u = navigator.userAgent; if (/iPad|Macintosh/.test(u) && 'ontouchend' in document) return 'iPad'; if (/iPhone/.test(u)) return 'iPhone'; if (/Android/.test(u)) return /Mobile/.test(u) ? 'มือถือ Android' : 'แท็บเล็ต Android'; return 'คอมพิวเตอร์'; };
+const can = p => !!S.user && (S.user.role === 'owner' || !!S.perms[p]);
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(n) ? n : 0; };
+const money = (v, d = 2) => num(v).toLocaleString('th-TH', { minimumFractionDigits: d, maximumFractionDigits: d });
+const baht = v => '฿' + money(v, num(v) % 1 ? 2 : 0);
+const isOwner = () => S.user && S.user.role === 'owner';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const todayISO = () => { const d = new Date(Date.now() + 7 * 3600e3); return d.toISOString().slice(0, 10); };
+const TH_M = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const TH_MF = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+const thDate = iso => { if (!iso) return '-'; const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); if (!y) return iso; return d + ' ' + TH_M[m - 1] + ' ' + String(y + 543).slice(-2); };
+const daysTo = iso => Math.round((new Date(iso + 'T00:00:00+07:00') - new Date(todayISO() + 'T00:00:00+07:00')) / 864e5);
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/* ---------- icons ---------- */
+const I = (d, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const IC = {
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+  box: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+  scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/>',
+  receipt: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M18 6L6 18M6 6l12 12"/>',
+  tag: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  print: '<path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>',
+  cam: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  tax: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h3M14 14h2M8 18h3M14 18h2"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
+  chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
+  io: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  bt: '<path d="M7 7l10 10-5 5V2l5 5L7 17"/>', back: '<path d="M15 18l-6-6 6-6"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>', alert: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>', file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>', bolt: '<path d="M13 2L3 14h9l-1 8 10-12h-9z"/>',
+  cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>',
+  user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  dots: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>', grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', refund: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>', image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+  wifi: '<path d="M5 12.6a10 10 0 0 1 14 0M1.4 9a15 15 0 0 1 21.2 0M8.5 16.1a5 5 0 0 1 7 0M12 20h.01"/>', count: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  sale: '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', leaf: '<path d="M11 20A7 7 0 0 1 4 13c0-5 4-9 16-10-1 12-5 16-9 17z"/><path d="M4 21c4-6 7-9 11-11"/>'
+};
+
+/* ---------- UI helpers ---------- */
+function toast(msg, err) {
+  const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4200 : 2400);
+}
+let busyEl = null;
+function busy(on, msg) {
+  if (on) { if (!busyEl) { busyEl = document.createElement('div'); busyEl.className = 'busy'; document.body.appendChild(busyEl); } busyEl.innerHTML = `<span class="spin dark" style="width:34px;height:34px"></span><div>${esc(msg || 'กำลังทำงาน...')}</div>`; }
+  else if (busyEl) { busyEl.remove(); busyEl = null; }
+}
+function sheet(title, body, foot, opts = {}) {
+  const ov = document.createElement('div'); ov.className = 'ov';
+  ov.innerHTML = `<div class="sheet" role="dialog"><div class="sh"><h3>${title}</h3><button class="iconbtn" data-x>${I(IC.x)}</button></div><div class="sb">${body}</div>${foot ? `<div class="sf">${foot}</div>` : ''}</div>`;
+  const close = () => { ov.remove(); opts.onClose && opts.onClose(); };
+  ov.addEventListener('click', e => { if (e.target === ov && !opts.sticky) close(); });
+  $('[data-x]', ov).onclick = close; ov.close = close;
+  document.body.appendChild(ov); return ov;
+}
+function confirmDlg(msg, okText = 'ยืนยัน', danger) {
+  return new Promise(res => {
+    const ov = sheet('ยืนยัน', `<p style="margin:4px 0 8px">${msg}</p>`, `<button class="btn ghost grow" data-n>ยกเลิก</button><button class="btn grow ${danger ? '' : 'green'}" data-y>${okText}</button>`, { onClose: () => res(false) });
+    $('[data-n]', ov).onclick = () => ov.close();
+    $('[data-y]', ov).onclick = () => { ov.remove(); res(true); };
+  });
+}
+function beep() {
+  try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 1850; g.gain.value = .08; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .09); } catch (e) { }
+  try { navigator.vibrate && navigator.vibrate(40); } catch (e) { }
+}
+function loadScript(src, globalName) {
+  if (globalName && window[globalName]) return Promise.resolve();
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('โหลดไลบรารีไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)')); document.head.appendChild(s); });
+}
+function download(name, content, mime) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function fileToDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+async function compressImage(file, max = 1800, q = .82) {
+  if (!/^image\//.test(file.type)) return { dataUrl: await fileToDataURL(file), mime: file.type || 'application/octet-stream' };
+  const url = URL.createObjectURL(file); const img = new Image(); img.src = url; await img.decode();
+  const sc = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+  return { dataUrl: c.toDataURL('image/jpeg', q), mime: 'image/jpeg' };
+}
+
+/* =========================================================
+   API — ออนไลน์ (Apps Script) หรือ โหมดทดลองในเครื่อง
+   ========================================================= */
+async function api(action, payload = {}) {
+  if (!S.apiUrl) return Local.handle(action, payload);
+  let res;
+  try {
+    res = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, payload, token: S.token, deviceId: S.device.id }) });
+  } catch (e) { const er = new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต'); er.offline = true; throw er; }
+  let j; try { j = await res.json(); } catch (e) { const er = new Error('เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (ตรวจ URL / การ Deploy)'); er.offline = true; throw er; }
+  if (!j.ok) {
+    if (/^AUTH:/.test(j.error)) { logout(true); throw new Error(j.error.replace('AUTH: ', '')); }
+    throw new Error(j.error || 'เกิดข้อผิดพลาด');
+  }
+  return j;
+}
+
+/* โหมดทดลอง: ใช้ Logic ชุดเดียวกับเซิร์ฟเวอร์ แต่เก็บข้อมูลในเบราว์เซอร์ */
+const LocalDB = {
+  key: t => Logic.SCHEMA[t].key,
+  all(t) {
+    const d = LS.get('L_' + t, null); if (d) return d;
+    if (t === 'Users') return [{ id: 'U1', name: 'เจ้าของร้าน', username: 'owner', pinHash: this.hash('1234'), role: 'owner', active: 'Y' }, { id: 'U2', name: 'พนักงานหน้าร้าน', username: 'staff', pinHash: this.hash('1111'), role: 'staff', active: 'Y' }];
+    if (t === 'Settings') return [['shopName', 'ร้านเมย์ มินิมาร์ท'], ['storeLabel', 'ร้านเมย์มินิมาร์ท'], ['address', 'บ้านกะเลา ต.หมื่นศรี อ.สำโรงทาบ จ.สุรินทร์'], ['phone', '092-806-5163'], ['promptpay', '0928065163']].map(([key, value]) => ({ key, value }));
+    return [];
+  },
+  save(t, rows) { if (!LS.set('L_' + t, rows)) throw new Error('พื้นที่เก็บข้อมูลในเครื่องเต็ม — ควรเชื่อมต่อเซิร์ฟเวอร์ Google'); },
+  read(t, opt = {}) {
+    let r = this.all(t).map(o => ({ ...o })); const sc = Logic.SCHEMA[t];
+    if (opt.ids) { const set = new Set(opt.ids.map(String)); r = r.filter(o => set.has(String(o[sc.key]))); }
+    else if ((opt.from || opt.to) && sc.dateCol) r = r.filter(o => String(o[sc.dateCol]) >= (opt.from || '') && String(o[sc.dateCol]) <= (opt.to || '￿'));
+    return r;
+  },
+  upsert(t, rows) { const k = this.key(t), all = this.all(t), ix = {}; all.forEach((r, i) => ix[r[k]] = i); rows.forEach(r => { if (ix[r[k]] != null) Object.assign(all[ix[r[k]]], r); else { ix[r[k]] = all.length; all.push({ ...r }); } }); this.save(t, all); },
+  append(t, rows) { this.save(t, this.all(t).concat(rows)); },
+  remove(t, ids) { if (ids === '*') return this.save(t, []); const k = this.key(t), set = new Set(ids.map(String)); this.save(t, this.all(t).filter(r => !set.has(String(r[k])))); },
+  hash: s => { let h = 5381; s = 'mm|' + s; for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0; return 'L' + h.toString(16); },
+  now: () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 19),
+  log() { },
+  settings() { const o = {}; this.all('Settings').forEach(r => o[r.key] = r.value); return o; }
+};
+const Local = {
+  async handle(a, p) {
+    await sleep(15);
+    switch (a) {
+      case 'login': { const r = Logic.login(LocalDB, p.username, p.pin, p.device); r.token = 'local'; return r; }
+      case 'logout': case 'ping': return {};
+      case 'upload': return { fileId: '', fileUrl: p.base64.length < 300000 ? p.base64 : '' };
+      case 'ocr': { await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'Tesseract'); const r = await Tesseract.recognize(p.base64, 'tha+eng'); return { engine: 'tesseract', text: r.data.text }; }
+      case 'displayPush': return { v: String(Date.now()) };
+      case 'displayPull': return { v: '', state: null };
+      case 'testAlert': return { sent: 0 };
+    }
+    return Logic.handle(LocalDB, S.user, a, p);
+  }
+};
+const nextSku = prods => Logic.nextSku(prods);
+
+/* ---------- data loading ---------- */
+async function loadProducts(force) {
+  if (!force && S.products.length && Date.now() - LS.get('productsAt', 0) < 60e3) return S.products;
+  const r = await api('list', { table: 'Products' });
+  S.products = r.rows; LS.set('products', S.products); LS.set('productsAt', Date.now()); buildIndex(); return S.products;
+}
+async function loadSettings() {
+  try {
+    const r = await api('bootstrap');
+    S.settings = r.settings; S.perms = r.perms; S.defs = r.defs; S.categories = r.categories.sort((a, b) => num(a.sort) - num(b.sort)); S.shift = r.shift;
+    LS.set('settings', S.settings); LS.set('perms', S.perms); LS.set('categories', S.categories);
+    document.dispatchEvent(new Event('mm:settings'));
+  } catch (e) { if (!e.offline) toast(e.message, 1); }
+}
+const cfg = (k, d) => { try { const v = S.settings[k]; return v ? (typeof d === 'object' ? { ...d, ...JSON.parse(v) } : v) : d; } catch (e) { return d; } };
+async function saveSetting(k, v) { const value = typeof v === 'object' ? JSON.stringify(v) : String(v); await api('upsert', { table: 'Settings', rows: [{ key: k, value }] }); S.settings[k] = value; LS.set('settings', S.settings); }
+const catColor = name => (S.categories.find(c => c.name === name) || {}).color || '#9E9E9E';
+async function loadTable(t) { const r = await api('list', { table: t }); return r.rows; }
+
+/* ---------- product search index ---------- */
+let IDX = { byBarcode: {}, bySku: {} };
+const norm = s => String(s || '').toLowerCase().replace(/[\s\-_.,/()]+/g, '');
+function buildIndex() {
+  IDX = { byBarcode: {}, bySku: {} };
+  S.products.forEach(p => { p._n = norm(p.name + ' ' + p.sku + ' ' + p.barcode + ' ' + p.category); if (p.barcode) String(p.barcode).split(/[,; ]+/).forEach(b => b && (IDX.byBarcode[b] = p)); IDX.bySku[p.sku] = p; });
+}
+function findByCode(code) {
+  code = String(code).trim();
+  if (IDX.byBarcode[code]) return { p: IDX.byBarcode[code] };
+  if (/^\d{12}$/.test(code) && IDX.byBarcode['0' + code]) return { p: IDX.byBarcode['0' + code] };
+  if (/^0\d{12}$/.test(code) && IDX.byBarcode[code.slice(1)]) return { p: IDX.byBarcode[code.slice(1)] };
+  // บาร์โค้ดฝังราคา 20IIIIIPPPPPC
+  if (/^20\d{11}$/.test(code)) { const item = code.slice(2, 7), price = Number(code.slice(7, 12)) / 100; const p = S.products.find(x => String(x.sku).padStart(5, '0').slice(-5) === item); if (p) return { p, price }; }
+  if (IDX.bySku[code]) return { p: IDX.bySku[code] };
+  return null;
+}
+function searchProducts(q, f = {}) {
+  const toks = String(q || '').toLowerCase().split(/\s+/).map(norm).filter(Boolean);
+  return S.products.filter(p => {
+    if (f.cat && (p.category || 'ไม่ระบุหมวด') !== f.cat) return false;
+    if (f.flag === 'low' && !(p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0))) return false;
+    if (f.flag === 'nobar' && p.barcode) return false;
+    if (f.flag === 'nocost' && num(p.cost) > 0) return false;
+    if (f.flag === 'best' && p.bestseller !== 'Y') return false;
+    if (f.flag === 'fresh' && !/ของสด/.test(p.category || '') && p.byWeight !== 'Y') return false;
+    return toks.every(t => p._n.includes(t));
+  });
+}
+
+/* =========================================================
+   Barcode: EAN-13 / EAN-8 (เขียนเอง) + Code128 (JsBarcode)
+   ========================================================= */
+const EAN = {
+  L: ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'],
+  G: ['0100111', '0110011', '0011011', '0100001', '0011101', '0111001', '0000101', '0010001', '0001001', '0010111'],
+  R: ['1110010', '1100110', '1101100', '1000010', '1011100', '1001110', '1010000', '1000100', '1001000', '1110100'],
+  P: ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'],
+  check(d) { let s = 0; const a = d.split('').reverse(); a.forEach((c, i) => s += +c * (i % 2 ? 1 : 3)); return String((10 - s % 10) % 10); },
+  valid(code) { return /^\d{8}$|^\d{13}$/.test(code) && this.check(code.slice(0, -1)) === code.slice(-1); },
+  bits(code) {
+    if (code.length === 13) { const f = +code[0], par = this.P[f]; let b = '101'; for (let i = 1; i <= 6; i++) b += this[par[i - 1]][+code[i]]; b += '01010'; for (let i = 7; i <= 12; i++) b += this.R[+code[i]]; return b + '101'; }
+    let b = '101'; for (let i = 0; i < 4; i++) b += this.L[+code[i]]; b += '01010'; for (let i = 4; i < 8; i++) b += this.R[+code[i]]; return b + '101';
+  }
+};
+function internalBarcode(sku) {
+  let d = String(sku || '').replace(/\D/g, '');
+  if (!d) d = String(Date.now()).slice(-8);
+  const body = '21' + d.slice(-10).padStart(10, '0');
+  return body + EAN.check(body);
+}
+function priceBarcode(sku, price) {
+  const body = '20' + String(sku).replace(/\D/g, '').padStart(5, '0').slice(-5) + String(Math.round(num(price) * 100)).padStart(5, '0').slice(-5);
+  return body + EAN.check(body);
+}
+/* วาดบาร์โค้ดลง canvas ctx ที่ x,y ขนาด w*h  คืนค่า true/false */
+function drawBarcode(ctx, code, x, y, w, h, showText = true, fontPx = 18) {
+  code = String(code || '').trim(); if (!code) return false;
+  let bits;
+  if (EAN.valid(code)) bits = EAN.bits(code);
+  else if (window.JsBarcode) {
+    const enc = {}; try { JsBarcode(enc, code, { format: 'CODE128' }); } catch (e) { return false; }
+    bits = enc.encodings.map(e => e.data).join('');
+  } else return false;
+  const tH = showText ? fontPx + 2 : 0;
+  const mod = Math.max(1, Math.floor(w / bits.length));
+  const bw = mod * bits.length; const ox = x + Math.floor((w - bw) / 2);
+  ctx.fillStyle = '#000';
+  for (let i = 0; i < bits.length; i++) if (bits[i] === '1') ctx.fillRect(ox + i * mod, y, mod, h - tH);
+  if (showText) { ctx.font = `600 ${fontPx}px "Noto Sans Thai",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(code, x + w / 2, y + h + 1); }
+  return bw <= w;
+}
+
+/* =========================================================
+   NIIMBOT B1 / B21 — พิมพ์ผ่าน Web Bluetooth
+   ========================================================= */
+const NB = {
+  SVC: 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', CHR: 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
+  dev: null, ch: null, buf: [], waiters: [], info: null,
+  get connected() { return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.ch); },
+  async connect() {
+    if (!navigator.bluetooth) throw new Error('เบราว์เซอร์นี้ไม่รองรับ Bluetooth — ใช้ Chrome บน Android หรือคอมพิวเตอร์ (iPhone ใช้ปุ่ม "บันทึกรูป" แล้วพิมพ์ผ่านแอป NIIMBOT)');
+    this.dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'B1' }, { namePrefix: 'B21' }, { namePrefix: 'B2' }, { namePrefix: 'B3' }, { namePrefix: 'D' }, { services: [this.SVC] }], optionalServices: [this.SVC] });
+    this.dev.addEventListener('gattserverdisconnected', () => { this.ch = null; renderPrinterBadge(); });
+    const srv = await this.dev.gatt.connect();
+    const svc = await srv.getPrimaryService(this.SVC);
+    this.ch = await svc.getCharacteristic(this.CHR);
+    await this.ch.startNotifications();
+    this.ch.addEventListener('characteristicvaluechanged', e => this.onData(new Uint8Array(e.target.value.buffer)));
+    const name = this.dev.name || '';
+    LS.set('printerModel', /^B21/i.test(name) ? 'B21' : /^B1/i.test(name) ? 'B1' : LS.get('printerModel', 'B1'));
+    return name;
+  },
+  disconnect() { try { this.dev && this.dev.gatt.disconnect(); } catch (e) { } this.ch = null; },
+  pkt(cmd, data = []) { let c = cmd ^ data.length; data.forEach(b => c ^= b); return Uint8Array.from([0x55, 0x55, cmd, data.length, ...data, c & 0xff, 0xAA, 0xAA]); },
+  onData(bytes) {
+    this.buf.push(...bytes);
+    while (this.buf.length >= 7) {
+      const s = this.buf.findIndex((b, i) => b === 0x55 && this.buf[i + 1] === 0x55);
+      if (s < 0) { this.buf = []; return; } if (s > 0) this.buf.splice(0, s);
+      if (this.buf.length < 4) return; const len = this.buf[3]; if (this.buf.length < len + 7) return;
+      const p = { cmd: this.buf[2], data: this.buf.slice(4, 4 + len) }; this.buf.splice(0, len + 7);
+      const w = this.waiters.shift(); if (w) w(p);
+    }
+  },
+  async write(u8) { if (this.ch.writeValueWithoutResponse) await this.ch.writeValueWithoutResponse(u8); else await this.ch.writeValue(u8); },
+  async send(cmd, data = [], wait = true, timeout = 2000) {
+    if (!this.connected) throw new Error('ยังไม่ได้เชื่อมต่อเครื่องพิมพ์');
+    let pr = null;
+    if (wait) pr = new Promise((res, rej) => { const fn = p => { clearTimeout(t); res(p); }; const t = setTimeout(() => { const i = this.waiters.indexOf(fn); if (i >= 0) this.waiters.splice(i, 1); rej(new Error('เครื่องพิมพ์ไม่ตอบสนอง')); }, timeout); this.waiters.push(fn); });
+    await this.write(this.pkt(cmd, data));
+    return pr;
+  },
+  /* อ่านชิป RFID ของม้วนกระดาษ */
+  async readPaper() {
+    const r = await this.send(0x1A, [1]); const d = r.data;
+    if (!d.length || d[0] === 0) return null;
+    let i = 8; const uuid = d.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+    const bl = d[i++]; const barcode = String.fromCharCode(...d.slice(i, i + bl)); i += bl;
+    const sl = d[i++]; const serial = String.fromCharCode(...d.slice(i, i + sl)); i += sl;
+    const total = (d[i] << 8) | d[i + 1], used = (d[i + 2] << 8) | d[i + 3], type = d[i + 4];
+    return { uuid, barcode, serial, total, used, left: total - used, type };
+  },
+  /* rows: Array<Uint8Array> (ขาว=0 ดำ=1, bit สูงอยู่ซ้าย) */
+  async print(rows, cols, { copies = 1, density = 3, labelType = 1, model = 'B1', onProgress } = {}) {
+    const H = rows.length, hi = n => (n >> 8) & 0xff, lo = n => n & 0xff;
+    await this.send(0x21, [density]);
+    await this.send(0x23, [labelType]);
+    if (model === 'B1') {
+      await this.send(0x01, [hi(copies), lo(copies), 0, 0, 0, 0, 0]);
+      await this.send(0x03, [1]);
+      await this.send(0x13, [hi(H), lo(H), hi(cols), lo(cols), hi(copies), lo(copies)]);
+    } else {
+      await this.send(0x01, [1]);
+      await this.send(0x03, [1]);
+      await this.send(0x13, [hi(H), lo(H), hi(cols), lo(cols)]);
+      await this.send(0x15, [hi(copies), lo(copies)]);
+    }
+    const third = Math.ceil(rows[0].length / 3);
+    for (let y = 0; y < H;) {
+      const row = rows[y];
+      if (row.every(b => b === 0)) {
+        let n = 1; while (y + n < H && n < 255 && rows[y + n].every(b => b === 0)) n++;
+        await this.send(0x84, [hi(y), lo(y), n], false); y += n;
+      } else {
+        let n = 1; while (y + n < H && n < 255 && rows[y + n].every((b, i) => b === row[i])) n++;
+        const cnt = [0, 1, 2].map(k => { let c = 0; row.slice(k * third, (k + 1) * third).forEach(b => { for (; b; b &= b - 1) c++; }); return Math.min(255, c); });
+        await this.send(0x85, [hi(y), lo(y), ...cnt, n, ...row], false); y += n;
+      }
+      await sleep(6); onProgress && onProgress(y / H * .8);
+    }
+    await this.send(0xE3, [1]);
+    const t0 = Date.now();
+    while (Date.now() - t0 < 25000) {
+      await sleep(400);
+      try { const st = await this.send(0xA3, [1], true, 1500); const page = (st.data[0] << 8) | st.data[1]; onProgress && onProgress(.8 + .2 * Math.min(1, page / copies)); if (page >= copies) break; } catch (e) { }
+    }
+    for (let i = 0; i < 5; i++) { try { const r = await this.send(0xF3, [1], true, 1500); if (r.data[0] === 1) break; } catch (e) { } await sleep(300); }
+  }
+};
+/* แปลง canvas -> แถว bitmap 1-bit */
+function canvasToRows(cv, rotate) {
+  let src = cv;
+  if (rotate) { const r = document.createElement('canvas'); r.width = cv.height; r.height = cv.width; const x = r.getContext('2d'); x.translate(r.width, 0); x.rotate(Math.PI / 2); x.drawImage(cv, 0, 0); src = r; }
+  const W = src.width, H = src.height, d = src.getContext('2d').getImageData(0, 0, W, H).data;
+  const bpr = Math.ceil(W / 8), rows = [];
+  for (let y = 0; y < H; y++) {
+    const row = new Uint8Array(bpr);
+    for (let x = 0; x < W; x++) { const i = (y * W + x) * 4; const lum = d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114; if (d[i + 3] > 100 && lum < 140) row[x >> 3] |= 0x80 >> (x & 7); }
+    rows.push(row);
+  }
+  return { rows, cols: bpr * 8 };
+}
+
+/* ---------- label templates ---------- */
+const PAPERS = [
+  { id: '40x30', w: 40, h: 30, name: '40×30 มม.' }, { id: '50x30', w: 50, h: 30, name: '50×30 มม.' },
+  { id: '40x20', w: 40, h: 20, name: '40×20 มม.' }, { id: '50x20', w: 50, h: 20, name: '50×20 มม.' },
+  { id: '30x20', w: 30, h: 20, name: '30×20 มม.' }, { id: '30x15', w: 30, h: 15, name: '30×15 มม.' },
+  { id: '50x40', w: 50, h: 40, name: '50×40 มม.' }, { id: '50x50', w: 50, h: 50, name: '50×50 มม.' },
+  { id: '60x40', w: 60, h: 40, name: '60×40 มม. (B21 ไม่รองรับ)' }
+];
+const TEMPLATES = [
+  { id: 'price', name: 'ราคา + บาร์โค้ด' }, { id: 'fresh', name: 'ของสด (วันที่แพ็ค/หมดอายุ)' },
+  { id: 'barcode', name: 'บาร์โค้ดอย่างเดียว' }, { id: 'shelf', name: 'ป้ายราคาชั้นวาง' }
+];
+function wrapText(ctx, text, maxW, maxLines) {
+  const out = []; let line = '';
+  const chars = Array.from(String(text));
+  // ตัดคำแบบง่าย (ภาษาไทยไม่มีช่องว่าง) ใช้ Intl.Segmenter ถ้ามี
+  let parts = chars;
+  if (window.Intl && Intl.Segmenter) parts = Array.from(new Intl.Segmenter('th', { granularity: 'word' }).segment(text), s => s.segment);
+  for (const w of parts) {
+    if (ctx.measureText(line + w).width > maxW && line) { out.push(line); line = w.trimStart(); if (out.length === maxLines) break; }
+    else line += w;
+  }
+  if (out.length < maxLines && line) out.push(line);
+  if (out.length === maxLines && (out.join('').length < String(text).length)) { let l = out[maxLines - 1]; while (l && ctx.measureText(l + '…').width > maxW) l = l.slice(0, -1); out[maxLines - 1] = l + '…'; }
+  return out;
+}
+function renderLabel(cv, o) {
+  const dpm = 8; const paper = PAPERS.find(p => p.id === o.paper) || PAPERS[0];
+  const W = Math.round(paper.w * dpm), H = Math.round(paper.h * dpm);
+  cv.width = W; cv.height = H; const c = cv.getContext('2d');
+  c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.fillStyle = '#000';
+  const pad = Math.round(1.5 * dpm), iw = W - pad * 2; const p = o.product || {};
+  const price = o.price != null && o.price !== '' ? num(o.price) : num(p.price);
+  let code = o.barcode || p.barcode || '';
+  if (o.embedPrice && p.sku) code = priceBarcode(p.sku, price);
+  const F = (w, s) => `${w} ${s}px Prompt,"Noto Sans Thai",sans-serif`;
+  const small = Math.max(14, Math.round(H * .085));
+  let y = pad;
+  if (o.tpl === 'barcode') {
+    c.font = F(600, small); c.textAlign = 'center'; c.textBaseline = 'top';
+    wrapText(c, p.name || '', iw, 1).forEach(l => { c.fillText(l, W / 2, y); y += small * 1.15; });
+    drawBarcode(c, code, pad, y + 2, iw, H - y - pad - 2, true, Math.max(14, Math.round(small * .9)));
+    return { code, W, H };
+  }
+  if (o.tpl === 'shelf') {
+    const nameS = Math.max(16, Math.round(H * .12));
+    c.font = F(600, nameS); c.textAlign = 'left'; c.textBaseline = 'top';
+    wrapText(c, p.name || '', iw, 2).forEach(l => { c.fillText(l, pad, y); y += nameS * 1.12; });
+    const bh = Math.round(H * .26), pS = Math.round(Math.min(H - y - bh - pad, W * .26));
+    c.font = F(800, pS); c.textAlign = 'right'; c.textBaseline = 'alphabetic';
+    c.fillText(money(price, price % 1 ? 2 : 0), W - pad, y + pS * .95);
+    c.font = F(600, Math.round(pS * .32)); c.textAlign = 'left'; c.fillText(p.byWeight === 'Y' ? 'บาท/กก.' : 'บาท', pad, y + pS * .9);
+    if (code) drawBarcode(c, code, pad, H - pad - bh, Math.round(iw * .7), bh, true, Math.max(13, Math.round(bh * .28)));
+    return { code, W, H };
+  }
+  // price / fresh
+  const shop = S.settings.shopName || 'ร้านเมย์ มินิมาร์ท';
+  c.font = F(600, small); c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText(shop, pad, y);
+  if (o.tpl === 'fresh' && o.weight) { c.textAlign = 'right'; c.fillText(o.weight + ' กก.', W - pad, y); }
+  y += small * 1.2;
+  const nameS = Math.max(16, Math.round(H * (o.tpl === 'fresh' ? .1 : .115)));
+  c.font = F(600, nameS); c.textAlign = 'left';
+  const nl = wrapText(c, p.name || '', iw, H < 200 || o.tpl === 'fresh' ? 1 : 2);
+  nl.forEach(l => { c.fillText(l, pad, y); y += nameS * 1.1; });
+  const dateLines = [];
+  if (o.tpl === 'fresh') {
+    const pk = o.packDate || todayISO(); dateLines.push('แพ็ค ' + thDate(pk));
+    const days = o.shelfDays != null && o.shelfDays !== '' ? num(o.shelfDays) : num(p.shelfLifeDays);
+    if (days > 0) { const e = new Date(pk + 'T12:00:00+07:00'); e.setDate(e.getDate() + days); dateLines.push('หมดอายุ ' + thDate(e.toISOString().slice(0, 10))); }
+    const ds = Math.max(13, Math.round(small * .9)); c.font = F(500, ds); c.textAlign = 'left';
+    let dl = dateLines.join(' · '); while (dl && c.measureText(dl).width > iw) dl = dl.slice(0, -1);
+    c.fillText(dl, pad, y); y += ds * 1.2; dateLines.length = 0;
+  }
+  const bh = code ? Math.max(Math.round(H * (o.tpl === 'fresh' ? .26 : .3)), 48) : 0;
+  const priceTop = y; const priceBottom = H - pad - bh - (code ? 4 : 0);
+  const pS = Math.max(20, Math.min(Math.round((priceBottom - priceTop) * .95), Math.round(W * .2)));
+  c.font = F(800, pS); c.textAlign = 'right'; c.textBaseline = 'alphabetic';
+  const pTxt = money(price, price % 1 ? 2 : 0);
+  c.fillText(pTxt, W - pad, priceTop + pS * .92);
+  const pw = c.measureText(pTxt).width;
+  c.font = F(600, Math.max(13, Math.round(pS * .3))); c.textAlign = 'right';
+  c.fillText('฿', W - pad - pw - 4, priceTop + pS * .9);
+  if (dateLines.length) { c.font = F(500, Math.max(13, Math.round(small * .95))); c.textAlign = 'left'; dateLines.forEach((l, i) => c.fillText(l, pad, priceTop + small * (i + 1) * 1.15)); }
+  if (code) drawBarcode(c, code, pad, H - pad - bh, iw, bh, true, Math.max(13, Math.round(bh * .24)));
+  return { code, W, H };
+}
+
+/* =========================================================
+   Camera scanner (BarcodeDetector → ZXing fallback)
+   ========================================================= */
+async function openScanner(onCode, opts = {}) {
+  const el = document.createElement('div'); el.className = 'scan';
+  el.innerHTML = `<video playsinline muted></video><div class="frame"></div>
+   <div class="bar"><button class="iconbtn" data-x>${I(IC.x, 26)}</button><div class="grow disp" style="font-size:17px">${esc(opts.title || 'สแกนบาร์โค้ด')}</div><button class="iconbtn" data-torch title="ไฟฉาย">${I(IC.bolt, 24)}</button></div>
+   <div class="bot"><div class="last hidden"></div><div class="row"><input class="in grow" inputmode="numeric" placeholder="หรือพิมพ์/ยิงบาร์โค้ด แล้วกด Enter" style="background:rgba(255,255,255,.95)"><button class="btn" data-ok>ตกลง</button></div><div class="tiny center" style="margin-top:8px;opacity:.85" data-st>กำลังเปิดกล้อง...</div></div>`;
+  document.body.appendChild(el);
+  const video = $('video', el), st = $('[data-st]', el), inp = $('input', el);
+  let stream = null, stop = false, last = '', lastAt = 0, reader = null, timer = null;
+  const close = () => { stop = true; clearTimeout(timer); try { reader && reader.reset(); } catch (e) { } stream && stream.getTracks().forEach(t => t.stop()); el.remove(); opts.onClose && opts.onClose(); };
+  const hit = code => {
+    code = String(code).trim(); if (!code) return;
+    if (code === last && Date.now() - lastAt < 1800) return; last = code; lastAt = Date.now(); beep();
+    const r = onCode(code, { showLast: html => { const b = $('.last', el); b.innerHTML = html; b.classList.remove('hidden'); } });
+    if (!opts.continuous || r === 'close') close();
+  };
+  $('[data-x]', el).onclick = close;
+  $('[data-ok]', el).onclick = () => { hit(inp.value); inp.value = ''; };
+  inp.onkeydown = e => { if (e.key === 'Enter') { hit(inp.value); inp.value = ''; } };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    video.srcObject = stream; await video.play();
+    const track = stream.getVideoTracks()[0];
+    $('[data-torch]', el).onclick = async () => { try { const on = !track._torch; await track.applyConstraints({ advanced: [{ torch: on }] }); track._torch = on; } catch (e) { toast('กล้องนี้ไม่รองรับไฟฉาย'); } };
+    let useNative = false;
+    if ('BarcodeDetector' in window) { try { const f = await BarcodeDetector.getSupportedFormats(); useNative = f.includes('ean_13'); } catch (e) { } }
+    if (useNative) {
+      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code', 'itf'] });
+      st.textContent = 'เล็งบาร์โค้ดให้อยู่ในกรอบ';
+      const loop = async () => { if (stop) return; try { const r = await det.detect(video); if (r.length) hit(r[0].rawValue); } catch (e) { } timer = setTimeout(loop, 120); };
+      loop();
+    } else {
+      st.textContent = 'กำลังโหลดตัวอ่านบาร์โค้ด...';
+      await loadScript('https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js', 'ZXing');
+      const hints = new Map(); hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.QR_CODE]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      stream.getTracks().forEach(t => t.stop()); stream = null;
+      reader = new ZXing.BrowserMultiFormatReader(hints, 150);
+      await reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } } }, video, (res) => { if (res && !stop) hit(res.getText()); });
+      st.textContent = 'เล็งบาร์โค้ดให้อยู่ในกรอบ';
+    }
+  } catch (e) {
+    st.textContent = 'เปิดกล้องไม่ได้: ' + (e.name === 'NotAllowedError' ? 'ยังไม่อนุญาตให้ใช้กล้อง' : e.message) + ' — พิมพ์รหัสด้านบนแทนได้';
+    inp.focus();
+  }
+  return close;
+}
+
+/* =========================================================
+   CSV / Excel import-export (รูปแบบเดียวกับไฟล์ Loyverse)
+   ========================================================= */
+function parseCSV(text) {
+  text = text.replace(/^﻿/, ''); const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true; else if (ch === ',') { row.push(f); f = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += ch;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(v => String(v).trim() !== ''));
+}
+const csvCell = v => { v = v == null ? '' : String(v); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+const toCSV = rows => '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+const MAP = [
+  ['handle', /^handle$/i], ['sku', /^sku$|^รหัส/i], ['name', /^name$|^ชื่อ/i], ['category', /^category$|^หมวด/i], ['description', /^description$|^รายละเอียด/i],
+  ['byWeight', /^sold by weight$/i], ['cost', /^cost$|^ต้นทุน/i], ['barcode', /^barcode$|^บาร์โค้ด/i], ['trackStock', /^track stock$/i],
+  ['available', /^available for sale/i], ['price', /^price|^ราคา/i], ['stock', /^in stock|^คงเหลือ|^สต็อก/i], ['lowStock', /^low stock/i], ['bestseller', /^modifier.*ขายดี/i],
+  ['unit', /^unit$|^หน่วย/i], ['shelfLifeDays', /^shelf|^อายุสินค้า/i]
+];
+function rowsToProducts(rows) {
+  const hi = rows.findIndex(r => r.some(c => /^sku$/i.test(String(c).trim())) && r.some(c => /^name$/i.test(String(c).trim())));
+  if (hi < 0) throw new Error('ไม่พบหัวตาราง SKU / Name ในไฟล์ (ใช้รูปแบบเดียวกับไฟล์ตัวอย่าง)');
+  const head = rows[hi].map(h => String(h).trim());
+  const idx = {}; MAP.forEach(([k, re]) => { const i = head.findIndex(h => re.test(h)); if (i >= 0 && idx[k] == null) idx[k] = i; });
+  const out = [];
+  rows.slice(hi + 1).forEach(r => {
+    const o = {}; Object.keys(idx).forEach(k => o[k] = String(r[idx[k]] == null ? '' : r[idx[k]]).trim());
+    if (!o.sku && !o.name) return; if (!o.sku) o.sku = '';
+    if (o.barcode && /e\+/i.test(o.barcode)) o.barcode = String(BigInt(Math.round(Number(o.barcode))));
+    out.push(o);
+  });
+  let next = Number(nextSku(S.products.concat(out)));
+  out.forEach(o => { if (!o.sku) o.sku = String(next++); });
+  return out;
+}
+function productsToLoyverseRows(list) {
+  const st = S.settings.storeLabel || 'ร้านเมย์มินิมาร์ท';
+  const head = ['Handle', 'SKU', 'Name', 'Category', 'Description', 'Sold by weight', 'Option 1 name', 'Option 1 value', 'Option 2 name', 'Option 2 value', 'Option 3 name', 'Option 3 value', 'Cost', 'Barcode', 'SKU of included item', 'Quantity of included item', 'Track stock', `Available for sale [${st}]`, `Price [${st}]`, `In stock [${st}]`, `Low stock [${st}]`, 'Modifier - "ขายดี"'];
+  const slug = s => String(s).toLowerCase().trim().replace(/[\s/]+/g, '-').replace(/[^\p{L}\p{N}\p{M}\-]/gu, '').slice(0, 60);
+  return [head].concat(list.map(p => [p.handle || slug(p.name), p.sku, p.name, p.category, p.description, p.byWeight || 'N', '', '', '', '', '', '', p.cost, p.barcode, '', '', p.trackStock || 'N', p.available || 'Y', p.price, p.trackStock === 'Y' ? p.stock : '', p.trackStock === 'Y' ? p.lowStock : '', p.bestseller || 'N']));
+}
+
+/* =========================================================
+   ภาษีเงินได้บุคคลธรรมดา (เงินได้ 40(8) ขายสินค้า)
+   ========================================================= */
+const TAX = {
+  BR: [[150000, 0], [300000, .05], [500000, .10], [750000, .15], [1000000, .20], [2000000, .25], [5000000, .30], [Infinity, .35]],
+  progressive(net) { let tax = 0, prev = 0; for (const [cap, r] of this.BR) { if (net <= prev) break; tax += (Math.min(net, cap) - prev) * r; prev = cap; } return Math.max(0, tax); },
+  bracket(net) { let prev = 0; for (const [cap, r] of this.BR) { if (net <= cap) return r; prev = cap; } return .35; },
+  calc({ gross, actualExp, allowance, half }) {
+    const flatExp = gross * .6;
+    const minThreshold = half ? 60000 : 120000;
+    const one = exp => {
+      const net = Math.max(0, gross - exp - allowance);
+      const t1 = this.progressive(net);
+      const t2 = gross >= minThreshold ? gross * .005 : 0;
+      const tax = t2 > 5000 ? Math.max(t1, t2) : t1;
+      return { exp, net, t1, t2, tax, usedMin: t2 > 5000 && t2 > t1, rate: this.bracket(net) };
+    };
+    const flat = one(flatExp), actual = one(actualExp);
+    return { flat, actual, best: actual.tax < flat.tax ? 'actual' : 'flat' };
+  },
+  deadlines(today = todayISO()) {
+    const y = +today.slice(0, 4), out = [];
+    for (const yy of [y, y + 1]) {
+      out.push({ form: 'ภ.ง.ด.90', what: 'ภาษีทั้งปี ' + (yy - 1 + 543), paper: `${yy}-03-31`, online: `${yy}-04-08` });
+      out.push({ form: 'ภ.ง.ด.94', what: 'ภาษีครึ่งปี ม.ค.–มิ.ย. ' + (yy + 543), paper: `${yy}-09-30`, online: `${yy}-10-08` });
+    }
+    return out.filter(d => d.online >= today).sort((a, b) => a.paper.localeCompare(b.paper)).slice(0, 2);
+  }
+};
+
+/* =========================================================
+   Receipt OCR text → items (กรณีไม่ได้ใช้ Gemini)
+   ========================================================= */
+function bigrams(s) { s = norm(s); const a = []; for (let i = 0; i < s.length - 1; i++) a.push(s.slice(i, i + 2)); return a; }
+function sim(a, b) { const A = bigrams(a), B = bigrams(b); if (!A.length || !B.length) return 0; const m = {}; B.forEach(x => m[x] = (m[x] || 0) + 1); let hit = 0; A.forEach(x => { if (m[x]) { hit++; m[x]--; } }); return 2 * hit / (A.length + B.length); }
+function matchProduct(name, code) {
+  if (code) { const f = findByCode(code); if (f) return { p: f.p, score: 1 }; }
+  if (!name || norm(name).length < 3) return null;
+  let best = null, bs = 0;
+  for (const p of S.products) { const s = sim(name, p.name); if (s > bs) { bs = s; best = p; } }
+  return bs >= .45 ? { p: best, score: bs } : null;
+}
+function parseReceiptText(text) {
+  const lines = String(text).split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const res = { supplier: lines[0] || '', supplierTaxId: '', docNo: '', date: '', items: [], total: 0, vat: 0 };
+  const NUM = /-?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|-?\d+\.\d{1,2}|-?\d+/g;
+  const SKIP = /รวม|ทั้งสิ้น|total|vat|ภาษี|เงินสด|เงินทอน|ทอน|change|cash|ส่วนลด|discount|ยอด|ชำระ|บัตร|สมาชิก|tel|โทร|เลขที่|วันที่|date|ใบกำกับ|ใบเสร็จ|สาขา|pos|ขอบคุณ/i;
+  lines.forEach(l => {
+    const tax = l.match(/(?<!\d)\d{13}(?!\d)/); if (tax && /ภาษี|tax|เลขประจำ/i.test(l)) res.supplierTaxId = tax[0];
+    const dm = l.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (dm && !res.date) { let y = +dm[3]; if (y < 100) y += y > 50 ? 2500 : 2000; if (y > 2400) y -= 543; const m = +dm[2], d = +dm[1]; if (m >= 1 && m <= 12 && d >= 1 && d <= 31) res.date = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
+    const dn = l.match(/(?:เลขที่|no\.?|inv|เอกสาร)\s*[:#]?\s*([A-Z0-9\-\/]{4,})/i); if (dn && !res.docNo) res.docNo = dn[1];
+    if (/รวมทั้งสิ้น|ยอดสุทธิ|grand\s*total|net\s*total|total/i.test(l)) { const ns = (l.match(NUM) || []).map(num); if (ns.length) res.total = Math.max(res.total, ...ns); }
+    if (/vat|ภาษีมูลค่าเพิ่ม/i.test(l) && !/รวม/.test(l)) { const ns = (l.match(NUM) || []).map(num).filter(n => n !== 7); if (ns.length) res.vat = ns[ns.length - 1]; }
+  });
+  let pendingName = '';
+  lines.forEach(l => {
+    if (SKIP.test(l)) { pendingName = ''; return; }
+    const bc = (l.match(/(?<!\d)(\d{8}|\d{12,14})(?!\d)/) || [])[1] || '';
+    let rest = bc ? l.replace(bc, ' ') : l;
+    const tailM = rest.match(/(?:\s+[-\d.,@x×X*=:|฿]+)+\s*$/);
+    const tail = tailM ? tailM[0] : (/^[\s\d.,@x×*=:|฿-]+$/.test(rest) ? rest : '');
+    const nums = (tail.match(NUM) || []).map(num).filter(n => n >= 0);
+    let name = (tailM ? rest.slice(0, tailM.index) : tail ? '' : rest).replace(/\s+/g, ' ').trim();
+    const hasText = /[ก-๙a-z]{2,}/i.test(name);
+    if (!nums.length) { if (hasText) pendingName = name; return; }
+    if (!hasText && pendingName) { name = pendingName; }
+    if (!/[ก-๙a-z]{2,}/i.test(name)) return;
+    pendingName = '';
+    let qty = 1, unit = 0, amt = nums[nums.length - 1];
+    if (nums.length >= 3) { const a = nums[nums.length - 3], b = nums[nums.length - 2]; if (Math.abs(a * b - amt) < .6) { qty = a; unit = b; } else if (Math.abs(b * a - amt) < .6) { qty = a; unit = b; } else { qty = a || 1; unit = amt / (qty || 1); } }
+    else if (nums.length === 2) { const a = nums[0]; if (a > 0 && a < 1000 && Number.isInteger(a) && amt / a >= 1) { qty = a; unit = amt / a; } else { unit = amt; } }
+    else unit = amt;
+    if (amt <= 0 || amt > 500000) return;
+    res.items.push({ code: bc, name, qty, unitPrice: Math.round(unit * 100) / 100, amount: amt });
+  });
+  return res;
+}
+
+/* =========================================================
+   APP SHELL
+   ========================================================= */
+const app = $('#app');
+function shell() {
+  const u = S.user;
+  app.innerHTML = `
+  <header class="top">
+    <div class="logo"><small>ร้าน</small><b>เมย์</b><i>Mini Mart</i></div>
+    <div class="sp"></div>
+    <div class="who"><div><span class="net ${S.online ? '' : 'off'}"></span>${esc(u.name)}</div><span class="chip-role">${u.role === 'owner' ? 'เจ้าของกิจการ' : 'พนักงาน'}${S.apiUrl ? '' : ' · โหมดทดลอง'}</span></div>
+  </header>
+  <main id="view"></main>
+  <nav class="nav">
+    <button data-v="home">${I(IC.home)}หน้าหลัก</button>
+    <button data-v="products">${I(IC.box)}สินค้า</button>
+    <button data-v="pos" class="fab"><span class="c">${I(IC.cart, 26)}</span>ขาย</button>
+    <button data-v="reports">${I(IC.chart)}รายงาน</button>
+    <button data-v="more">${I(IC.menu)}เพิ่มเติม</button>
+  </nav>`;
+  $$('.nav button').forEach(b => b.onclick = () => go(b.dataset.v));
+}
+const VIEWS = {};
+function go(v, arg) {
+  if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
+  if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
+  S.view = v; $$('.nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v || (b.dataset.v === 'more' && !['home', 'products', 'pos', 'reports'].includes(v))));
+  document.body.classList.toggle('full', v === 'pos');
+  const el = $('#view'); el.innerHTML = ''; window.scrollTo(0, 0);
+  (VIEWS[v] || VIEWS.home)(el, arg);
+}
+function vhead(title, extra = '', back) { return `<div class="vhead">${back ? `<button class="iconbtn" onclick="go('${back}')">${I(IC.back)}</button>` : ''}<h2>${title}</h2>${extra}</div>`; }
+function ownerOnly(el) { if (isOwner()) return false; el.innerHTML = `<div class="card empty">${I(IC.shield, 40)}<p>เมนูนี้สำหรับเจ้าของกิจการเท่านั้น</p></div>`; return true; }
+
+/* ---------- LOGIN ---------- */
+function renderLogin() {
+  let pin = '';
+  app.innerHTML = `<div class="login">
+    <div class="brand"><div class="mk"><small>ร้าน</small>เมย์</div><div class="mm">Mini Mart</div><div class="muted small" style="margin-top:6px">ระบบจัดการร้านค้า</div></div>
+    <div class="card" style="width:100%;max-width:360px">
+      <label class="f"><span>ชื่อผู้ใช้</span><input class="in" id="lu" autocomplete="username" autocapitalize="none" value="${esc(LS.get('lastUser', 'owner'))}"></label>
+      <div class="center muted small">ใส่ PIN</div>
+      <div class="dots">${'<i></i>'.repeat(6)}</div>
+      <div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:var(--red);color:#fff;font-size:15px">เข้า</button></div>
+      <div class="center tiny muted" style="margin-top:14px">${S.apiUrl ? 'เชื่อมต่อ: Google Sheet ของร้าน' : 'โหมดทดลอง (เก็บข้อมูลในเครื่องนี้) · เจ้าของ owner/1234 · พนักงาน staff/1111'}</div>
+      <div class="center" style="margin-top:6px"><button class="btn ghost sm" id="cfg">${I(IC.gear, 16)} ตั้งค่าการเชื่อมต่อ</button></div>
+    </div>
+    <div class="tiny muted" style="margin-top:14px">v${APP_VER}</div></div>`;
+  const dots = () => $$('.dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
+  const submit = async () => {
+    if (pin.length < 4) return toast('PIN อย่างน้อย 4 หลัก', 1);
+    const username = $('#lu').value.trim().toLowerCase();
+    busy(1, 'กำลังเข้าสู่ระบบ...');
+    try {
+      const r = await api('login', { username, pin, device: { id: S.device.id, type: devType(), ua: navigator.userAgent, name: S.device.name || '' } });
+      S.token = r.token; S.user = r.user; LS.set('token', r.token); LS.set('user', r.user); LS.set('lastUser', username);
+      if (r.device) { S.device = { ...S.device, ...r.device }; LS.set('device', S.device); }
+      busy(0); await boot();
+      if (r.mustChangePin) { toast('กรุณาเปลี่ยน PIN เริ่มต้น'); changePinDlg(); }
+    } catch (e) { busy(0); pin = ''; dots(); toast(e.message, 1); }
+  };
+  $$('.pinpad [data-n]').forEach(b => b.onclick = () => { if (pin.length < 8) pin += b.dataset.n; dots(); if (pin.length === 8) submit(); });
+  $('.pinpad [data-c]').onclick = () => { pin = ''; dots(); };
+  $('.pinpad [data-ok]').onclick = submit;
+  document.onkeydown = e => { if (!$('.login')) return; if (document.activeElement && document.activeElement.id === 'lu') return; if (/^\d$/.test(e.key) && pin.length < 8) { pin += e.key; dots(); } else if (e.key === 'Backspace') { pin = pin.slice(0, -1); dots(); } else if (e.key === 'Enter') submit(); };
+  $('#cfg').onclick = connectDlg;
+}
+function connectDlg() {
+  const ov = sheet('เชื่อมต่อฐานข้อมูล Google', `
+    <p class="small muted" style="margin-top:0">วาง URL ของ Web App ที่ได้จากการ Deploy Google Apps Script (ลงท้ายด้วย <b>/exec</b>) — ดูขั้นตอนในคู่มือติดตั้ง<br>เว้นว่างไว้ = ใช้โหมดทดลองเก็บข้อมูลในเครื่อง</p>
+    <label class="f"><span>Apps Script Web App URL</span><input class="in" id="au" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(S.apiUrl)}"></label>
+    <div id="tr" class="small"></div>`,
+    `<button class="btn ghost grow" id="tt">ทดสอบ</button><button class="btn grow" id="sv">บันทึก</button>`);
+  const test = async () => { const u = $('#au', ov).value.trim(); if (!u) return true; $('#tr', ov).textContent = 'กำลังทดสอบ...'; try { const r = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'ping' }) }); const j = await r.json(); if (!j.ok) throw 0; $('#tr', ov).innerHTML = `<span class="tag green">เชื่อมต่อสำเร็จ · เวอร์ชัน ${esc(j.version)}</span>`; return true; } catch (e) { $('#tr', ov).innerHTML = '<span class="tag red">เชื่อมต่อไม่ได้ — ตรวจ URL และตั้งค่า Who has access: Anyone</span>'; return false; } };
+  $('#tt', ov).onclick = test;
+  $('#sv', ov).onclick = async () => { if (!(await test())) return; S.apiUrl = $('#au', ov).value.trim(); LS.set('apiUrl', S.apiUrl); LS.del('token'); LS.del('products'); S.products = []; S.token = ''; ov.remove(); renderLogin(); };
+}
+function changePinDlg() {
+  const ov = sheet('เปลี่ยน PIN', `<label class="f"><span>PIN เดิม</span><input class="in" id="p0" type="password" inputmode="numeric"></label><label class="f"><span>PIN ใหม่ (4-8 หลัก)</span><input class="in" id="p1" type="password" inputmode="numeric"></label><label class="f"><span>ยืนยัน PIN ใหม่</span><input class="in" id="p2" type="password" inputmode="numeric"></label>`, `<button class="btn block" id="ok">บันทึก</button>`);
+  $('#ok', ov).onclick = async () => {
+    const a = $('#p0', ov).value, b = $('#p1', ov).value, c = $('#p2', ov).value;
+    if (!/^\d{4,8}$/.test(b)) return toast('PIN ต้องเป็นตัวเลข 4-8 หลัก', 1); if (b !== c) return toast('PIN ใหม่ไม่ตรงกัน', 1);
+    try { busy(1); await api('changePin', { oldPin: a, newPin: b }); busy(0); ov.remove(); toast('เปลี่ยน PIN แล้ว'); } catch (e) { busy(0); toast(e.message, 1); }
+  };
+}
+async function logout(silent) {
+  if (!silent) { try { await api('logout'); } catch (e) { } }
+  S.token = ''; S.user = null; LS.del('token'); LS.del('user'); renderLogin();
+}
+
+/* ---------- HOME ---------- */
+VIEWS.home = async el => {
+  const h = new Date(Date.now() + 7 * 3600e3).getUTCHours();
+  const greet = h < 11 ? 'สวัสดีตอนเช้า' : h < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น';
+  el.innerHTML = `<div style="margin:2px 2px 12px"><div class="muted small">${greet}</div><h2 style="font-size:22px">${esc(S.user.name)}</h2></div>
+   <div class="qa">
+     <button onclick="go('pos')"><span class="ic" style="background:var(--green)">${I(IC.cart)}</span>ขายสินค้า</button>
+     <button onclick="go('scan')"><span class="ic" style="background:var(--red)">${I(IC.scan)}</span>สแกน/เช็คราคา</button>
+     <button onclick="newReceipt()"><span class="ic" style="background:#E07A00">${I(IC.cam)}</span>ใบเสร็จร้านส่ง</button>
+     <button onclick="go('labels')"><span class="ic" style="background:#2B4C9B">${I(IC.print)}</span>พิมพ์ฉลาก</button>
+   </div>
+   <div id="today"></div><div id="alerts"></div><div id="stats"><div class="card center"><span class="spin dark"></span></div></div>`;
+  window.homeToday && homeToday($('#today', el));
+  try {
+    await loadProducts();
+    const lic = await loadTable('Licenses').catch(() => []);
+    S.licenses = lic;
+    const al = [];
+    lic.forEach(l => { if (!l.expiryDate) return; const d = daysTo(l.expiryDate); if (d < 0) al.push(['red', `${esc(l.type)} <b>หมดอายุแล้ว ${-d} วัน</b> — ต้องต่ออายุก่อนขายต่อ`, 'licenses']); else if (d <= 60) al.push([d <= 15 ? 'red' : 'amber', `${esc(l.type)} จะหมดอายุใน <b>${d} วัน</b> (${thDate(l.expiryDate)})`, 'licenses']); });
+    const low = S.products.filter(p => p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0));
+    if (low.length) al.push(['amber', `สินค้าใกล้หมด/หมดสต็อก <b>${low.length}</b> รายการ`, 'products:low']);
+    if (isOwner()) TAX.deadlines().forEach(d => { const n = daysTo(d.paper); if (n >= 0 && n <= 45) al.push(['blue', `อีก <b>${n} วัน</b> ครบกำหนดยื่น ${d.form} (${d.what}) — ${thDate(d.paper)}`, 'tax']); });
+    const nobar = S.products.filter(p => !p.barcode).length;
+    if (nobar) al.push(['green', `สินค้าไม่มีบาร์โค้ด ${nobar} รายการ — สร้างและพิมพ์ฉลากได้`, 'products:nobar']);
+    $('#alerts', el).innerHTML = al.map(([c, t, v]) => `<div class="alert ${c}" style="cursor:pointer" data-go="${v}">${I(c === 'green' ? IC.tag : IC.alert, 20)}<div>${t}</div></div>`).join('');
+    $$('#alerts [data-go]', el).forEach(a => a.onclick = () => { const [v, f] = a.dataset.go.split(':'); go(v, f); });
+    const stockVal = S.products.filter(p => p.trackStock === 'Y').reduce((s, p) => s + Math.max(0, num(p.stock)) * num(p.cost), 0);
+    const withCost = S.products.filter(p => num(p.cost) > 0 && num(p.price) > 0);
+    const margin = withCost.length ? withCost.reduce((s, p) => s + (num(p.price) - num(p.cost)) / num(p.price), 0) / withCost.length * 100 : 0;
+    let extra = '';
+    if (isOwner()) {
+      const [rc, sales] = await Promise.all([loadTable('Receipts').catch(() => []), loadTable('Sales').catch(() => [])]);
+      S.receipts = rc; S.sales = sales;
+      const ym = todayISO().slice(0, 7), y = ym.slice(0, 4);
+      const buyM = rc.filter(r => String(r.date).startsWith(ym)).reduce((s, r) => s + num(r.total), 0);
+      const saleY = sales.filter(r => String(r.date).startsWith(y)).reduce((s, r) => s + num(r.amount), 0);
+      const pct = Math.min(100, saleY / 1.8e6 * 100);
+      extra = `<div class="stat"><div class="k">ซื้อเข้าเดือนนี้</div><div class="v">${baht(buyM)}</div></div><div class="stat"><div class="k">ยอดขายปีนี้ (บันทึก)</div><div class="v">${baht(saleY)}</div></div>
+      </div><div class="card"><div class="row"><div class="grow small">ยอดขายเทียบเกณฑ์จด VAT 1.8 ล้าน/ปี</div><b class="small">${pct.toFixed(0)}%</b></div><div class="prog" style="margin-top:6px"><i style="width:${pct}%;background:${pct > 80 ? 'var(--red)' : 'var(--green)'}"></i></div></div><div>`;
+    }
+    $('#stats', el).innerHTML = `<div class="grid2" style="margin-bottom:12px">
+      <div class="stat"><div class="k">สินค้าทั้งหมด</div><div class="v">${S.products.length.toLocaleString()}</div></div>
+      <div class="stat"><div class="k">กำไรขั้นต้นเฉลี่ย</div><div class="v">${margin.toFixed(1)}%</div></div>
+      ${isOwner() ? `<div class="stat"><div class="k">มูลค่าสต็อก (ที่นับ)</div><div class="v">${baht(stockVal)}</div></div><div class="stat"><div class="k">ไม่มีต้นทุน</div><div class="v">${S.products.filter(p => !num(p.cost)).length}</div></div>` : ''}
+      ${extra}</div>
+      ${S.apiUrl ? '' : `<div class="alert blue">${I(IC.alert, 20)}<div>กำลังใช้ <b>โหมดทดลอง</b> ข้อมูลอยู่ในเครื่องนี้เท่านั้น — ไปที่ เพิ่มเติม › ตั้งค่า เพื่อเชื่อม Google Sheet</div></div>`}`;
+  } catch (e) { $('#stats', el).innerHTML = `<div class="alert red">${esc(e.message)}</div>`; }
+};
+
+/* ---------- PRODUCTS ---------- */
+let PF = { q: '', cat: '', flag: '', limit: 60 };
+VIEWS.products = async (el, flag) => {
+  if (flag) PF.flag = flag;
+  el.innerHTML = vhead('สินค้า', `<button class="btn sm" onclick="editProduct()">${I(IC.plus, 18)} เพิ่ม</button>`) +
+    `<div class="search"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาชื่อ / รหัส / บาร์โค้ด" value="${esc(PF.q)}"><button class="scanbtn" id="sc">${I(IC.scan, 20)}</button></div>
+     <div class="chips" id="flags" style="margin-top:10px"></div><div class="chips" id="cats"></div>
+     <div class="row small muted" style="margin:2px 4px 8px"><span id="cnt" class="grow"></span><button class="btn ghost sm" id="rf">รีเฟรช</button></div>
+     <div class="list" id="pl"><div class="empty"><span class="spin dark"></span></div></div>`;
+  const draw = () => {
+    const flags = [['', 'ทั้งหมด'], ['low', 'ใกล้หมด'], ['nobar', 'ไม่มีบาร์โค้ด'], ['nocost', 'ไม่มีต้นทุน'], ['best', 'ขายดี'], ['fresh', 'ของสด']];
+    $('#flags', el).innerHTML = flags.map(([k, n]) => `<button class="chip ${PF.flag === k ? 'on' : ''}" data-f="${k}">${n}</button>`).join('');
+    const cats = {}; S.products.forEach(p => { const c = p.category || 'ไม่ระบุหมวด'; cats[c] = (cats[c] || 0) + 1; });
+    $('#cats', el).innerHTML = `<button class="chip ${!PF.cat ? 'on' : ''}" data-c="">ทุกหมวด</button>` + Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button class="chip ${PF.cat === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)} <span class="muted">${n}</span></button>`).join('');
+    $$('[data-f]', el).forEach(b => b.onclick = () => { PF.flag = b.dataset.f; PF.limit = 60; draw(); });
+    $$('[data-c]', el).forEach(b => b.onclick = () => { PF.cat = b.dataset.c; PF.limit = 60; draw(); });
+    const res = searchProducts(PF.q, PF);
+    $('#cnt', el).textContent = `พบ ${res.length.toLocaleString()} รายการ`;
+    $('#pl', el).innerHTML = res.length ? res.slice(0, PF.limit).map(p => {
+      const low = p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0);
+      return `<div class="item" data-sku="${esc(p.sku)}"><div class="av">${esc(Array.from(p.name || '?')[0])}</div><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.sku)} · ${p.barcode ? esc(p.barcode) : '<span class="tag amber">ไม่มีบาร์โค้ด</span>'}${p.trackStock === 'Y' ? ` · <span class="tag ${low ? 'red' : 'gray'}">คงเหลือ ${num(p.stock)}</span>` : ''}${can('viewCost') && num(p.cost) ? ` · ทุน ${money(p.cost)}` : ''}</div></div><div class="price">${baht(p.price)}</div></div>`;
+    }).join('') + (res.length > PF.limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red);font-weight:600">แสดงเพิ่ม (${res.length - PF.limit})</div>` : '') : `<div class="empty">ไม่พบสินค้า<br><button class="btn sm" style="margin-top:10px" onclick="editProduct({name:${esc(JSON.stringify(PF.q))}})">เพิ่ม “${esc(PF.q)}”</button></div>`;
+    $$('#pl [data-sku]', el).forEach(r => r.onclick = () => productCard(IDX.bySku[r.dataset.sku]));
+    const m = $('#more', el); if (m) m.onclick = () => { PF.limit += 100; draw(); };
+  };
+  let t; $('#q', el).oninput = e => { clearTimeout(t); t = setTimeout(() => { PF.q = e.target.value; PF.limit = 60; draw(); }, 150); };
+  $('#sc', el).onclick = () => openScanner(code => { const f = findByCode(code); if (f) { productCard(f.p, f.price); return 'close'; } $('#q', el).value = PF.q = code; draw(); return 'close'; });
+  $('#rf', el).onclick = async () => { busy(1, 'กำลังโหลดสินค้า...'); try { await loadProducts(true); draw(); } catch (e) { toast(e.message, 1); } busy(0); };
+  if (!S.products.length) { try { await loadProducts(true); } catch (e) { toast(e.message, 1); } } else { buildIndex(); loadProducts().then(draw).catch(() => { }); }
+  draw();
+};
+function productCard(p, embeddedPrice) {
+  if (!p) return;
+  const margin = num(p.price) && num(p.cost) ? ((num(p.price) - num(p.cost)) / num(p.price) * 100).toFixed(1) + '%' : '-';
+  const ov = sheet(esc(p.name), `
+    <div class="card center"><div class="muted small">${esc(p.category || 'ไม่ระบุหมวด')}</div><div class="big-price" style="margin:8px 0">${baht(embeddedPrice != null ? embeddedPrice : p.price)}</div>${embeddedPrice != null ? '<span class="tag blue">ราคาจากบาร์โค้ดฝังราคา</span>' : ''}${p.byWeight === 'Y' ? '<span class="tag green">ขายตามน้ำหนัก</span>' : ''}</div>
+    <div class="card">
+      <div class="kv"><span class="muted">รหัส SKU</span><b>${esc(p.sku)}</b></div>
+      <div class="kv"><span class="muted">บาร์โค้ด</span><b>${esc(p.barcode || '—')}</b></div>
+      ${can('viewCost') ? `<div class="kv"><span class="muted">ต้นทุน</span><b>${money(p.cost)}</b></div><div class="kv"><span class="muted">กำไรขั้นต้น</span><b>${margin}</b></div>` : ''}
+      <div class="kv"><span class="muted">สต็อก</span><b>${p.trackStock === 'Y' ? num(p.stock) + (p.lowStock ? ` (เตือนที่ ${p.lowStock})` : '') : 'ไม่ได้นับสต็อก'}</b></div>
+      <div class="kv"><span class="muted">แก้ไขล่าสุด</span><span class="small">${esc(p.updatedAt ? String(p.updatedAt).replace('T', ' ').slice(0, 16) : '-')} ${esc(p.updatedBy || '')}</span></div>
+    </div>`,
+    `<button class="btn ghost grow" id="lb">${I(IC.print, 18)} ฉลาก</button><button class="btn ghost grow" id="st">± สต็อก</button><button class="btn grow" id="ed">${I(IC.edit, 18)} แก้ไข</button>`);
+  $('#ed', ov).onclick = () => { ov.remove(); editProduct(p); };
+  $('#lb', ov).onclick = () => { ov.remove(); go('labels', [p]); };
+  $('#st', ov).onclick = () => { ov.remove(); stockDlg(p); };
+}
+function stockDlg(p) {
+  const ov = sheet('ปรับสต็อก: ' + esc(p.name), `<div class="seg" id="md"><button class="on" data-m="add">รับเข้า +</button><button data-m="sub">เบิก/เสีย −</button><button data-m="set">ตั้งค่าที่นับได้</button></div>
+   <label class="f" style="margin-top:12px"><span>จำนวน</span><input class="in" id="qq" type="number" inputmode="decimal" step="any"></label><div class="small muted">คงเหลือปัจจุบัน: <b>${num(p.stock)}</b></div>`, `<button class="btn block" id="ok">บันทึก</button>`);
+  let m = 'add'; $$('#md button', ov).forEach(b => b.onclick = () => { m = b.dataset.m; $$('#md button', ov).forEach(x => x.classList.toggle('on', x === b)); });
+  $('#qq', ov).focus();
+  $('#ok', ov).onclick = async () => {
+    const q = num($('#qq', ov).value); const cur = num(p.stock); const v = m === 'add' ? cur + q : m === 'sub' ? cur - q : q;
+    try { busy(1); await saveProducts([{ ...p, stock: String(v), trackStock: 'Y' }]); busy(0); ov.remove(); toast('บันทึกสต็อกแล้ว: ' + v); if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); }
+  };
+}
+async function saveProducts(rows) {
+  const clean = rows.map(r => { const o = {}; Object.keys(r).forEach(k => { if (k[0] !== '_') o[k] = r[k]; }); return o; });
+  await api('upsert', { table: 'Products', rows: clean });
+  clean.forEach(r => { const i = S.products.findIndex(p => p.sku === r.sku); if (i >= 0) S.products[i] = { ...S.products[i], ...r }; else S.products.unshift(r); });
+  LS.set('products', S.products); buildIndex();
+}
+function editProduct(p0) {
+  const isNew = !p0 || !p0.sku;
+  const p = { byWeight: 'N', trackStock: 'N', available: 'Y', bestseller: 'N', ...(p0 || {}) };
+  if (isNew) p.sku = nextSku(S.products);
+  const cats = [...new Set(S.categories.map(c => c.name).concat(S.products.map(x => x.category)).filter(Boolean))].sort();
+  let newImg = null, rmImg = false;
+  const curImg = window.Img ? Img.get(p.sku) : '';
+  const ov = sheet(isNew ? 'เพิ่มสินค้าใหม่' : 'แก้ไขสินค้า', `
+    <div class="row" style="margin-bottom:12px;gap:12px"><div id="pimg" style="width:84px;height:84px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3);flex:none">${curImg ? `<img src="${curImg}" style="width:100%;height:100%;object-fit:cover">` : I(IC.image, 30)}</div>
+      <div class="grow"><div class="small" style="font-weight:600">รูปสินค้า (แสดงบนหน้าจอขาย)</div><div class="row wrap" style="margin-top:6px"><label class="btn ghost sm">${I(IC.cam, 16)} ถ่าย/เลือกรูป<input type="file" accept="image/*" id="f_img" class="hidden"></label><button class="btn ghost sm" id="rmimg">ลบรูป</button></div><div class="tiny muted">ย่อขนาดอัตโนมัติ ~10 KB โหลดเร็ว</div></div></div>
+    <label class="f"><span>ชื่อสินค้า *</span><input class="in" id="f_name" value="${esc(p.name)}"></label>
+    <label class="f"><span>บาร์โค้ด</span><div class="row"><input class="in grow" id="f_barcode" inputmode="numeric" value="${esc(p.barcode)}"><button class="btn sm" id="bscan" title="สแกน">${I(IC.scan, 18)}</button><button class="btn ghost sm" id="bgen" title="สร้างบาร์โค้ดภายในร้าน">สร้าง</button></div><div class="tiny muted" id="bmsg"></div></label>
+    <div class="grid2"><label class="f"><span>ราคาขาย *</span><input class="in" id="f_price" type="number" inputmode="decimal" step="any" value="${esc(p.price)}"></label>
+    <label class="f ${can('viewCost') ? '' : 'hidden'}"><span>ต้นทุน</span><input class="in" id="f_cost" type="number" inputmode="decimal" step="any" value="${esc(p.cost)}"></label></div>
+    <label class="f"><span>หมวดหมู่</span><input class="in" id="f_category" list="catl" value="${esc(p.category)}"><datalist id="catl">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
+    <div class="grid2"><label class="f"><span>รหัส SKU</span><input class="in" id="f_sku" value="${esc(p.sku)}" ${isNew ? '' : 'readonly'}></label>
+    <label class="f"><span>หน่วย</span><input class="in" id="f_unit" placeholder="ชิ้น/แพ็ค/กก." value="${esc(p.unit)}"></label></div>
+    <div class="card" style="padding:10px 12px">
+      <label class="row" style="margin-bottom:8px"><input type="checkbox" id="f_trackStock" ${p.trackStock === 'Y' ? 'checked' : ''}> <span class="grow">นับสต็อก</span></label>
+      <div class="grid2" id="stk"><label class="f"><span>คงเหลือ</span><input class="in" id="f_stock" type="number" step="any" value="${esc(p.stock)}"></label><label class="f"><span>เตือนเมื่อเหลือ ≤</span><input class="in" id="f_lowStock" type="number" step="any" value="${esc(p.lowStock)}"></label></div>
+      <label class="row" style="margin-bottom:8px"><input type="checkbox" id="f_byWeight" ${p.byWeight === 'Y' ? 'checked' : ''}> <span class="grow">ขายตามน้ำหนัก (ของสด)</span></label>
+      <label class="row" style="margin-bottom:8px"><input type="checkbox" id="f_bestseller" ${p.bestseller === 'Y' ? 'checked' : ''}> <span class="grow">สินค้าขายดี</span></label>
+      <label class="row"><input type="checkbox" id="f_available" ${p.available !== 'N' ? 'checked' : ''}> <span class="grow">เปิดขาย</span></label>
+    </div>
+    <label class="f"><span>อายุสินค้า (วัน) — ใช้พิมพ์วันหมดอายุบนฉลากของสด</span><input class="in" id="f_shelfLifeDays" type="number" value="${esc(p.shelfLifeDays)}"></label>
+    <label class="f"><span>หมายเหตุ</span><input class="in" id="f_note" value="${esc(p.note)}"></label>
+    ${!isNew && isOwner() ? `<button class="btn ghost sm" id="del" style="color:var(--red)">${I(IC.trash, 16)} ลบสินค้านี้</button>` : ''}`,
+    `<button class="btn ghost grow" id="svp">บันทึก + พิมพ์ฉลาก</button><button class="btn grow" id="sv">บันทึก</button>`);
+  const chk = () => {
+    const b = $('#f_barcode', ov).value.trim(); let m = '';
+    if (b) { const dup = S.products.find(x => x.sku !== p.sku && String(x.barcode) === b); if (dup) m = `<span style="color:var(--red)">⚠ บาร์โค้ดซ้ำกับ: ${esc(dup.name)}</span>`; else if (/^\d{13}$/.test(b) && !EAN.valid(b)) m = '⚠ เลขตรวจสอบ EAN-13 ไม่ถูกต้อง'; }
+    $('#bmsg', ov).innerHTML = m;
+  };
+  $('#f_barcode', ov).oninput = chk; chk();
+  $('#f_img', ov).onchange = async e => { const f = e.target.files[0]; if (!f) return; newImg = await Img.shrink(f); rmImg = false; $('#pimg', ov).innerHTML = `<img src="${newImg}" style="width:100%;height:100%;object-fit:cover">`; };
+  $('#rmimg', ov).onclick = () => { newImg = null; rmImg = true; $('#pimg', ov).innerHTML = I(IC.image, 30); };
+  $('#bscan', ov).onclick = () => openScanner(code => { $('#f_barcode', ov).value = code; chk(); return 'close'; });
+  $('#bgen', ov).onclick = () => { $('#f_barcode', ov).value = internalBarcode($('#f_sku', ov).value); chk(); toast('สร้างบาร์โค้ดภายในร้าน (ขึ้นต้น 21)'); };
+  const stkVis = () => $('#stk', ov).style.display = $('#f_trackStock', ov).checked ? '' : 'none';
+  $('#f_trackStock', ov).onchange = stkVis; stkVis();
+  const collect = () => {
+    const o = { ...p }; ['name', 'barcode', 'price', 'cost', 'category', 'sku', 'unit', 'stock', 'lowStock', 'shelfLifeDays', 'note'].forEach(k => { const e = $('#f_' + k, ov); if (e) o[k] = e.value.trim(); });
+    ['trackStock', 'byWeight', 'bestseller', 'available'].forEach(k => o[k] = $('#f_' + k, ov).checked ? 'Y' : 'N');
+    if (!o.name) throw new Error('กรุณาใส่ชื่อสินค้า'); if (!o.sku) throw new Error('กรุณาใส่รหัส SKU');
+    if (isNew && IDX.bySku[o.sku]) throw new Error('รหัส SKU นี้มีอยู่แล้ว');
+    return o;
+  };
+  const save = async print => {
+    let o; try { o = collect(); } catch (e) { return toast(e.message, 1); }
+    try { busy(1, 'กำลังบันทึก...'); await saveProducts([o]);
+      if (newImg) await Img.save(o.sku, newImg); else if (rmImg && curImg) await Img.remove(o.sku);
+      if (o.category && !S.categories.some(c => c.name === o.category)) { await api('renameCategory', { from: '', to: o.category }); loadSettings(); }
+      busy(0); ov.remove(); toast('บันทึกแล้ว'); if (print) go('labels', [o]); else if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); }
+  };
+  $('#sv', ov).onclick = () => save(false); $('#svp', ov).onclick = () => save(true);
+  const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg(`ลบ “${esc(p.name)}” ?`, 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Products', ids: [p.sku] }); S.products = S.products.filter(x => x.sku !== p.sku); LS.set('products', S.products); buildIndex(); busy(0); ov.remove(); go('products'); } catch (e) { busy(0); toast(e.message, 1); } };
+  if (isNew) setTimeout(() => $('#f_name', ov).focus(), 200);
+}
+
+/* ---------- SCAN / PRICE CHECK ---------- */
+VIEWS.scan = el => {
+  el.innerHTML = vhead('สแกน / เช็คราคา') + `
+   <div class="card center" style="padding:22px 14px">
+     <button class="btn block" id="go" style="min-height:64px;font-size:18px">${I(IC.cam, 26)} เปิดกล้องสแกน</button>
+     <div class="small muted" style="margin:12px 0 6px">หรือใช้เครื่องยิงบาร์โค้ด / พิมพ์รหัส</div>
+     <input class="in" id="kb" inputmode="numeric" placeholder="ยิงบาร์โค้ดที่ช่องนี้" style="text-align:center;font-size:18px">
+     <div class="seg" id="md" style="margin-top:12px"><button class="on" data-m="price">เช็คราคา</button><button data-m="stock">นับ/รับสต็อก</button><button data-m="label">คิวพิมพ์ฉลาก</button></div>
+   </div>
+   <div id="res"></div><div id="hist"></div>`;
+  let mode = 'price'; const hist = [];
+  $$('#md button', el).forEach(b => b.onclick = () => { mode = b.dataset.m; $$('#md button', el).forEach(x => x.classList.toggle('on', x === b)); });
+  const show = (code, ctx) => {
+    const f = findByCode(code);
+    if (!f) {
+      $('#res', el).innerHTML = `<div class="card"><div class="row"><div class="grow"><b>ไม่พบสินค้า</b><div class="small muted">บาร์โค้ด ${esc(code)}</div></div><button class="btn sm" id="add">${I(IC.plus, 16)} เพิ่มสินค้า</button></div></div>`;
+      $('#add', el).onclick = () => editProduct({ barcode: code });
+      ctx && ctx.showLast(`<b>ไม่พบ</b> ${esc(code)}`);
+      return mode === 'price' ? 'close' : '';
+    }
+    const p = f.p;
+    if (mode === 'stock') {
+      p._cnt = (p._cnt || 0) + 1; hist.unshift(p);
+      ctx && ctx.showLast(`<div class="row"><b class="grow">${esc(p.name)}</b><span class="tag green">+${p._cnt}</span></div>`);
+      drawHist(); return '';
+    }
+    if (mode === 'label') { LQ.push({ p, copies: 1 }); ctx && ctx.showLast(`<b>${esc(p.name)}</b> เพิ่มเข้าคิวพิมพ์ (${LQ.length})`); drawHist(); return ''; }
+    $('#res', el).innerHTML = `<div class="card center"><div class="small muted">${esc(p.sku)} · ${esc(p.barcode)}</div><h3 style="margin:6px 0">${esc(p.name)}</h3><div class="big-price">${baht(f.price != null ? f.price : p.price)}</div>
+      ${p.trackStock === 'Y' ? `<div class="small" style="margin-top:6px">คงเหลือ ${num(p.stock)}</div>` : ''}<div class="row" style="margin-top:12px"><button class="btn ghost grow" id="e">แก้ไข</button><button class="btn ghost grow" id="l">พิมพ์ฉลาก</button></div></div>`;
+    $('#e', el).onclick = () => editProduct(p); $('#l', el).onclick = () => go('labels', [p]);
+    return 'close';
+  };
+  const drawHist = () => {
+    if (mode === 'stock') {
+      const uniq = [...new Set(hist)];
+      $('#hist', el).innerHTML = uniq.length ? `<div class="card"><h3>รายการที่นับ (${uniq.length})</h3>${uniq.map(p => `<div class="kv"><span>${esc(p.name)}</span><b>${p._cnt}</b></div>`).join('')}
+       <div class="seg" id="sm" style="margin-top:10px"><button class="on" data-m="add">บวกเพิ่มเข้าสต็อก</button><button data-m="set">ตั้งเป็นยอดที่นับได้</button></div>
+       <button class="btn green block" id="ap" style="margin-top:10px">บันทึกสต็อก</button></div>` : '';
+      let sm = 'add'; $$('#sm button', el).forEach(b => b.onclick = () => { sm = b.dataset.m; $$('#sm button', el).forEach(x => x.classList.toggle('on', x === b)); });
+      const ap = $('#ap', el); if (ap) ap.onclick = async () => { try { busy(1); await saveProducts(uniq.map(p => ({ ...p, stock: String(sm === 'add' ? num(p.stock) + p._cnt : p._cnt), trackStock: 'Y' }))); uniq.forEach(p => delete p._cnt); hist.length = 0; busy(0); drawHist(); toast('บันทึกสต็อกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
+    } else if (mode === 'label') {
+      $('#hist', el).innerHTML = LQ.length ? `<div class="card"><div class="row"><h3 class="grow">คิวพิมพ์ฉลาก (${LQ.length})</h3><button class="btn sm" onclick="go('labels')">ไปพิมพ์</button></div></div>` : '';
+    }
+  };
+  $('#go', el).onclick = () => openScanner(show, { continuous: true, title: mode === 'price' ? 'เช็คราคา' : mode === 'stock' ? 'นับสต็อก (สแกนต่อเนื่อง)' : 'เพิ่มเข้าคิวพิมพ์' });
+  const kb = $('#kb', el); kb.onkeydown = e => { if (e.key === 'Enter' && kb.value.trim()) { beep(); show(kb.value.trim()); kb.value = ''; } };
+  if (!S.products.length) loadProducts(true).catch(e => toast(e.message, 1)); else buildIndex();
+  setTimeout(() => kb.focus(), 100);
+};
+
+/* ---------- LABELS (NIIMBOT) ---------- */
+let LQ = [];
+VIEWS.labels = (el, items) => {
+  if (Array.isArray(items)) items.forEach(p => { if (!LQ.some(x => x.p.sku === p.sku)) LQ.push({ p, copies: 1 }); });
+  const cfg = LS.get('labelCfg', { paper: '40x30', tpl: 'price', density: 3, labelType: 1, rotate: false, model: LS.get('printerModel', 'B1') });
+  el.innerHTML = vhead('พิมพ์ฉลาก / บาร์โค้ด', '', 'more') + `
+   <div class="card"><div class="row"><div class="grow"><b>เครื่องพิมพ์ NIIMBOT</b><div class="small muted" id="pst"></div></div><button class="btn sm" id="con">${I(IC.bt, 18)} เชื่อมต่อ</button></div>
+     <div class="row small" style="margin-top:8px"><button class="btn ghost sm" id="rp">อ่านกระดาษอัตโนมัติ</button><span class="muted grow" id="pinfo"></span></div></div>
+   <div class="card">
+     <div class="grid2"><label class="f"><span>ขนาดกระดาษ</span><select class="in" id="paper">${PAPERS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select></label>
+     <label class="f"><span>รูปแบบฉลาก</span><select class="in" id="tpl">${TEMPLATES.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</select></label></div>
+     <div class="grid3"><label class="f"><span>รุ่น</span><select class="in" id="model"><option value="B1">B1</option><option value="B21">B21</option></select></label>
+     <label class="f"><span>ความเข้ม</span><select class="in" id="density">${[1, 2, 3, 4, 5].map(n => `<option>${n}</option>`).join('')}</select></label>
+     <label class="f"><span>ชนิดกระดาษ</span><select class="in" id="labelType"><option value="1">มีช่องว่าง</option><option value="2">แถบดำ</option><option value="3">ต่อเนื่อง</option></select></label></div>
+     <label class="row small"><input type="checkbox" id="rotate"> หมุนภาพ 90° (ถ้าพิมพ์ออกมาตะแคง)</label>
+     <div id="freshOpt" class="grid3" style="margin-top:10px"><label class="f"><span>วันที่แพ็ค</span><input class="in" type="date" id="packDate" value="${todayISO()}"></label><label class="f"><span>อายุ (วัน)</span><input class="in" type="number" id="shelfDays" placeholder="ตามสินค้า"></label><label class="f"><span>น้ำหนัก กก.</span><input class="in" type="number" step="any" id="weight"></label></div>
+     <label class="row small" id="embedRow"><input type="checkbox" id="embedPrice"> ฝังราคาในบาร์โค้ด (ขึ้นต้น 20 สำหรับ POS ที่รองรับ)</label>
+   </div>
+   <div class="card"><div class="row" style="margin-bottom:8px"><h3 class="grow">รายการที่จะพิมพ์</h3><button class="btn ghost sm" id="addp">${I(IC.plus, 16)} เลือกสินค้า</button><button class="btn ghost sm" id="adds">${I(IC.scan, 16)}</button></div><div id="queue"></div></div>
+   <div class="card center"><div class="small muted" style="margin-bottom:8px">ตัวอย่าง (ขนาดจริง 8 จุด/มม.)</div><canvas class="lbl" id="pv"></canvas></div>
+   <div class="row" style="gap:8px"><button class="btn ghost grow" id="png">บันทึกรูป PNG</button><button class="btn grow" id="pr" style="min-height:52px">${I(IC.print)} พิมพ์ทั้งหมด</button></div>`;
+  ['paper', 'tpl', 'model', 'density', 'labelType'].forEach(k => $('#' + k, el).value = cfg[k]); $('#rotate', el).checked = !!cfg.rotate;
+  const save = () => { ['paper', 'tpl', 'model'].forEach(k => cfg[k] = $('#' + k, el).value); cfg.density = +$('#density', el).value; cfg.labelType = +$('#labelType', el).value; cfg.rotate = $('#rotate', el).checked; LS.set('labelCfg', cfg); LS.set('printerModel', cfg.model); };
+  const opts = it => ({ paper: cfg.paper, tpl: cfg.tpl, product: it.p, price: it.price, packDate: $('#packDate', el).value, shelfDays: $('#shelfDays', el).value, weight: $('#weight', el).value || it.weight, embedPrice: $('#embedPrice', el).checked });
+  const preview = () => {
+    save(); $('#freshOpt', el).style.display = cfg.tpl === 'fresh' ? '' : 'none'; $('#embedRow', el).style.display = cfg.tpl === 'fresh' || cfg.tpl === 'price' ? '' : 'none';
+    const it = LQ[0] || { p: { name: 'ตัวอย่างสินค้า ผักกาดขาว', price: '25', sku: '10001', barcode: internalBarcode('10001') } };
+    const r = renderLabel($('#pv', el), opts(it)); $('#pv', el).style.width = Math.min(r.W * 1.0, 340) + 'px';
+    if (cfg.model === 'B21' && r.W > 384 && !cfg.rotate) $('#pinfo', el).textContent = '⚠ กว้างเกินหัวพิมพ์ 48 มม. ระบบจะย่อให้พอดี';
+  };
+  const drawQ = () => {
+    $('#queue', el).innerHTML = LQ.length ? LQ.map((it, i) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="grow"><div style="font-weight:600;line-height:1.3">${esc(it.p.name)}</div><div class="tiny muted">${esc(it.p.barcode || 'ยังไม่มีบาร์โค้ด')} · ${baht(it.p.price)}</div></div>
+      ${!it.p.barcode ? `<button class="btn soft sm" data-gen="${i}">สร้างบาร์โค้ด</button>` : ''}<input class="in" style="width:60px;min-height:36px;text-align:center" type="number" min="1" value="${it.copies}" data-cp="${i}"><button class="iconbtn" data-rm="${i}">${I(IC.x, 18)}</button></div>`).join('') : '<div class="empty small">ยังไม่มีรายการ — เลือกสินค้าหรือสแกนเพื่อเพิ่ม<br>เหมาะกับของสดที่ไม่มีบาร์โค้ด</div>';
+    $$('[data-cp]', el).forEach(i => i.onchange = () => LQ[+i.dataset.cp].copies = Math.max(1, +i.value || 1));
+    $$('[data-rm]', el).forEach(b => b.onclick = () => { LQ.splice(+b.dataset.rm, 1); drawQ(); preview(); });
+    $$('[data-gen]', el).forEach(b => b.onclick = async () => { const it = LQ[+b.dataset.gen]; const code = internalBarcode(it.p.sku); try { busy(1); await saveProducts([{ ...it.p, barcode: code }]); it.p = IDX.bySku[it.p.sku]; busy(0); toast('บันทึกบาร์โค้ด ' + code + ' ให้สินค้าแล้ว'); drawQ(); preview(); } catch (e) { busy(0); toast(e.message, 1); } });
+  };
+  $$('select,input', el).forEach(i => i.addEventListener('change', preview));
+  $('#addp', el).onclick = () => pickProducts(ps => { ps.forEach(p => LQ.push({ p, copies: 1 })); drawQ(); preview(); });
+  $('#adds', el).onclick = () => openScanner((code, ctx) => { const f = findByCode(code); if (f) { LQ.push({ p: f.p, copies: 1 }); ctx.showLast(`<b>${esc(f.p.name)}</b> เพิ่มแล้ว (${LQ.length})`); drawQ(); preview(); } else ctx.showLast('ไม่พบ ' + esc(code)); return ''; }, { continuous: true, title: 'สแกนเพิ่มเข้าคิว' });
+  renderPrinterBadge = () => { const s = $('#pst', el); if (!s) return; s.textContent = NB.connected ? 'เชื่อมต่อแล้ว: ' + (NB.dev.name || '') : (navigator.bluetooth ? 'ยังไม่เชื่อมต่อ' : 'อุปกรณ์นี้ไม่รองรับ Web Bluetooth — ใช้ “บันทึกรูป PNG” แล้วพิมพ์ผ่านแอป NIIMBOT'); $('#con', el).textContent = NB.connected ? 'ตัดการเชื่อมต่อ' : 'เชื่อมต่อ'; };
+  renderPrinterBadge();
+  const readPaper = async () => {
+    try {
+      const info = await NB.readPaper();
+      if (!info) { $('#pinfo', el).textContent = 'ไม่พบชิปกระดาษ / ไม่ได้ใส่กระดาษ'; return; }
+      const papers = LS.get('papers', {}); const known = papers[info.barcode];
+      $('#pinfo', el).innerHTML = `ม้วน ${esc(info.barcode)} · เหลือ ${info.left}/${info.total} ดวง`;
+      if (known) { cfg.paper = known.paper; cfg.labelType = known.labelType; $('#paper', el).value = known.paper; $('#labelType', el).value = known.labelType; preview(); toast('เลือกขนาดกระดาษอัตโนมัติ: ' + known.paper); }
+      else {
+        const ov = sheet('พบกระดาษม้วนใหม่', `<p class="small">รหัสม้วน <b>${esc(info.barcode)}</b> (${info.total} ดวง) — เลือกขนาดครั้งเดียว ระบบจะจำและเลือกให้อัตโนมัติครั้งต่อไป</p><select class="in" id="pp">${PAPERS.map(p => `<option value="${p.id}" ${p.id === cfg.paper ? 'selected' : ''}>${p.name}</option>`).join('')}</select>`, `<button class="btn block" id="ok">จำขนาดนี้</button>`);
+        $('#ok', ov).onclick = () => { papers[info.barcode] = { paper: $('#pp', ov).value, labelType: info.type || cfg.labelType }; LS.set('papers', papers); $('#paper', el).value = papers[info.barcode].paper; preview(); ov.remove(); };
+      }
+    } catch (e) { $('#pinfo', el).textContent = 'อ่านชิปไม่ได้: ' + e.message; }
+  };
+  $('#con', el).onclick = async () => {
+    if (NB.connected) { NB.disconnect(); renderPrinterBadge(); return; }
+    try { busy(1, 'กำลังค้นหาเครื่องพิมพ์...'); const n = await NB.connect(); busy(0); $('#model', el).value = LS.get('printerModel', 'B1'); preview(); renderPrinterBadge(); toast('เชื่อมต่อ ' + n); await readPaper(); } catch (e) { busy(0); if (e.name !== 'NotFoundError') toast(e.message, 1); }
+  };
+  $('#rp', el).onclick = () => NB.connected ? readPaper() : toast('เชื่อมต่อเครื่องพิมพ์ก่อน', 1);
+  $('#png', el).onclick = () => {
+    if (!LQ.length) return toast('ยังไม่มีรายการ', 1);
+    LQ.forEach((it, i) => { const c = document.createElement('canvas'); renderLabel(c, opts(it)); c.toBlob(b => download(`label_${it.p.sku}.png`, b), 'image/png'); });
+    toast('บันทึกรูปแล้ว — เปิดในแอป NIIMBOT เพื่อพิมพ์');
+  };
+  $('#pr', el).onclick = async () => {
+    if (!LQ.length) return toast('ยังไม่มีรายการ', 1);
+    if (!NB.connected) { try { await NB.connect(); renderPrinterBadge(); } catch (e) { return e.name !== 'NotFoundError' && toast(e.message, 1); } }
+    save(); const total = LQ.length;
+    try {
+      for (let i = 0; i < total; i++) {
+        const it = LQ[i]; const c = document.createElement('canvas'); renderLabel(c, opts(it));
+        let src = c; const maxW = 384;
+        const w = cfg.rotate ? c.height : c.width;
+        if (w > maxW) { const s = document.createElement('canvas'); const k = maxW / w; s.width = Math.floor(c.width * (cfg.rotate ? 1 : k)); s.height = Math.floor(c.height * (cfg.rotate ? k : 1)); const x = s.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, s.width, s.height); x.drawImage(c, 0, 0, s.width, s.height); src = s; }
+        const { rows, cols } = canvasToRows(src, cfg.rotate);
+        busy(1, `กำลังพิมพ์ ${i + 1}/${total}: ${it.p.name}`);
+        await NB.print(rows, cols, { copies: it.copies, density: cfg.density, labelType: cfg.labelType, model: cfg.model });
+      }
+      busy(0); toast('พิมพ์เสร็จ ' + total + ' รายการ'); LQ = []; drawQ(); preview();
+    } catch (e) { busy(0); toast('พิมพ์ไม่สำเร็จ: ' + e.message + ' — ลองสลับรุ่น B1/B21 หรือใช้ “บันทึกรูป PNG”', 1); }
+  };
+  drawQ(); document.fonts.ready.then(preview);
+  if (!S.products.length) loadProducts(true).catch(() => { });
+};
+let renderPrinterBadge = () => { };
+function pickProducts(cb) {
+  const sel = new Map(); let q = '', onlyFresh = true;
+  const ov = sheet('เลือกสินค้า', `<input class="in" id="pq" placeholder="ค้นหา..."><label class="row small" style="margin:8px 2px"><input type="checkbox" id="pf" checked> เฉพาะของสด / ไม่มีบาร์โค้ด</label><div class="list" id="pl"></div>`, `<button class="btn block" id="ok">เพิ่มที่เลือก (<span id="n">0</span>)</button>`);
+  const draw = () => {
+    let res = searchProducts(q, {}); if (onlyFresh) res = res.filter(p => !p.barcode || /ของสด/.test(p.category || '') || p.byWeight === 'Y');
+    $('#pl', ov).innerHTML = res.slice(0, 80).map(p => `<label class="item"><input type="checkbox" data-s="${esc(p.sku)}" ${sel.has(p.sku) ? 'checked' : ''}><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || 'ไม่มีบาร์โค้ด')}</div></div><div class="price" style="font-size:15px">${baht(p.price)}</div></label>`).join('') || '<div class="empty">ไม่พบ</div>';
+    $$('[data-s]', ov).forEach(c => c.onchange = () => { c.checked ? sel.set(c.dataset.s, IDX.bySku[c.dataset.s]) : sel.delete(c.dataset.s); $('#n', ov).textContent = sel.size; });
+  };
+  $('#pq', ov).oninput = e => { q = e.target.value; draw(); }; $('#pf', ov).onchange = e => { onlyFresh = e.target.checked; draw(); };
+  $('#ok', ov).onclick = () => { ov.remove(); cb([...sel.values()]); }; draw();
+}
+
+/* ---------- RECEIPTS ---------- */
+VIEWS.receipts = async el => {
+  el.innerHTML = vhead('ใบเสร็จร้านค้าส่ง', `<button class="btn sm" onclick="newReceipt()">${I(IC.cam, 18)} เพิ่ม</button>`) + `
+   <div class="row" style="margin-bottom:10px"><select class="in" id="ym" style="max-width:200px"></select><span class="grow"></span><span class="small muted" id="sum"></span></div>
+   <div class="list" id="rl"><div class="empty"><span class="spin dark"></span></div></div>`;
+  try { S.receipts = await loadTable('Receipts'); } catch (e) { $('#rl', el).innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const months = [...new Set(S.receipts.map(r => String(r.date).slice(0, 7)).concat([todayISO().slice(0, 7)]))].sort().reverse();
+  $('#ym', el).innerHTML = `<option value="">ทั้งหมด</option>` + months.map(m => `<option value="${m}">${TH_MF[+m.slice(5) - 1]} ${+m.slice(0, 4) + 543}</option>`).join('');
+  $('#ym', el).value = todayISO().slice(0, 7);
+  const draw = () => {
+    const ym = $('#ym', el).value; const list = S.receipts.filter(r => !ym || String(r.date).startsWith(ym)).sort((a, b) => String(b.date).localeCompare(a.date));
+    $('#sum', el).textContent = `${list.length} ใบ · ${baht(list.reduce((s, r) => s + num(r.total), 0))}`;
+    $('#rl', el).innerHTML = list.length ? list.map(r => { const n = (JSON.parse(r.items || '[]')).length; return `<div class="item" data-id="${esc(r.id)}"><div class="av" style="background:${r.fileUrl ? 'var(--green-l)' : 'var(--amber-l)'};color:${r.fileUrl ? 'var(--green)' : 'var(--amber)'}">${I(r.fileUrl ? IC.file : IC.alert, 20)}</div><div class="grow"><div class="t">${esc(r.supplier || 'ไม่ระบุร้าน')}</div><div class="m">${thDate(r.date)} · ${esc(r.docNo || '-')} · ${n} รายการ · ${esc(r.type || 'สินค้า')}</div></div><div class="price" style="font-size:16px;color:var(--ink)">${baht(r.total)}</div></div>`; }).join('') : '<div class="empty">ยังไม่มีใบเสร็จในเดือนนี้<br>กด “เพิ่ม” เพื่อถ่ายรูปใบเสร็จ</div>';
+    $$('#rl [data-id]', el).forEach(x => x.onclick = () => receiptForm(S.receipts.find(r => r.id === x.dataset.id)));
+  };
+  $('#ym', el).onchange = draw; draw();
+};
+function newReceipt() {
+  const ov = sheet('เพิ่มใบเสร็จร้านค้าส่ง', `
+    <p class="small muted" style="margin-top:0">ถ่ายรูปใบเสร็จให้เห็นรายการชัดเจน วางบนพื้นเรียบ แสงพอ — ระบบจะอ่านรายการสินค้าและให้ตรวจสอบก่อนบันทึก</p>
+    <label class="btn block" style="min-height:64px;font-size:17px">${I(IC.cam, 24)} ถ่ายรูป / เลือกรูปใบเสร็จ<input type="file" accept="image/*,application/pdf" capture="environment" id="fi" class="hidden"></label>
+    <button class="btn ghost block" style="margin-top:10px" id="man">กรอกเอง (ไม่มีรูป)</button>
+    <div class="tiny muted" style="margin-top:10px">${S.apiUrl ? 'อ่านข้อความด้วย Google OCR (หรือ Gemini ถ้าตั้งค่า API key ไว้)' : 'โหมดทดลอง: อ่านข้อความด้วย Tesseract ในเครื่อง (ช้ากว่าและแม่นน้อยกว่า)'}</div>`);
+  $('#man', ov).onclick = () => { ov.remove(); receiptForm({ id: uid('R'), date: todayISO(), type: 'สินค้า', items: '[]' }, true); };
+  $('#fi', ov).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; ov.remove();
+    try {
+      busy(1, 'กำลังย่อรูป...'); const img = await compressImage(f);
+      busy(1, 'กำลังอัปโหลดรูปเก็บใน Google Drive...');
+      const up = await api('upload', { kind: 'receipt', name: `receipt_${todayISO()}_${Date.now()}.jpg`, mime: img.mime, base64: img.dataUrl });
+      busy(1, 'กำลังอ่านรายการในใบเสร็จ...');
+      let data;
+      try {
+        const o = await api('ocr', { base64: img.dataUrl, mime: img.mime });
+        data = o.data ? { ...o.data, items: (o.data.items || []).map(i => ({ ...i })) } : parseReceiptText(o.text || '');
+        data._raw = o.text || ''; data._engine = o.engine;
+      } catch (err) { data = { items: [] }; toast('อ่านข้อความไม่สำเร็จ: ' + err.message + ' — กรอกเองได้', 1); }
+      if (!S.products.length) await loadProducts(true);
+      buildIndex();
+      const items = (data.items || []).map(it => {
+        const m = matchProduct(it.name, it.code);
+        return { name: it.name, code: it.code || '', qty: num(it.qty) || 1, unitCost: num(it.unitPrice) || (num(it.amount) / (num(it.qty) || 1)), amount: num(it.amount), sku: m ? m.p.sku : '', score: m ? m.score : 0, updateCost: !!m, addStock: false, createNew: false };
+      });
+      busy(0);
+      receiptForm({ id: uid('R'), date: data.date || todayISO(), supplier: data.supplier || '', supplierTaxId: data.supplierTaxId || '', docNo: data.docNo || '', type: 'สินค้า', vat: data.vat || '', total: data.total || '', subtotal: data.subtotal || '', fileId: up.fileId, fileUrl: up.fileUrl, items: JSON.stringify(items), _raw: data._raw, _engine: data._engine, _img: img.dataUrl }, true);
+    } catch (err) { busy(0); toast(err.message, 1); }
+  };
+}
+function receiptForm(r, isNew) {
+  let items = JSON.parse(r.items || '[]');
+  const applied = r.stockApplied === 'Y';
+  const ov = sheet(isNew ? 'ตรวจสอบใบเสร็จก่อนบันทึก' : 'ใบเสร็จ', `
+    ${r._img || (r.fileUrl && /^data:/.test(r.fileUrl)) ? `<img src="${r._img || r.fileUrl}" style="width:100%;max-height:220px;object-fit:contain;background:#fff;border-radius:12px;margin-bottom:10px">` : r.fileUrl ? `<a class="btn ghost sm" href="${esc(r.fileUrl)}" target="_blank" rel="noopener" style="margin-bottom:10px">${I(IC.file, 16)} เปิดรูปใบเสร็จใน Drive</a>` : `<div class="alert amber">${I(IC.alert, 18)}<div>ไม่มีรูปใบเสร็จแนบ — ควรเก็บหลักฐานไว้กรณีใช้หักค่าใช้จ่ายตามจริง</div></div>`}
+    ${r._engine ? `<div class="tiny muted" style="margin-bottom:8px">อ่านด้วย: ${esc(r._engine)} · <b>กรุณาตรวจทุกช่องก่อนยืนยัน</b></div>` : ''}
+    <div class="grid2"><label class="f"><span>วันที่ในใบเสร็จ</span><input class="in" type="date" id="r_date" value="${esc(r.date)}"></label>
+    <label class="f"><span>ประเภท</span><select class="in" id="r_type"><option>สินค้า</option><option>ค่าใช้จ่าย</option></select></label></div>
+    <label class="f"><span>ร้านค้าส่ง / ผู้ขาย</span><input class="in" id="r_supplier" list="supl" value="${esc(r.supplier)}"><datalist id="supl">${[...new Set(S.receipts.map(x => x.supplier).filter(Boolean))].map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
+    <div class="grid2"><label class="f"><span>เลขที่เอกสาร</span><input class="in" id="r_docNo" value="${esc(r.docNo)}"></label><label class="f"><span>เลขผู้เสียภาษีผู้ขาย</span><input class="in" id="r_supplierTaxId" inputmode="numeric" value="${esc(r.supplierTaxId)}"></label></div>
+    <div class="card" style="padding:10px"><div class="row" style="margin-bottom:6px"><b class="grow">รายการสินค้า (${items.length})</b><button class="btn ghost sm" id="addi">${I(IC.plus, 16)} เพิ่มแถว</button></div><div id="items"></div></div>
+    <div class="grid3"><label class="f"><span>ก่อน VAT</span><input class="in" id="r_subtotal" type="number" step="any" value="${esc(r.subtotal)}"></label><label class="f"><span>VAT</span><input class="in" id="r_vat" type="number" step="any" value="${esc(r.vat)}"></label><label class="f"><span>ยอดรวม *</span><input class="in" id="r_total" type="number" step="any" value="${esc(r.total)}"></label></div>
+    <div class="small muted" id="chk"></div>
+    <label class="f"><span>ชำระโดย</span><select class="in" id="r_payMethod"><option>เงินสด</option><option>โอน</option><option>เครดิต</option><option>บัตร</option></select></label>
+    <label class="f"><span>หมายเหตุ</span><input class="in" id="r_note" value="${esc(r.note)}"></label>
+    ${r._raw ? `<details><summary class="small muted">ข้อความที่อ่านได้ (OCR)</summary><pre style="white-space:pre-wrap;font-size:12px;background:#fff;padding:8px;border-radius:8px">${esc(r._raw)}</pre></details>` : ''}
+    ${!isNew && isOwner() ? `<button class="btn ghost sm" id="del" style="color:var(--red);margin-top:10px">${I(IC.trash, 16)} ลบใบเสร็จ</button>` : ''}`,
+    `<button class="btn grow green" id="sv">${applied ? 'บันทึกการแก้ไข' : 'ยืนยัน นำเข้าระบบ'}</button>`, { sticky: true });
+  $('#r_type', ov).value = r.type || 'สินค้า'; $('#r_payMethod', ov).value = r.payMethod || 'เงินสด';
+  const drawItems = () => {
+    $('#items', ov).innerHTML = items.length ? items.map((it, i) => {
+      const p = it.sku ? IDX.bySku[it.sku] : null;
+      return `<div style="border-bottom:1px solid var(--line);padding:8px 0">
+        <div class="row"><input class="in grow" data-k="name" data-i="${i}" value="${esc(it.name)}" placeholder="ชื่อในใบเสร็จ" style="min-height:38px"><button class="iconbtn" data-del="${i}">${I(IC.x, 18)}</button></div>
+        <div class="row tiny" style="margin:6px 0">${p ? `<span class="tag ${it.score >= .75 ? 'green' : 'amber'}">จับคู่: ${esc(p.name)}</span>` : it.createNew ? '<span class="tag blue">จะสร้างสินค้าใหม่</span>' : '<span class="tag red">ยังไม่จับคู่สินค้า</span>'}<button class="btn ghost sm" data-match="${i}" style="min-height:28px;padding:2px 8px">${p ? 'เปลี่ยน' : 'เลือกสินค้า'}</button></div>
+        <div class="grid3"><label class="tiny muted">จำนวน<input class="in" type="number" step="any" data-k="qty" data-i="${i}" value="${it.qty}"></label><label class="tiny muted">ทุน/หน่วย<input class="in" type="number" step="any" data-k="unitCost" data-i="${i}" value="${it.unitCost}"></label><label class="tiny muted">รวม<input class="in" type="number" step="any" data-k="amount" data-i="${i}" value="${it.amount}"></label></div>
+        ${p || it.createNew ? `<div class="row tiny" style="margin-top:6px;gap:12px"><label class="row"><input type="checkbox" data-c="updateCost" data-i="${i}" ${it.updateCost ? 'checked' : ''}> อัปเดตต้นทุน${p && num(p.cost) ? ` (เดิม ${money(p.cost)})` : ''}</label><label class="row"><input type="checkbox" data-c="addStock" data-i="${i}" ${it.addStock ? 'checked' : ''}> เพิ่มสต็อก</label></div>` : ''}
+      </div>`;
+    }).join('') : '<div class="empty small">ไม่มีรายการ</div>';
+    $$('[data-k]', ov).forEach(inp => inp.onchange = () => { const it = items[+inp.dataset.i], k = inp.dataset.k; it[k] = k === 'name' ? inp.value : num(inp.value); if (k === 'qty' || k === 'unitCost') it.amount = Math.round(num(it.qty) * num(it.unitCost) * 100) / 100; if (k === 'amount') it.unitCost = Math.round(num(it.amount) / (num(it.qty) || 1) * 100) / 100; drawItems(); });
+    $$('[data-c]', ov).forEach(c => c.onchange = () => items[+c.dataset.i][c.dataset.c] = c.checked);
+    $$('[data-del]', ov).forEach(b => b.onclick = () => { items.splice(+b.dataset.del, 1); drawItems(); });
+    $$('[data-match]', ov).forEach(b => b.onclick = () => matchDlg(items[+b.dataset.match], drawItems));
+    const sum = items.reduce((s, it) => s + num(it.amount), 0); const tot = num($('#r_total', ov).value);
+    $('#chk', ov).innerHTML = items.length ? `รวมรายการ ${money(sum)} ${tot ? (Math.abs(sum - tot) < 1 ? '<span class="tag green">ตรงกับยอดรวม</span>' : Math.abs(sum + num($('#r_vat', ov).value) - tot) < 1 ? '<span class="tag green">ตรง (รวม VAT)</span>' : `<span class="tag amber">ต่างจากยอดรวม ${money(tot - sum)}</span>`) : ''}` : '';
+  };
+  $('#addi', ov).onclick = () => { items.push({ name: '', qty: 1, unitCost: 0, amount: 0, sku: '', updateCost: true, addStock: false }); drawItems(); };
+  $('#r_total', ov).onchange = drawItems;
+  drawItems();
+  $('#sv', ov).onclick = async () => {
+    const rc = { id: r.id, fileId: r.fileId || '', fileUrl: /^data:/.test(r.fileUrl || '') && r.fileUrl.length > 400000 ? '' : (r.fileUrl || ''), createdAt: r.createdAt, createdBy: r.createdBy };
+    ['date', 'type', 'supplier', 'docNo', 'supplierTaxId', 'subtotal', 'vat', 'total', 'payMethod', 'note'].forEach(k => rc[k] = $('#r_' + k, ov).value.trim());
+    if (!rc.total) rc.total = String(items.reduce((s, it) => s + num(it.amount), 0));
+    if (!rc.date) return toast('กรุณาใส่วันที่', 1);
+    rc.items = JSON.stringify(items.map(({ score, ...it }) => it));
+    try {
+      busy(1, 'กำลังบันทึก...');
+      if (applied) { rc.stockApplied = 'Y'; await api('upsert', { table: 'Receipts', rows: [rc] }); }
+      else { const res = await api('applyReceipt', { receipt: rc }); toast(`บันทึกแล้ว · อัปเดตสินค้า ${res.updated} รายการ${res.created ? ` · สร้างใหม่ ${res.created}` : ''}`); await loadProducts(true); }
+      busy(0); ov.remove(); if (S.view === 'receipts') go('receipts');
+    } catch (e) { busy(0); toast(e.message, 1); }
+  };
+  const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg('ลบใบเสร็จนี้? (สต็อก/ต้นทุนที่อัปเดตไปแล้วจะไม่ย้อนกลับ)', 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Receipts', ids: [r.id] }); busy(0); ov.remove(); go('receipts'); } catch (e) { busy(0); toast(e.message, 1); } };
+}
+function matchDlg(it, done) {
+  let q = it.name || '';
+  const ov = sheet('จับคู่สินค้า', `<div class="small muted" style="margin-bottom:6px">ในใบเสร็จ: <b>${esc(it.name)}</b></div><input class="in" id="mq" value="${esc(q)}"><div class="list" id="ml" style="margin-top:8px"></div>`, `<button class="btn ghost grow" id="nw">สร้างเป็นสินค้าใหม่</button><button class="btn ghost grow" id="sk">ไม่จับคู่</button>`);
+  const draw = () => {
+    let res = searchProducts(q); if (!res.length) res = S.products.map(p => [p, sim(q, p.name)]).sort((a, b) => b[1] - a[1]).slice(0, 20).map(x => x[0]);
+    $('#ml', ov).innerHTML = res.slice(0, 40).map(p => `<div class="item" data-s="${esc(p.sku)}"><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || '')} · ทุน ${money(p.cost)}</div></div><div class="price" style="font-size:15px">${baht(p.price)}</div></div>`).join('');
+    $$('[data-s]', ov).forEach(x => x.onclick = () => { it.sku = x.dataset.s; it.score = 1; it.createNew = false; it.updateCost = true; ov.remove(); done(); });
+  };
+  $('#mq', ov).oninput = e => { q = e.target.value; draw(); };
+  $('#nw', ov).onclick = () => { it.sku = ''; it.createNew = true; it.updateCost = true; ov.remove(); done(); };
+  $('#sk', ov).onclick = () => { it.sku = ''; it.createNew = false; ov.remove(); done(); };
+  draw();
+}
+
+/* ---------- MORE MENU ---------- */
+VIEWS.more = el => {
+  const own = isOwner();
+  const items = [
+    ['salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 'ดูย้อนหลัง พิมพ์ซ้ำ คืนเงิน', 1],
+    ['customers', IC.user, 'ฐานลูกค้า', 'เบอร์โทร ยอดซื้อ แต้มสะสม เงินเชื่อ', can('customers')],
+    ['inventory', IC.count, 'สินค้าคงคลัง', 'ตรวจนับสต็อก ใบสั่งซื้อ มูลค่าสต็อก', can('stockCount') || can('receiveGoods') || can('viewCost')],
+    ['receipts', IC.cam, 'ใบเสร็จร้านค้าส่ง', 'ถ่ายรูป อ่านรายการ รับสินค้าเข้า', can('receiveGoods')],
+    ['labels', IC.print, 'พิมพ์ฉลาก / บาร์โค้ด', 'NIIMBOT B1 / B21 · แผ่น A4', 1],
+    ['categories', IC.grid, 'หมวดหมู่สินค้า', 'ชื่อ สี ลำดับ', can('editProducts')],
+    ['staff', IC.users, 'พนักงาน', 'ผู้ใช้ สิทธิ์ ลงเวลา ยอดขายพนักงาน', 1],
+    ['sales', IC.sale, 'ยอดขายรายเดือน (ภาษี)', 'ยอดจาก POS + กรอกเองย้อนหลัง', own],
+    ['tax', IC.tax, 'ภาษีเงินได้บุคคลธรรมดา', 'คำนวณ เปรียบเทียบวิธีหักค่าใช้จ่าย กำหนดยื่น', own],
+    ['licenses', IC.shield, 'ใบอนุญาต', 'สุรา ยาสูบ และอื่นๆ แจ้งเตือนก่อนหมดอายุ', 1],
+    ['io', IC.io, 'นำเข้า / ส่งออกไฟล์', 'Excel / CSV รูปแบบเดียวกับไฟล์ตัวอย่าง', own],
+    ['printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 'Bluetooth / USB · ออกแบบใบเสร็จ', 1],
+    ['payset', IC.sale, 'การชำระเงิน & แต้ม', 'พร้อมเพย์ QR บัตรสวัสดิการ เงินเชื่อ แต้มสะสม', own],
+    ['displayset', IC.monitor, 'จอแสดงผลฝั่งลูกค้า', 'เปิดจอที่ 2 / จับคู่แท็บเล็ต', 1],
+    ['devices', IC.wifi, 'อุปกรณ์ POS', 'มือถือ แท็บเล็ต iPad คอมพิวเตอร์', own],
+    ['settings', IC.gear, 'ตั้งค่า', 'ข้อมูลร้าน การเชื่อมต่อ เปลี่ยน PIN', 1]
+  ].filter(x => x[4]);
+  el.innerHTML = vhead('เพิ่มเติม') + `<div class="list menu">${items.map(([v, ic, t, d]) => `<div class="item" onclick="go('${v}')"><div class="av">${I(ic, 20)}</div><div class="grow"><div class="t">${t}</div><div class="m">${d}</div></div></div>`).join('')}
+   <div class="item" id="lo"><div class="av" style="color:var(--red)">${I(IC.logout, 20)}</div><div class="grow"><div class="t" style="color:var(--red)">ออกจากระบบ</div></div></div></div>`;
+  $('#lo', el).onclick = () => logout();
+};
+
+/* ---------- SALES (รายเดือนสำหรับภาษี) ---------- */
+async function monthlySales(y) {
+  const [man, pos] = await Promise.all([loadTable('Sales').catch(() => []), api('salesMonthly', { year: y }).then(r => r.months).catch(() => ({}))]);
+  S.sales = man;
+  return TH_MF.map((m, i) => {
+    const mm = String(i + 1).padStart(2, '0'), id = `M-${y}-${mm}`, r = man.find(x => x.id === id), p = pos[mm] || {};
+    const manual = r && r.amount !== '' ? num(r.amount) : null;
+    return { i, mm, id, name: m, pos: num(p.net), posCost: num(p.cost), count: p.count || 0, manual, amount: manual != null ? manual : num(p.net) };
+  });
+}
+VIEWS.sales = async el => {
+  if (ownerOnly(el)) return;
+  const y0 = +todayISO().slice(0, 4);
+  el.innerHTML = vhead('ยอดขายรายเดือน (ใช้คำนวณภาษี)', '', 'more') + `<div class="card"><p class="small muted" style="margin-top:0">ระบบดึงยอดขายสุทธิจากหน้าขาย (POS) ให้อัตโนมัติ เดือนที่ยังไม่ได้ใช้ POS ของระบบนี้ (เช่น ใช้ Loyverse) ให้กรอก “ยอดที่ใช้จริง” เอง — ถ้ากรอก จะใช้ค่าที่กรอกแทนยอด POS</p>
+   <select class="in" id="yy">${[y0, y0 - 1, y0 - 2].map(y => `<option value="${y}">ปี ${y + 543}</option>`).join('')}</select></div><div class="card" id="mm"><span class="spin dark"></span></div>`;
+  const draw = async () => {
+    const y = $('#yy', el).value; const rows = await monthlySales(y); let tot = 0; rows.forEach(r => tot += r.amount);
+    $('#mm', el).innerHTML = `<table class="t"><tr><th>เดือน</th><th class="right">จาก POS</th><th class="right">ยอดที่ใช้ (กรอกทับ)</th></tr>` + rows.map(r => `<tr><td>${r.name}</td><td class="right num">${r.pos ? money(r.pos) : '<span class="muted">-</span>'}</td><td class="right"><input class="in num right" style="max-width:150px;min-height:36px" type="number" step="any" data-id="${r.id}" value="${r.manual != null ? r.manual : ''}" placeholder="${r.pos ? money(r.pos, 0) : '0'}"></td></tr>`).join('') + `</table><div class="kv" style="font-weight:700;margin-top:8px"><span>รวมทั้งปี</span><span>${baht(tot)}</span></div><button class="btn block green" id="sv" style="margin-top:10px">บันทึก</button>`;
+    $('#sv', el).onclick = async () => {
+      const ins = $$('[data-id]', el); const rows2 = ins.filter(i => i.value !== '').map(i => ({ id: i.dataset.id, date: i.dataset.id.slice(2) + '-01', amount: i.value }));
+      const clear = ins.filter(i => i.value === '' && S.sales.some(x => x.id === i.dataset.id)).map(i => i.dataset.id);
+      try { busy(1); if (rows2.length) await api('upsert', { table: 'Sales', rows: rows2 }); if (clear.length) await api('remove', { table: 'Sales', ids: clear }); busy(0); toast('บันทึกแล้ว'); draw(); } catch (e) { busy(0); toast(e.message, 1); }
+    };
+  };
+  $('#yy', el).onchange = draw; draw();
+};
+
+/* ---------- TAX ---------- */
+VIEWS.tax = async el => {
+  if (ownerOnly(el)) return;
+  const y0 = +todayISO().slice(0, 4);
+  el.innerHTML = vhead('ภาษีเงินได้บุคคลธรรมดา', '', 'more') + `<div class="card center"><span class="spin dark"></span></div>`;
+  S.receipts = await loadTable('Receipts').catch(() => []);
+  const tcfg = LS.get('taxCfg', { extraAllow: 0, paid94: {} });
+  const MS = {};
+  const render = async y => {
+    y = +y; const inYear = (d, h) => String(d).startsWith(String(y)) && (!h || +String(d).slice(5, 7) <= 6);
+    const ms = MS[y] || (MS[y] = await monthlySales(y)); S.taxMonths = ms;
+    const sales = (h) => ms.filter(m => !h || m.i < 6).reduce((a, m) => a + m.amount, 0);
+    const exps = (h) => S.receipts.filter(r => inYear(r.date, h)).reduce((a, r) => a + num(r.total), 0);
+    const monthsWithSales = ms.filter(m => m.amount > 0).length;
+    const noFile = S.receipts.filter(r => inYear(r.date) && !r.fileUrl).length;
+    const G = sales(), E = exps(), GH = sales(1), EH = exps(1);
+    const allow = 60000 + num(tcfg.extraAllow);
+    const A = TAX.calc({ gross: G, actualExp: E, allowance: allow });
+    const H = TAX.calc({ gross: GH, actualExp: EH, allowance: 30000 + num(tcfg.extraAllow) / 2, half: true });
+    const curY = y === y0; const monthsPassed = curY ? +todayISO().slice(5, 7) : 12;
+    const proj = monthsWithSales ? G / monthsWithSales * 12 : 0;
+    const rec = [];
+    if (!monthsWithSales) rec.push(['amber', 'ยังไม่มียอดขายของปีนี้ — ขายผ่านหน้า POS หรือกรอกที่ “ยอดขายรายเดือน” การคำนวณด้านล่างจะยังไม่ถูกต้อง']);
+    else if (monthsWithSales < monthsPassed) rec.push(['amber', `บันทึกยอดขายแล้ว ${monthsWithSales} เดือน จาก ${monthsPassed} เดือน — กรอกให้ครบเพื่อความแม่นยำ`]);
+    if (G > 1.8e6) rec.push(['red', `<b>ยอดขายเกิน 1,800,000 บาท/ปี แล้ว</b> — กฎหมายกำหนดให้จดทะเบียนภาษีมูลค่าเพิ่ม (VAT) ภายใน 30 วันนับจากวันที่รายรับเกิน จากนั้นต้องยื่น ภ.พ.30 ทุกเดือน ควรปรึกษาสรรพากรพื้นที่/นักบัญชีทันที`]);
+    else if (proj > 1.8e6 || G > 1.44e6) rec.push(['amber', `คาดการณ์ยอดขายทั้งปี ≈ ${baht(proj)} ใกล้/เกินเกณฑ์ VAT 1.8 ล้าน — เตรียมความพร้อมจด VAT (ระบบใบกำกับภาษี, ปรับราคา)`]);
+    if (A.best === 'actual' && E > 0) rec.push(['green', `วิธี <b>หักค่าใช้จ่ายตามจริง</b> เสียภาษีน้อยกว่าเหมา 60% ประมาณ ${baht(A.flat.tax - A.actual.tax)} — ต้องมีหลักฐานครบ (ใบเสร็จ/ใบกำกับ) และควรจัดทำบัญชีรายรับ-รายจ่าย`]);
+    else if (G > 0) rec.push(['green', `วิธี <b>หักเหมา 60%</b> คุ้มกว่า/ง่ายกว่า (ค่าใช้จ่ายจริงที่มีหลักฐาน ${G ? (E / G * 100).toFixed(0) : 0}% ของยอดขาย) ไม่ต้องแนบหลักฐานค่าใช้จ่าย แต่ควรเก็บใบเสร็จไว้`]);
+    if (E / (G || 1) > .5 && E / (G || 1) < .6) rec.push(['blue', 'ค่าใช้จ่ายจริงใกล้ 60% — ถ้าเก็บใบเสร็จได้ครบขึ้นอาจคุ้มกว่าการหักเหมา']);
+    if (noFile) rec.push(['amber', `มีใบเสร็จ ${noFile} ใบที่ยังไม่มีรูปหลักฐาน`]);
+    const best = A[A.best];
+    if (best.rate >= .2) rec.push(['blue', `เงินได้สุทธิอยู่ในขั้นภาษี ${best.rate * 100}% — ควรปรึกษานักบัญชีเรื่องการจดทะเบียนนิติบุคคล (บริษัท SME มีอัตราภาษีขั้นบันได) และวางแผนค่าลดหย่อน`]);
+    if (best.usedMin) rec.push(['blue', 'ภาษีคำนวณแบบ 0.5% ของรายรับ (วิธีที่ 2) สูงกว่าแบบขั้นบันได จึงต้องชำระตามวิธีที่ 2']);
+    const paid94 = num(tcfg.paid94[y]);
+    const row = (k, a, b) => `<tr><td>${k}</td><td class="right num">${a}</td><td class="right num">${b}</td></tr>`;
+    const dl = TAX.deadlines();
+    $('#tx', el).innerHTML = `
+     <div class="card"><h3>กำหนดยื่นแบบถัดไป</h3>${dl.map(d => `<div class="kv"><span><b>${d.form}</b> <span class="small muted">${d.what}</span></span><span class="small right">กระดาษ ${thDate(d.paper)}<br>ออนไลน์ ~${thDate(d.online)} <span class="tag ${daysTo(d.paper) <= 30 ? 'red' : 'gray'}">อีก ${daysTo(d.paper)} วัน</span></span></div>`).join('')}
+      <div class="tiny muted" style="margin-top:6px">วันยื่นออนไลน์ที่ขยายเวลาอาจเปลี่ยนแต่ละปี ตรวจสอบที่ rd.go.th · ยื่นช้ามีเงินเพิ่ม 1.5% ต่อเดือนของภาษีที่ต้องชำระ</div></div>
+     <div class="card"><h3>สรุปปี ${y + 543}</h3>
+      <div class="grid2"><div class="stat"><div class="k">ยอดขาย (เงินได้ 40(8))</div><div class="v">${baht(G)}</div></div><div class="stat"><div class="k">ค่าใช้จ่ายมีหลักฐาน</div><div class="v">${baht(E)}</div></div></div>
+      <div class="scroll-x" style="margin-top:10px"><table class="t"><tr><th></th><th class="right">หักเหมา 60%</th><th class="right">หักตามจริง</th></tr>
+       ${row('ค่าใช้จ่าย', money(A.flat.exp), money(A.actual.exp))}${row('ค่าลดหย่อน', money(allow), money(allow))}${row('เงินได้สุทธิ', money(A.flat.net), money(A.actual.net))}
+       ${row('ภาษีแบบขั้นบันได', money(A.flat.t1), money(A.actual.t1))}${row('ภาษีแบบ 0.5% ของรายรับ', money(A.flat.t2), money(A.actual.t2))}
+       <tr style="font-weight:700"><td>ภาษีที่ต้องชำระ (ภ.ง.ด.90)</td><td class="right num" style="color:${A.best === 'flat' ? 'var(--green)' : ''}">${money(A.flat.tax)}${A.best === 'flat' ? ' ✓' : ''}</td><td class="right num" style="color:${A.best === 'actual' ? 'var(--green)' : ''}">${money(A.actual.tax)}${A.best === 'actual' ? ' ✓' : ''}</td></tr>
+       ${row('หักภาษีที่ชำระแล้วตาม ภ.ง.ด.94', money(paid94), money(paid94))}
+       <tr style="font-weight:700"><td>คงเหลือชำระ/ขอคืน</td><td class="right num">${money(A.flat.tax - paid94)}</td><td class="right num">${money(A.actual.tax - paid94)}</td></tr></table></div></div>
+     <div class="card"><h3>ครึ่งปีแรก ม.ค.–มิ.ย. (ภ.ง.ด.94)</h3>
+      <div class="kv"><span>ยอดขายครึ่งปี</span><b>${baht(GH)}</b></div><div class="kv"><span>ค่าใช้จ่ายมีหลักฐาน</span><b>${baht(EH)}</b></div>
+      <div class="kv"><span>ภาษีหักเหมา 60%</span><b>${money(H.flat.tax)}</b></div><div class="kv"><span>ภาษีหักตามจริง</span><b>${money(H.actual.tax)}</b></div>
+      <label class="f" style="margin-top:8px"><span>ภาษีที่ชำระไปแล้วตาม ภ.ง.ด.94 ปีนี้</span><input class="in" type="number" step="any" id="p94" value="${esc(tcfg.paid94[y] || '')}"></label></div>
+     <div class="card"><h3>คำแนะนำจากระบบ</h3>${rec.map(([c, t]) => `<div class="alert ${c}">${I(c === 'green' ? IC.check : IC.alert, 18)}<div>${t}</div></div>`).join('') || '<div class="muted small">ไม่มี</div>'}</div>
+     <div class="card"><label class="f"><span>ค่าลดหย่อนอื่นนอกจากส่วนตัว 60,000 (คู่สมรส บุตร บิดามารดา ประกัน ประกันสังคม กองทุน ฯลฯ รวม)</span><input class="in" type="number" step="any" id="xa" value="${esc(tcfg.extraAllow || '')}"></label>
+      <div class="row"><button class="btn ghost grow" id="pr">${I(IC.print, 18)} พิมพ์รายงาน + รายการใบเสร็จ</button><button class="btn ghost grow" id="cs">ส่งออก CSV</button></div></div>
+     <div class="tiny muted" style="padding:0 6px 10px">ตัวเลขเป็นการประมาณเพื่อวางแผน คำนวณจากยอดขายที่บันทึกและใบเสร็จในระบบ (ใช้ยอดซื้อสินค้าแทนต้นทุนขาย ยังไม่ปรับสินค้าคงเหลือต้น/ปลายปี) ไม่ใช่คำปรึกษาทางภาษี — ก่อนยื่นจริงควรตรวจกับสรรพากรพื้นที่หรือนักบัญชี</div>`;
+    $('#xa', el).onchange = e => { tcfg.extraAllow = num(e.target.value); LS.set('taxCfg', tcfg); render(y); };
+    $('#p94', el).onchange = e => { tcfg.paid94[y] = num(e.target.value); LS.set('taxCfg', tcfg); render(y); };
+    $('#pr', el).onclick = () => printTaxReport(y, G, E, A, allow);
+    $('#cs', el).onclick = () => { const rs = S.receipts.filter(r => inYear(r.date)).sort((a, b) => String(a.date).localeCompare(b.date)); download(`receipts_${y}.csv`, toCSV([['วันที่', 'ร้านค้า', 'เลขผู้เสียภาษี', 'เลขที่เอกสาร', 'ประเภท', 'ก่อนVAT', 'VAT', 'ยอดรวม', 'ลิงก์หลักฐาน']].concat(rs.map(r => [r.date, r.supplier, r.supplierTaxId, r.docNo, r.type, r.subtotal, r.vat, r.total, /^data:/.test(r.fileUrl) ? '' : r.fileUrl])))); };
+  };
+  el.innerHTML = vhead('ภาษีเงินได้บุคคลธรรมดา', `<select class="in" id="ty" style="width:auto">${[y0, y0 - 1, y0 - 2].map(y => `<option value="${y}">${y + 543}</option>`).join('')}</select>`, 'more') + '<div id="tx"></div>';
+  $('#ty', el).onchange = e => render(e.target.value); render(y0);
+};
+function printTaxReport(y, G, E, A, allow) {
+  const rs = S.receipts.filter(r => String(r.date).startsWith(String(y))).sort((a, b) => String(a.date).localeCompare(b.date));
+  const byM = {}; rs.forEach(r => { const m = +String(r.date).slice(5, 7); byM[m] = (byM[m] || 0) + num(r.total); });
+  const sm = {}; (S.taxMonths || []).forEach(m => sm[m.i + 1] = m.amount);
+  $('#printArea').innerHTML = `<h2>${esc(S.settings.shopName || 'ร้านเมย์ มินิมาร์ท')} — สรุปรายรับรายจ่าย ปีภาษี ${y + 543}</h2><div>${esc(S.settings.address || '')}</div>
+   <table style="margin-top:8px"><tr><th>เดือน</th><th>ยอดขาย</th><th>ซื้อสินค้า/ค่าใช้จ่าย (มีหลักฐาน)</th></tr>${TH_MF.map((m, i) => `<tr><td>${m}</td><td style="text-align:right">${money(sm[i + 1] || 0)}</td><td style="text-align:right">${money(byM[i + 1] || 0)}</td></tr>`).join('')}<tr><th>รวม</th><th style="text-align:right">${money(G)}</th><th style="text-align:right">${money(E)}</th></tr></table>
+   <p>ภาษีประมาณการ — หักเหมา 60%: ${money(A.flat.tax)} บาท · หักตามจริง: ${money(A.actual.tax)} บาท (ค่าลดหย่อน ${money(allow)})</p>
+   <h2>ทะเบียนใบเสร็จ/ใบกำกับภาษีซื้อ (${rs.length} ใบ)</h2><table><tr><th>#</th><th>วันที่</th><th>ผู้ขาย</th><th>เลขผู้เสียภาษี</th><th>เลขที่</th><th>ก่อน VAT</th><th>VAT</th><th>รวม</th></tr>${rs.map((r, i) => `<tr><td>${i + 1}</td><td>${thDate(r.date)}</td><td>${esc(r.supplier)}</td><td>${esc(r.supplierTaxId)}</td><td>${esc(r.docNo)}</td><td style="text-align:right">${money(r.subtotal)}</td><td style="text-align:right">${money(r.vat)}</td><td style="text-align:right">${money(r.total)}</td></tr>`).join('')}</table>
+   <p style="font-size:10px">พิมพ์เมื่อ ${thDate(todayISO())} จากระบบ May MiniMart · ใช้ประกอบการยื่น ภ.ง.ด.90/94 เก็บคู่กับต้นฉบับใบเสร็จ</p>`;
+  try { window.print(); } catch (e) { toast('อุปกรณ์นี้สั่งพิมพ์ไม่ได้', 1); }
+}
+
+/* ---------- LICENSES ---------- */
+VIEWS.licenses = async el => {
+  el.innerHTML = vhead('ใบอนุญาต', isOwner() ? `<button class="btn sm" id="add">${I(IC.plus, 18)} เพิ่ม</button>` : '', 'more') + `<div class="list" id="ll"><div class="empty"><span class="spin dark"></span></div></div>
+   <div class="card small muted" style="margin-top:12px">ระบบแจ้งเตือนบนหน้าหลักเมื่อเหลือ ≤ 60 วัน และส่งอีเมลถึงเจ้าของร้านเมื่อเหลือ 90/60/30/15/7/3/1 วัน (เมื่อเชื่อมต่อ Google แล้ว) — ใบอนุญาตขายสุราและยาสูบต่ออายุได้ที่สำนักงานสรรพสามิตพื้นที่ หรือระบบออนไลน์ของกรมสรรพสามิต ควรยื่นก่อนวันหมดอายุ</div>`;
+  const draw = async () => {
+    S.licenses = await loadTable('Licenses').catch(e => (toast(e.message, 1), []));
+    $('#ll', el).innerHTML = S.licenses.length ? S.licenses.sort((a, b) => String(a.expiryDate).localeCompare(b.expiryDate)).map(l => { const d = l.expiryDate ? daysTo(l.expiryDate) : null; const c = d == null ? 'gray' : d < 0 ? 'red' : d <= 30 ? 'red' : d <= 60 ? 'amber' : 'green'; return `<div class="item" data-id="${esc(l.id)}"><div class="av">${I(IC.shield, 20)}</div><div class="grow"><div class="t">${esc(l.type)}${l.subtype ? ' · ' + esc(l.subtype) : ''}</div><div class="m">เลขที่ ${esc(l.number || '-')} · หมดอายุ ${thDate(l.expiryDate)}</div></div><span class="tag ${c}">${d == null ? '-' : d < 0 ? 'หมดอายุ' : 'อีก ' + d + ' วัน'}</span></div>`; }).join('') : '<div class="empty">ยังไม่มีใบอนุญาต</div>';
+    $$('#ll [data-id]', el).forEach(x => x.onclick = () => licenseForm(S.licenses.find(l => l.id === x.dataset.id), draw));
+  };
+  const a = $('#add', el); if (a) a.onclick = () => licenseForm(null, draw);
+  draw();
+};
+function licenseForm(l, done) {
+  const isNew = !l; l = l || { id: uid('L'), type: 'ใบอนุญาตขายสุรา' };
+  const ro = !isOwner();
+  const ov = sheet(isNew ? 'เพิ่มใบอนุญาต' : 'ใบอนุญาต', `
+   <label class="f"><span>ประเภท</span><select class="in" id="l_type" ${ro ? 'disabled' : ''}><option>ใบอนุญาตขายสุรา</option><option>ใบอนุญาตขายยาสูบ</option><option>ใบอนุญาตขายไพ่</option><option>ใบทะเบียนพาณิชย์</option><option>ใบอนุญาตประกอบกิจการ (ท้องถิ่น)</option><option>อื่นๆ</option></select></label>
+   <div class="grid2"><label class="f"><span>ประเภทย่อย</span><input class="in" id="l_subtype" placeholder="เช่น ประเภท 2" value="${esc(l.subtype)}" ${ro ? 'readonly' : ''}></label><label class="f"><span>เลขที่ใบอนุญาต</span><input class="in" id="l_number" value="${esc(l.number)}" ${ro ? 'readonly' : ''}></label></div>
+   <label class="f"><span>ชื่อผู้รับอนุญาต</span><input class="in" id="l_holder" value="${esc(l.holder)}" ${ro ? 'readonly' : ''}></label>
+   <div class="grid2"><label class="f"><span>วันที่ออก</span><input class="in" type="date" id="l_issueDate" value="${esc(l.issueDate)}" ${ro ? 'readonly' : ''}></label><label class="f"><span>วันหมดอายุ *</span><input class="in" type="date" id="l_expiryDate" value="${esc(l.expiryDate)}" ${ro ? 'readonly' : ''}></label></div>
+   ${l.fileUrl ? `<a class="btn ghost sm" href="${esc(l.fileUrl)}" target="_blank" rel="noopener">${I(IC.file, 16)} เปิดไฟล์ใบอนุญาต</a>` : ''}
+   ${ro ? '' : `<label class="btn ghost block" style="margin-top:10px">${I(IC.cam, 18)} ${l.fileUrl ? 'อัปเดตไฟล์ใหม่' : 'แนบรูป/ไฟล์ใบอนุญาต'}<input type="file" accept="image/*,application/pdf" id="lf" class="hidden"></label><div class="tiny muted" id="lfn"></div>`}
+   <label class="f" style="margin-top:10px"><span>หมายเหตุ</span><input class="in" id="l_note" value="${esc(l.note)}" ${ro ? 'readonly' : ''}></label>
+   ${!isNew && !ro ? `<button class="btn ghost sm" id="del" style="color:var(--red)">${I(IC.trash, 16)} ลบ</button>` : ''}`,
+    ro ? '' : `<button class="btn block" id="sv">บันทึก</button>`);
+  $('#l_type', ov).value = l.type;
+  if (ro) return;
+  let file = null; $('#lf', ov).onchange = e => { file = e.target.files[0]; $('#lfn', ov).textContent = file ? file.name : ''; };
+  $('#sv', ov).onclick = async () => {
+    const o = { ...l }; ['type', 'subtype', 'number', 'holder', 'issueDate', 'expiryDate', 'note'].forEach(k => o[k] = $('#l_' + k, ov).value.trim());
+    if (!o.expiryDate) return toast('กรุณาใส่วันหมดอายุ', 1);
+    try {
+      busy(1, 'กำลังบันทึก...');
+      if (file) { const img = await compressImage(file, 2200, .85); const up = await api('upload', { kind: 'license', name: `${o.type}_${o.number || ''}_${todayISO()}.${img.mime === 'application/pdf' ? 'pdf' : 'jpg'}`, mime: img.mime, base64: img.dataUrl }); o.fileId = up.fileId; o.fileUrl = up.fileUrl; }
+      await api('upsert', { table: 'Licenses', rows: [o] }); busy(0); ov.remove(); toast('บันทึกแล้ว'); done && done();
+    } catch (e) { busy(0); toast(e.message, 1); }
+  };
+  const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg('ลบใบอนุญาตนี้?', 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Licenses', ids: [l.id] }); busy(0); ov.remove(); done && done(); } catch (e) { busy(0); toast(e.message, 1); } };
+}
+
+/* ---------- IMPORT / EXPORT ---------- */
+VIEWS.io = el => {
+  if (ownerOnly(el)) return;
+  el.innerHTML = vhead('นำเข้า / ส่งออก', '', 'more') + `
+   <div class="card"><h3>นำเข้าสินค้า</h3><p class="small muted" style="margin-top:0">รองรับไฟล์ .csv และ .xlsx รูปแบบเดียวกับไฟล์ตัวอย่าง (ส่งออกจาก Loyverse: Handle, SKU, Name, Category, Cost, Barcode, Price ...)</p>
+    <label class="btn block">${I(IC.io, 18)} เลือกไฟล์ CSV / Excel<input type="file" id="fi" accept=".csv,.xlsx,.xls,text/csv" class="hidden"></label><div id="pv" style="margin-top:10px"></div></div>
+   <div class="card"><h3>ส่งออก</h3>
+    <button class="btn ghost block" id="e1" style="margin-bottom:8px">สินค้า → CSV (รูปแบบ Loyverse นำกลับเข้า POS ได้)</button>
+    <button class="btn ghost block" id="e2" style="margin-bottom:8px">สินค้า → Excel (.xlsx)</button>
+    <button class="btn ghost block" id="e3">สำรองข้อมูลทั้งหมด (JSON)</button></div>`;
+  $('#fi', el).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      busy(1, 'กำลังอ่านไฟล์...'); let rows;
+      if (/\.xlsx?$/i.test(f.name)) { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
+      else rows = parseCSV(await f.text());
+      if (!S.products.length) await loadProducts(true).catch(() => { });
+      const list = rowsToProducts(rows); busy(0);
+      const exist = list.filter(p => IDX.bySku[p.sku]).length;
+      const dupBar = {}; list.forEach(p => p.barcode && (dupBar[p.barcode] = (dupBar[p.barcode] || 0) + 1));
+      const dups = Object.values(dupBar).filter(n => n > 1).length;
+      $('#pv', el).innerHTML = `<div class="alert blue">${I(IC.check, 18)}<div>พบ <b>${list.length.toLocaleString()}</b> รายการ · มีอยู่แล้ว ${exist} · ใหม่ ${list.length - exist}${dups ? ` · <b>บาร์โค้ดซ้ำในไฟล์ ${dups} ชุด</b>` : ''}</div></div>
+        <div class="scroll-x"><table class="t"><tr><th>SKU</th><th>ชื่อ</th><th>บาร์โค้ด</th><th class="right">ทุน</th><th class="right">ราคา</th></tr>${list.slice(0, 8).map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.barcode)}</td><td class="right">${esc(p.cost)}</td><td class="right">${esc(p.price)}</td></tr>`).join('')}</table></div>
+        <div class="seg" id="md" style="margin:10px 0"><button class="on" data-m="merge">รวม/อัปเดตตาม SKU</button><button data-m="replace">แทนที่ทั้งหมด</button></div>
+        <button class="btn green block" id="go">นำเข้า ${list.length.toLocaleString()} รายการ</button>`;
+      let mode = 'merge'; $$('#md button', el).forEach(b => b.onclick = () => { mode = b.dataset.m; $$('#md button', el).forEach(x => x.classList.toggle('on', x === b)); });
+      $('#go', el).onclick = async () => {
+        if (mode === 'replace' && !(await confirmDlg('ลบสินค้าทั้งหมดในระบบแล้วแทนที่ด้วยไฟล์นี้?', 'แทนที่', true))) return;
+        try {
+          const CH = 800;
+          for (let i = 0; i < list.length; i += CH) { busy(1, `กำลังนำเข้า ${Math.min(i + CH, list.length)}/${list.length}...`); await api('importProducts', { rows: list.slice(i, i + CH), mode: i === 0 ? mode : 'merge' }); }
+          await loadProducts(true); busy(0); toast('นำเข้าสำเร็จ ' + list.length + ' รายการ'); $('#pv', el).innerHTML = '';
+        } catch (err) { busy(0); toast(err.message, 1); }
+      };
+    } catch (err) { busy(0); toast(err.message, 1); }
+    e.target.value = '';
+  };
+  const stamp = todayISO().replace(/-/g, '');
+  $('#e1', el).onclick = async () => { await loadProducts(true); download(`May_MiniMart_items_${stamp}.csv`, toCSV(productsToLoyverseRows(S.products))); };
+  $('#e2', el).onclick = async () => { try { busy(1); await loadProducts(true); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const ws = XLSX.utils.aoa_to_sheet(productsToLoyverseRows(S.products)); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Items'); download(`May_MiniMart_items_${stamp}.xlsx`, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })); busy(0); } catch (e) { busy(0); toast(e.message, 1); } };
+  $('#e3', el).onclick = async () => { try { busy(1); const out = {}; for (const t of ['Products', 'Receipts', 'Sales', 'Licenses', 'Settings']) out[t] = await loadTable(t); busy(0); download(`May_MiniMart_backup_${stamp}.json`, JSON.stringify(out), 'application/json'); } catch (e) { busy(0); toast(e.message, 1); } };
+};
+
+/* ---------- USERS ---------- */
+VIEWS.users = async el => {
+  if (ownerOnly(el)) return;
+  el.innerHTML = vhead('ผู้ใช้และสิทธิ์', `<button class="btn sm" id="add">${I(IC.plus, 18)} เพิ่ม</button>`, 'more') + `<div class="list" id="ul"></div>
+   <div class="card small" style="margin-top:12px"><b>สิทธิ์การใช้งาน</b><div class="kv"><span>เจ้าของกิจการ</span><span class="muted right">ทุกเมนู ต้นทุน ภาษี ยอดขาย ใบเสร็จทั้งหมด นำเข้า/ส่งออก ลบข้อมูล จัดการผู้ใช้</span></div><div class="kv"><span>พนักงาน</span><span class="muted right">ค้นหา/สแกน/เพิ่ม-แก้สินค้า พิมพ์ฉลาก นับสต็อก บันทึกใบเสร็จรับสินค้า (เห็นเฉพาะที่ตนบันทึก) ดูใบอนุญาต</span></div></div>`;
+  const draw = async () => {
+    const us = await loadTable('Users');
+    $('#ul', el).innerHTML = us.map(u => `<div class="item" data-id="${esc(u.id)}"><div class="av">${esc(Array.from(u.name || u.username)[0])}</div><div class="grow"><div class="t">${esc(u.name)}</div><div class="m">@${esc(u.username)}</div></div><span class="tag ${u.role === 'owner' ? 'red' : 'blue'}">${u.role === 'owner' ? 'เจ้าของ' : 'พนักงาน'}</span>${u.active === 'N' ? '<span class="tag gray">ปิดใช้</span>' : ''}</div>`).join('');
+    $$('#ul [data-id]', el).forEach(x => x.onclick = () => userForm(us.find(u => u.id === x.dataset.id), draw));
+  };
+  $('#add', el).onclick = () => userForm(null, draw); draw();
+};
+function userForm(u, done) {
+  const isNew = !u; u = u || { role: 'staff', active: 'Y' };
+  const ov = sheet(isNew ? 'เพิ่มผู้ใช้' : 'แก้ไขผู้ใช้', `<label class="f"><span>ชื่อที่แสดง</span><input class="in" id="u_name" value="${esc(u.name)}"></label>
+   <label class="f"><span>ชื่อผู้ใช้ (ภาษาอังกฤษ)</span><input class="in" id="u_username" autocapitalize="none" value="${esc(u.username)}"></label>
+   <label class="f"><span>${isNew ? 'PIN (4-8 หลัก)' : 'PIN ใหม่ (เว้นว่างถ้าไม่เปลี่ยน)'}</span><input class="in" id="u_pin" type="password" inputmode="numeric"></label>
+   <div class="grid2"><label class="f"><span>สิทธิ์</span><select class="in" id="u_role"><option value="staff">พนักงาน</option><option value="owner">เจ้าของกิจการ</option></select></label><label class="f"><span>สถานะ</span><select class="in" id="u_active"><option value="Y">ใช้งาน</option><option value="N">ปิดใช้งาน</option></select></label></div>`,
+    `<button class="btn block" id="sv">บันทึก</button>`);
+  $('#u_role', ov).value = u.role; $('#u_active', ov).value = u.active || 'Y';
+  $('#sv', ov).onclick = async () => { const p = { id: u.id }; ['name', 'username', 'pin', 'role', 'active'].forEach(k => p[k] = $('#u_' + k, ov).value.trim()); try { busy(1); await api('saveUser', p); busy(0); ov.remove(); toast('บันทึกแล้ว'); done(); } catch (e) { busy(0); toast(e.message, 1); } };
+}
+
+/* ---------- SETTINGS ---------- */
+VIEWS.settings = el => {
+  const own = isOwner(); const st = S.settings;
+  el.innerHTML = vhead('ตั้งค่า', '', 'more') + `
+   ${own ? `<div class="card"><h3>ข้อมูลร้าน</h3>
+    <label class="f"><span>ชื่อร้าน (แสดงบนฉลาก)</span><input class="in" id="s_shopName" value="${esc(st.shopName || 'ร้านเมย์ มินิมาร์ท')}"></label>
+    <label class="f"><span>ชื่อสาขาใน Loyverse (ใช้ในหัวคอลัมน์ไฟล์ส่งออก)</span><input class="in" id="s_storeLabel" value="${esc(st.storeLabel || 'ร้านเมย์มินิมาร์ท')}"></label>
+    <label class="f"><span>ที่อยู่</span><input class="in" id="s_address" value="${esc(st.address || '')}"></label>
+    <div class="grid2"><label class="f"><span>โทร</span><input class="in" id="s_phone" value="${esc(st.phone || '')}"></label><label class="f"><span>อีเมลรับแจ้งเตือน</span><input class="in" id="s_alertEmail" type="email" value="${esc(st.alertEmail || '')}"></label></div>
+    <div class="row"><button class="btn grow" id="ss">บันทึก</button>${S.apiUrl ? '<button class="btn ghost grow" id="ta">ทดสอบส่งอีเมลแจ้งเตือน</button>' : ''}</div></div>` : ''}
+   <div class="card"><h3>บัญชีของฉัน</h3><div class="kv"><span>ผู้ใช้</span><b>${esc(S.user.username)}</b></div><button class="btn ghost block" style="margin-top:8px" onclick="changePinDlg()">เปลี่ยน PIN</button></div>
+   <div class="card"><h3>การเชื่อมต่อ</h3><div class="kv"><span>ฐานข้อมูล</span><b>${S.apiUrl ? 'Google Sheet (ออนไลน์)' : 'โหมดทดลองในเครื่อง'}</b></div>
+    ${own ? `<button class="btn ghost block" id="cn" style="margin-top:8px">เปลี่ยน URL เซิร์ฟเวอร์</button>` : ''}
+    <button class="btn ghost block" id="cc" style="margin-top:8px">ล้างแคชในเครื่อง</button>
+    <div class="tiny muted" style="margin-top:8px">กล้อง ${navigator.mediaDevices ? '✓' : '✗'} · ตัวอ่านบาร์โค้ดในตัว ${'BarcodeDetector' in window ? '✓' : '✗ (ใช้ ZXing)'} · Bluetooth ${navigator.bluetooth ? '✓' : '✗'} · v${APP_VER}</div></div>`;
+  if (own) {
+    $('#ss', el).onclick = async () => { const rows = ['shopName', 'storeLabel', 'address', 'phone', 'alertEmail'].map(k => ({ key: k, value: $('#s_' + k, el).value.trim() })); try { busy(1); await api('upsert', { table: 'Settings', rows }); await loadSettings(); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
+    const ta = $('#ta', el); if (ta) ta.onclick = async () => { try { busy(1); const r = await api('testAlert'); busy(0); toast(r.sent ? `ส่งอีเมลแล้ว (${r.sent} รายการ)` : 'ไม่มีรายการที่ต้องแจ้งเตือนใน 90 วัน'); } catch (e) { busy(0); toast(e.message, 1); } };
+    $('#cn', el).onclick = connectDlg;
+  }
+  $('#cc', el).onclick = () => { LS.del('products'); LS.del('productsAt'); S.products = []; toast('ล้างแคชแล้ว'); };
+};
+
+/* ---------- BOOT ---------- */
+async function boot() {
+  const h0 = (location.hash || '').slice(1);
+  if (/^display/.test(h0) && VIEWS.display) return VIEWS.display(app, h0);
+  if (!S.user || !S.token) return renderLogin();
+  document.onkeydown = null;
+  shell(); buildIndex();
+  const first = loadSettings();
+  if (!S.settings.shopName) await first;
+  window.Sync && Sync.start();
+  const v = h0 || 'home';
+  go(VIEWS[v] ? v : 'home');
+}
+window.addEventListener('online', () => { S.online = true; const n = $('.net'); n && n.classList.remove('off'); });
+window.addEventListener('offline', () => { S.online = false; const n = $('.net'); n && n.classList.add('off'); });
+window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (S.user && VIEWS[v] && v !== S.view) go(v); });
+loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
+</script>
+<script src="js/qr.js"></script>
+<script src="js/logic.js"></script>
+<script src="js/printer.js"></script>
+<script src="js/pos.js"></script>
+<script src="js/display.js"></script>
+<script src="js/reports.js"></script>
+<script src="js/inventory.js"></script>
+<script src="js/people.js"></script>
+<script>
+boot();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+</script>
+</body>
+</html>
