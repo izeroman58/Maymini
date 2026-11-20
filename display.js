@@ -15,7 +15,7 @@ const Display = {
   last: null, t: null, dc: null, pc: null, offerId: '', sigT: null,
   push(state) {
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
-    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, cashier: (S.user && S.user.name) || '', at: Date.now() };
+    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
     this.last = state;
     try { this.bc && this.bc.postMessage(state); } catch (e) { }
     const direct = this.send(state);
@@ -69,7 +69,7 @@ VIEWS.display = (root, hash) => {
    .dsp .cu{opacity:.38;font-weight:400;margin-right:.08em}
    .dsp .hd{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--red);color:#fff;font-size:clamp(14px,3.2vmin,26px);flex:none}
    .dsp .hd .sh{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-   .dsp .hd .ck{font-weight:700;font-variant-numeric:tabular-nums}
+   .dsp .hd .ck{font-weight:800;font-variant-numeric:tabular-nums;font-size:clamp(20px,6vmin,48px);line-height:1}
    .dsp .bd{flex:1;display:flex;min-height:0}
    .dsp .lst{flex:1;min-width:0;min-height:0;padding:1vmin 2.5vmin;display:flex;flex-direction:column;justify-content:flex-end}
    .dsp .gr{display:grid;grid-template-columns:minmax(0,max-content) max-content;column-gap:2.5ch;row-gap:.12em;align-items:baseline;justify-content:center;line-height:1.22;font-weight:600}
@@ -85,12 +85,12 @@ VIEWS.display = (root, hash) => {
    .dsp .tot .v{font-size:clamp(34px,12vmin,120px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
    .dsp .tot .cu{opacity:.55}
    .dsp .ft{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 12px;font-size:clamp(12px,2.8vmin,22px);color:#666;background:#fafafa;border-top:1px solid #eee}
-   .dsp .ft .cs{font-weight:700;color:#333;white-space:nowrap}
+   .dsp .ft .cs{font-weight:800;color:#222;white-space:nowrap;font-size:clamp(15px,4vmin,30px)}
    .dsp .side{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FFF3F4;padding:2vmin 3vmin;text-align:center;gap:1vmin}
    .dsp .qr{background:#fff;padding:1.5vmin;border-radius:2vmin;box-shadow:0 2px 10px #0001}
    .dsp .qr img{display:block;image-rendering:pixelated;width:min(52vmin,60vw);height:auto}
    .dsp .cen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.5vmin;padding:3vmin}
-   .dsp .mk{font-weight:800;font-style:italic;color:var(--red);font-size:clamp(60px,24vmin,220px);line-height:1;letter-spacing:-3px}
+   .dsp .mk{font-family:var(--flogo);font-weight:800;font-style:italic;color:var(--red);font-size:clamp(60px,24vmin,220px);line-height:1;letter-spacing:-3px}
    .dsp .huge{font-size:clamp(48px,20vmin,200px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
    .dsp .pill{background:#fff;color:var(--red);border-radius:99px;padding:.3em .9em;font-weight:700}
    .dsp .co{background:#FFF7E0;color:#8a5a00;border-radius:1.5vmin;padding:.3em .7em;font-weight:700}
@@ -153,7 +153,10 @@ VIEWS.display = (root, hash) => {
     const all = extra ? [{ n: `(+${extra} รายการ)`, q: 1, a: 0 }].concat(items) : items;
     requestAnimationFrame(() => { const box = $('#lst', root), gr = $('#gr', root); if (box && gr) fit(box, gr, all); });
   };
-  const accept = s => { if (!s || (s.at && s.at < lastAt)) return; lastAt = s.at || lastAt; Display.cur = s; draw(s); };
+  const accept = s => {
+    // เครื่องขายใช้เวอร์ชันใหม่กว่า → จอลูกค้าโหลดตัวเองใหม่ (ไม่ต้องไปกดรีเฟรชที่จอลูกค้า)
+    if (s && s.ver && s.ver !== APP_VER && sessionStorage.getItem('mm_dver') !== s.ver) { sessionStorage.setItem('mm_dver', s.ver); location.reload(); return; }
+    if (!s || (s.at && s.at < lastAt)) return; lastAt = s.at || lastAt; Display.cur = s; draw(s); };
   draw(null);
   addEventListener('resize', () => { clearTimeout(VIEWS.display.rt); VIEWS.display.rt = setTimeout(() => draw(cur), 150); });
   if (!code) {

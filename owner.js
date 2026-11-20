@@ -207,17 +207,19 @@ VIEWS.cashreport = async el => {
 };
 
 /* ---------- ฟอนต์ (เจ้าของร้านเลือกได้) ---------- */
-const FONTS = [['Noto Sans Thai Looped', 'Noto Sans Thai (มีหัว) — แบบ Android/Loyverse'], ['Sarabun', 'สารบรรณ (มีหัว) — แบบเอกสารราชการ'], ['Bai Jamjuree', 'ใบจามจุรี (มีหัว)'], ['Noto Sans Thai', 'Noto Sans Thai (ไม่มีหัว)'], ['Prompt', 'พร้อมท์ (ไม่มีหัว)'], ['Kanit', 'คณิต (ไม่มีหัว)']];
+const FONTS = [['Loyverse', 'แบบ Loyverse / Android (Roboto + ไทยมีหัว) — ค่าเริ่มต้น'], ['Sarabun', 'สารบรรณ (มีหัว) — แบบเอกสารราชการ'], ['Bai Jamjuree', 'ใบจามจุรี (มีหัว)'], ['Noto Sans Thai', 'Noto Sans Thai (ไม่มีหัว)'], ['Prompt', 'พร้อมท์ (ไม่มีหัว)'], ['Kanit', 'คณิต (ไม่มีหัว)']];
 function applyFont(f) {
-  f = f || cfg('uiFont', { body: 'Noto Sans Thai Looped', head: 'Noto Sans Thai Looped', scale: 1 });
+  f = f || cfg('uiFont', { body: 'Loyverse', head: 'Loyverse', scale: 1 });
+  if (f.body === 'Noto Sans Thai Looped') f.body = 'Loyverse'; if (f.head === 'Noto Sans Thai Looped') f.head = 'Loyverse';
+  const fam = k => (!k || k === 'Loyverse') ? "'Roboto','Noto Sans Thai Looped'" : `'${k}'`;
   const r = document.documentElement.style;
-  r.setProperty('--fb', `'${f.body}','Noto Sans Thai',system-ui,sans-serif`); r.setProperty('--fh', `'${f.head || f.body}','Noto Sans Thai',system-ui,sans-serif`); r.setProperty('--fs', (15 * (f.scale || 1)) + 'px');
+  r.setProperty('--fb', `${fam(f.body)},'Noto Sans Thai',system-ui,sans-serif`); r.setProperty('--fh', `${fam(f.head || f.body)},'Noto Sans Thai',system-ui,sans-serif`); r.setProperty('--fs', (15 * (f.scale || 1)) + 'px');
   LS.set('uiFont', f);
 }
 document.addEventListener('mm:settings', () => applyFont());
 function fontDlg() {
-  const f = cfg('uiFont', { body: 'Noto Sans Thai Looped', head: 'Noto Sans Thai Looped', scale: 1 });
-  const ov = sheet('ฟอนต์และขนาดตัวอักษร', `<label class="f"><span>ฟอนต์ข้อความ</span><select class="in" id="fb">${FONTS.map(([k, n]) => `<option value="${k}" style="font-family:'${k}'">${n}</option>`).join('')}</select></label>
+  const f = cfg('uiFont', { body: 'Loyverse', head: 'Loyverse', scale: 1 }); if (f.body === 'Noto Sans Thai Looped') f.body = 'Loyverse'; if (f.head === 'Noto Sans Thai Looped') f.head = 'Loyverse';
+  const ov = sheet('ฟอนต์และขนาดตัวอักษร', `<label class="f"><span>ฟอนต์ข้อความ</span><select class="in" id="fb">${FONTS.map(([k, n]) => `<option value="${k}" style="font-family:${k === 'Loyverse' ? "Roboto,'Noto Sans Thai Looped'" : "'" + k + "'"}">${n}</option>`).join('')}</select></label>
     <label class="f"><span>ฟอนต์หัวข้อ/ตัวเลข</span><select class="in" id="fh">${FONTS.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
     <label class="f"><span>ขนาดตัวอักษร: <b id="sv2">${Math.round((f.scale || 1) * 100)}%</b></span><input type="range" id="sc" min="85" max="130" step="5" value="${Math.round((f.scale || 1) * 100)}" style="width:100%"></label>
     <div class="card" id="pv"><div class="disp" style="font-size:20px">ตั๋วออเดอร์ ฿1,234</div><div>นมเปรี้ยวบีทาเก้น 140ml × 2 · ข้อต่อตรง 3/4" 6หุน</div></div>

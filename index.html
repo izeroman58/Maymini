@@ -14,11 +14,11 @@
 <title>May MiniMart — ระบบจัดการร้านเมย์</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai+Looped:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Kanit:wght@400;500;600&family=Bai+Jamjuree:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script>/* ฟอนต์ที่เจ้าของร้านเลือก (ใช้ก่อนวาดหน้า กันกระพริบ) */try{var f=JSON.parse(localStorage.getItem("mm_uiFont")||"null")||{};var r=document.documentElement.style;r.setProperty("--fb","'"+(f.body||"Noto Sans Thai Looped")+"','Noto Sans Thai',system-ui,sans-serif");r.setProperty("--fh","'"+(f.head||f.body||"Noto Sans Thai Looped")+"','Noto Sans Thai',system-ui,sans-serif");r.setProperty("--fs",(15*(f.scale||1))+"px");}catch(e){}</script>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,500;0,600;0,700;0,800;1,600;1,800&family=Roboto:wght@400;500;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai+Looped:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Kanit:wght@400;500;600&family=Bai+Jamjuree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>/* ฟอนต์ที่เจ้าของร้านเลือก (ใช้ก่อนวาดหน้า กันกระพริบ) · ค่าเริ่มต้น = แบบ Loyverse (Roboto + Noto Sans Thai Looped) */try{var f=JSON.parse(localStorage.getItem("mm_uiFont")||"null")||{};var fam=function(k){return(!k||k==="Loyverse"||k==="Noto Sans Thai Looped")?"'Roboto','Noto Sans Thai Looped'":"'"+k+"'";};var r=document.documentElement.style;r.setProperty("--fb",fam(f.body)+",'Noto Sans Thai',system-ui,sans-serif");r.setProperty("--fh",fam(f.head||f.body)+",'Noto Sans Thai',system-ui,sans-serif");r.setProperty("--fs",(15*(f.scale||1))+"px");}catch(e){}</script>
 <style>
 :root{
-  --fb:"Noto Sans Thai Looped","Noto Sans Thai",system-ui,sans-serif; --fh:"Noto Sans Thai Looped","Noto Sans Thai",system-ui,sans-serif; --fs:15px;
+  --fb:"Roboto","Noto Sans Thai Looped","Noto Sans Thai",system-ui,sans-serif; --fh:"Roboto","Noto Sans Thai Looped","Noto Sans Thai",system-ui,sans-serif; --flogo:"Prompt","Noto Sans Thai",sans-serif; --fs:15px;
   --red:#D6001C; --red-d:#A80016; --red-l:#FFE9EC; --green:#0B8A3E; --green-l:#E5F5EC;
   --ink:#1D1B1C; --ink2:#5E5759; --ink3:#9A9294; --line:#ECE6E7; --bg:#F7F4F2; --card:#fff;
   --amber:#B86E00; --amber-l:#FFF3DC; --blue:#1F5FBF; --blue-l:#E8F0FC;
@@ -33,7 +33,7 @@ a{color:var(--blue)}
 .hidden{display:none!important}
 /* top bar */
 .top{position:sticky;top:0;z-index:20;background:var(--red);color:#fff;padding:calc(10px + var(--safe-t)) 16px 12px;display:flex;align-items:center;gap:10px}
-.logo{display:flex;align-items:baseline;gap:4px;font-family:var(--fh);font-weight:800;letter-spacing:-.5px}
+.logo{display:flex;align-items:baseline;gap:4px;font-family:var(--flogo);font-weight:800;letter-spacing:-.5px}
 .logo small{font-size:12px;font-weight:600;opacity:.9}
 .logo b{font-size:24px;font-style:italic}
 .logo i{font-size:11px;font-style:italic;font-weight:600;opacity:.85;margin-left:2px}
@@ -140,9 +140,9 @@ body.kiosk main{padding-bottom:calc(24px + var(--safe-b))}
 /* login */
 .login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:radial-gradient(120% 60% at 50% 0%,#FFE1E5 0%,var(--bg) 60%)}
 .login .brand{text-align:center;margin-bottom:18px}
-.login .brand .mk{font-family:var(--fh);font-weight:800;font-style:italic;font-size:56px;color:var(--red);line-height:1;letter-spacing:-2px}
+.login .brand .mk{font-family:var(--flogo);font-weight:800;font-style:italic;font-size:56px;color:var(--red);line-height:1;letter-spacing:-2px}
 .login .brand .mk small{font-size:18px;font-style:normal;vertical-align:top;margin-right:2px}
-.login .brand .mm{font-family:var(--fh);font-style:italic;color:var(--red);font-weight:600}
+.login .brand .mm{font-family:var(--flogo);font-style:italic;color:var(--red);font-weight:600}
 .pinpad{display:grid;grid-template-columns:repeat(3,72px);gap:12px;justify-content:center;margin-top:14px}
 .pinpad button{height:60px;border-radius:18px;border:0;background:#fff;box-shadow:var(--sh);font-family:var(--fh);font-size:22px;font-weight:600;cursor:pointer}
 .pinpad button:active{background:var(--red-l)}
@@ -190,7 +190,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.5';
+const APP_VER = '2.6.7';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -1963,20 +1963,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.5"></script>
-<script src="logic.js?v=2.6.5"></script>
-<script src="cache.js?v=2.6.5"></script>
-<script src="offline.js?v=2.6.5"></script>
-<script src="scanner.js?v=2.6.5"></script>
-<script src="printer.js?v=2.6.5"></script>
-<script src="pos.js?v=2.6.5"></script>
-<script src="display.js?v=2.6.5"></script>
-<script src="reports.js?v=2.6.5"></script>
-<script src="inventory.js?v=2.6.5"></script>
-<script src="people.js?v=2.6.5"></script>
-<script src="quality.js?v=2.6.5"></script>
-<script src="services.js?v=2.6.5"></script>
-<script src="owner.js?v=2.6.5"></script>
+<script src="qr.js?v=2.6.7"></script>
+<script src="logic.js?v=2.6.7"></script>
+<script src="cache.js?v=2.6.7"></script>
+<script src="offline.js?v=2.6.7"></script>
+<script src="scanner.js?v=2.6.7"></script>
+<script src="printer.js?v=2.6.7"></script>
+<script src="pos.js?v=2.6.7"></script>
+<script src="display.js?v=2.6.7"></script>
+<script src="reports.js?v=2.6.7"></script>
+<script src="inventory.js?v=2.6.7"></script>
+<script src="people.js?v=2.6.7"></script>
+<script src="quality.js?v=2.6.7"></script>
+<script src="services.js?v=2.6.7"></script>
+<script src="owner.js?v=2.6.7"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
