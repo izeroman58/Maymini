@@ -1,6 +1,6 @@
 /* May MiniMart service worker: เปิดแอปได้แม้เน็ตหลุด (ข้อมูลยังซิงก์เมื่อกลับมาออนไลน์) */
-const C = 'maymart-v2.5';
-const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './js/qr.js', './js/offline.js', './js/scanner.js', './js/logic.js', './js/printer.js', './js/pos.js', './js/display.js', './js/reports.js', './js/inventory.js', './js/people.js', './js/quality.js'];
+const C = 'maymart-v2.6';
+const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './js/qr.js', './js/cache.js', './js/services.js', './js/owner.js', './js/offline.js', './js/scanner.js', './js/logic.js', './js/printer.js', './js/pos.js', './js/display.js', './js/reports.js', './js/inventory.js', './js/people.js', './js/quality.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
