@@ -190,7 +190,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.1';
+const APP_VER = '2.6.3';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -1946,23 +1946,29 @@ window.addEventListener('offline', () => { S.online = false; const n = $('.net')
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (S.user && VIEWS[v] && v !== S.view) go(v); });
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
-<script src="js/qr.js"></script>
-<script src="js/logic.js"></script>
-<script src="js/cache.js"></script>
-<script src="js/offline.js"></script>
-<script src="js/scanner.js"></script>
-<script src="js/printer.js"></script>
-<script src="js/pos.js"></script>
-<script src="js/display.js"></script>
-<script src="js/reports.js"></script>
-<script src="js/inventory.js"></script>
-<script src="js/people.js"></script>
-<script src="js/quality.js"></script>
-<script src="js/services.js"></script>
-<script src="js/owner.js"></script>
+<!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
+<script src="js/qr.js?v=2.6.3"></script>
+<script src="js/logic.js?v=2.6.3"></script>
+<script src="js/cache.js?v=2.6.3"></script>
+<script src="js/offline.js?v=2.6.3"></script>
+<script src="js/scanner.js?v=2.6.3"></script>
+<script src="js/printer.js?v=2.6.3"></script>
+<script src="js/pos.js?v=2.6.3"></script>
+<script src="js/display.js?v=2.6.3"></script>
+<script src="js/reports.js?v=2.6.3"></script>
+<script src="js/inventory.js?v=2.6.3"></script>
+<script src="js/people.js?v=2.6.3"></script>
+<script src="js/quality.js?v=2.6.3"></script>
+<script src="js/services.js?v=2.6.3"></script>
+<script src="js/owner.js?v=2.6.3"></script>
 <script>
 boot();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // updateViaCache:'none' = ตรวจหาเวอร์ชันใหม่จากเซิร์ฟเวอร์ทุกครั้ง · ได้เวอร์ชันใหม่แล้วโหลดหน้าใหม่ 1 ครั้ง (ยกเว้นกำลังชำระเงิน)
+  const hadCtl = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => { setInterval(() => r.update().catch(() => { }), 30 * 60e3); }).catch(() => { });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadCtl || window.__swReloaded) return; const again = () => { if (window.POS && POS.pay && !POS.pay.done) return setTimeout(again, 5000); window.__swReloaded = 1; location.reload(); }; again(); });
+}
 </script>
 </body>
 </html>

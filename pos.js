@@ -42,8 +42,13 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .ttot{padding:10px 14px;border-top:1px solid #E0E0E0}
 .ttot .kv{border:0;padding:3px 0}
 .payb{margin:0 14px calc(14px + var(--safe-b));min-height:72px;font-size:21px;border-radius:8px;background:#7CB342}
-.who2{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;font-size:13px;margin:0 4px;white-space:nowrap}.who2 b{font-size:14px}.who2 .clk{opacity:.9;font-size:12px}
-@media (max-width:520px){.who2 .clk{display:none}.who2 b{max-width:70px;overflow:hidden;text-overflow:ellipsis}}
+.who2{display:flex;align-items:center;gap:8px;background:#fff;color:var(--red-d,#9b0019);border-radius:99px;padding:5px 12px 5px 8px;margin:0 6px;white-space:nowrap;font-family:var(--fh);font-size:16px;font-weight:700;box-shadow:0 1px 3px #0003}
+.who2 .ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff;font-size:14px}
+.who2 b{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.who2 .sep{width:1px;height:20px;background:#0002}
+.who2 .clk{font-variant-numeric:tabular-nums;color:#333}
+@media (max-width:700px){.who2{font-size:14px;padding:4px 10px 4px 6px;gap:6px}.who2 b{max-width:90px}.who2 .ic{width:22px;height:22px}}
+@media (max-width:520px){.who2{flex-direction:column;align-items:flex-start;gap:0;border-radius:10px;padding:2px 8px;font-size:13px;line-height:1.2;margin:0 2px}.who2 .ic,.who2 .sep{display:none}.who2 b{max-width:84px}.who2 .clk{font-size:12px}}
 .pop{position:fixed;z-index:60;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);min-width:240px;max-width:min(320px,92vw);overflow:hidden;animation:fi .12s}
 .pop button{display:flex;width:100%;align-items:center;gap:12px;border:0;background:#fff;padding:0 18px;min-height:56px;font-size:17px;text-align:left;cursor:pointer;border-bottom:1px solid #F0F0F0}
 .pop button:last-child{border-bottom:0}.pop button:active{background:#F2F2F2}
@@ -297,7 +302,7 @@ const POS = {
     this.el = el;
     el.innerHTML = `<div class="pos" id="pos">
       <div class="pos-l"><div class="pbar"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button>${isKiosk() ? '' : `<button class="iconbtn" onclick="go('home')" title="Back to management">${I(IC.home, 22)}</button>`}<div class="ttl" id="pt"></div><span class="netpill"></span>
-        <div class="who2" title="Cashier"><b>${esc(S.user.name)}</b><span class="clk" id="pclk"></span></div>
+        <div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 16)}</span><b>${esc(S.user.name)}</b><span class="sep"></span><span class="clk" id="pclk"></span></div>
         <button class="iconbtn" id="psvc" title="Services">${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
         <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="Switch user">${I(IC.switchu, 22)}</button></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
@@ -306,7 +311,7 @@ const POS = {
     $('#pm', el).onclick = () => this.menu();
     $('#psvc', el).onclick = () => svcMenu();
     const tick = () => { const c = $('#pclk', el); if (c) c.textContent = new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) + ' น.'; };
-    tick(); clearInterval(this.clk); this.clk = setInterval(tick, 15000);
+    tick(); clearInterval(this.clk); this.clk = setInterval(tick, 10000);
     $('#ps', el).onclick = () => this.search();
     $('#pcam', el).onclick = () => openScanner((code, ctx) => { const ok = this.scan(code); ctx.showLast(ok ? `<b>${esc(this.t.items[this.lastAdded].name)}</b> · รวม ${baht(this.totals().total)}` : 'ไม่พบ ' + esc(code)); return ''; }, { continuous: true, title: 'สแกนขายสินค้า' });
     // เครื่องยิงบาร์โค้ด USB/Bluetooth/Serial — รับผ่านตัวรับกลาง (js/scanner.js)
