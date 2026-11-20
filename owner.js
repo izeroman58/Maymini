@@ -138,7 +138,7 @@ function filingForm(f0, done) {
 // เสริมหน้า "ภาษี": บันทึกการยื่น + รายงานเงินสดรับ-จ่าย + สถานะ VAT
 const _taxView = VIEWS.tax;
 VIEWS.tax = async el => {
-  S.filings = await loadTable('TaxFilings').catch(() => S.filings || []);
+  S.filings = await quick(loadTable('TaxFilings'), 700, S.filings || []);
   await _taxView(el);
   if (!isOwner()) return;
   const box = document.createElement('div'); el.appendChild(box);
@@ -175,7 +175,7 @@ VIEWS.cashreport = async el => {
   const build = async () => {
     RS2.y = +$('#yy', el).value; RS2.m = +$('#mm', el).value;
     const y = RS2.y, from = RS2.m ? `${y}-${String(RS2.m).padStart(2, '0')}-01` : `${y}-01-01`, to = RS2.m ? addDays(addDays(from, 32).slice(0, 8) + '01', -1) : `${y}-12-31`;
-    const [days, rc] = await Promise.all([dailySummary(y + '-01-01', y + '-12-31').catch(() => ({})), loadTable('Receipts').catch(() => [])]);
+    const [days, rc] = await Promise.all([quick(dailySummary(y + '-01-01', y + '-12-31'), 900, {}), quick(loadTable('Receipts'), 900, [])]);
     rows = [];
     const dates = new Set(Object.keys(days).filter(d => d >= from && d <= to));
     rc.forEach(r => { const d = String(r.date).slice(0, 10); if (d >= from && d <= to) dates.add(d); });

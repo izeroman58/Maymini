@@ -190,7 +190,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.0';
+const APP_VER = '2.6.5';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -915,7 +915,7 @@ function go(v, arg) {
   document.body.classList.toggle('full', v === 'pos');
   document.body.classList.toggle('kiosk', isKiosk());
   const el = $('#view'); el.innerHTML = ''; window.scrollTo(0, 0);
-  (VIEWS[v] || VIEWS.home)(el, arg);
+  const fn = VIEWS[v] || VIEWS.home; if (!fn) { const m = missingFiles(); return selfHeal(m.length ? m : ['owner.js']); } fn(el, arg);
 }
 function vhead(title, extra = '', back) { if (isKiosk()) back = 'pos'; return `<div class="vhead">${back ? `<button class="iconbtn" onclick="go('${back}')">${I(IC.back)}</button>` : ''}<h2>${title}</h2>${extra}</div>`; }
 function ownerOnly(el) { if (isOwner()) return false; el.innerHTML = `<div class="card empty">${I(IC.shield, 40)}<p>เมนูนี้สำหรับเจ้าของกิจการเท่านั้น</p></div>`; return true; }
@@ -1539,7 +1539,7 @@ VIEWS.more = el => {
 
 /* ---------- SALES (รายเดือน: POS + นำเข้าจาก Loyverse/Excel) ---------- */
 async function monthlySales(y) {
-  const [man, days] = await Promise.all([loadTable('Sales').catch(() => []), dailySummary(y + '-01-01', y + '-12-31').catch(() => ({}))]);
+  const [man, days] = await Promise.all([quick(loadTable('Sales'), 900, S.sales || []), quick(dailySummary(y + '-01-01', y + '-12-31'), 900, {})]);
   S.sales = man;
   return TH_MF.map((m, i) => {
     const mm = String(i + 1).padStart(2, '0'), id = `M-${y}-${mm}`, r = man.find(x => x.id === id);
@@ -1913,7 +1913,23 @@ VIEWS.settings = el => {
 };
 
 /* ---------- BOOT ---------- */
+/* ตรวจว่าไฟล์ระบบโหลดครบ ถ้าไม่ครบ (เช่นเบราว์เซอร์ยังจำไฟล์เก่า) ล้างแคชแล้วโหลดใหม่ 1 ครั้ง ถ้ายังไม่ครบ แจ้งชื่อไฟล์ที่ขาด */
+function missingFiles() {
+  const chk = { 'logic.js': () => typeof Logic !== 'undefined', 'cache.js': () => typeof Cache !== 'undefined', 'offline.js': () => typeof OfflineAuth !== 'undefined', 'scanner.js': () => typeof Scanner !== 'undefined', 'printer.js': () => typeof RP !== 'undefined', 'pos.js': () => typeof POS !== 'undefined', 'display.js': () => !!VIEWS.displayset, 'reports.js': () => !!VIEWS.reports, 'inventory.js': () => !!VIEWS.stockcount, 'people.js': () => !!VIEWS.staff, 'quality.js': () => !!VIEWS.dataquality, 'services.js': () => typeof svcMenu !== 'undefined', 'owner.js': () => !!VIEWS.home };
+  return Object.keys(chk).filter(f => { try { return !chk[f](); } catch (e) { return true; } });
+}
+async function selfHeal(miss) {
+  if (!sessionStorage.getItem('mm_heal')) {
+    sessionStorage.setItem('mm_heal', '1');
+    try { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } catch (e) { }
+    try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) { }
+    location.reload(); return;
+  }
+  app.innerHTML = `<div class="login"><div class="card" style="max-width:520px"><h3>ไฟล์ระบบโหลดไม่ครบ</h3><p>ไฟล์ที่ขาด: <b>${miss.join(', ')}</b></p><p class="small muted">ตรวจว่าไฟล์เหล่านี้อยู่หน้าแรกของ repo Maymini บน GitHub (ไม่อยู่ในโฟลเดอร์ย่อย) แล้วรอ 2–3 นาทีให้ GitHub อัปเดต</p><button class="btn block" onclick="sessionStorage.removeItem('mm_heal');location.reload()">ลองใหม่</button></div></div>`;
+}
 async function boot() {
+  const miss = missingFiles(); if (miss.length) return selfHeal(miss);
+  sessionStorage.removeItem('mm_heal');
   const h0 = (location.hash || '').slice(1);
   if (/^display/.test(h0) && VIEWS.display) return VIEWS.display(app, h0);
   if (!S.user || !S.token) return renderLogin();
@@ -1946,23 +1962,29 @@ window.addEventListener('offline', () => { S.online = false; const n = $('.net')
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (S.user && VIEWS[v] && v !== S.view) go(v); });
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
-<script src="js/qr.js"></script>
-<script src="js/logic.js"></script>
-<script src="js/cache.js"></script>
-<script src="js/offline.js"></script>
-<script src="js/scanner.js"></script>
-<script src="js/printer.js"></script>
-<script src="js/pos.js"></script>
-<script src="js/display.js"></script>
-<script src="js/reports.js"></script>
-<script src="js/inventory.js"></script>
-<script src="js/people.js"></script>
-<script src="js/quality.js"></script>
-<script src="js/services.js"></script>
-<script src="js/owner.js"></script>
+<!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
+<script src="qr.js?v=2.6.5"></script>
+<script src="logic.js?v=2.6.5"></script>
+<script src="cache.js?v=2.6.5"></script>
+<script src="offline.js?v=2.6.5"></script>
+<script src="scanner.js?v=2.6.5"></script>
+<script src="printer.js?v=2.6.5"></script>
+<script src="pos.js?v=2.6.5"></script>
+<script src="display.js?v=2.6.5"></script>
+<script src="reports.js?v=2.6.5"></script>
+<script src="inventory.js?v=2.6.5"></script>
+<script src="people.js?v=2.6.5"></script>
+<script src="quality.js?v=2.6.5"></script>
+<script src="services.js?v=2.6.5"></script>
+<script src="owner.js?v=2.6.5"></script>
 <script>
 boot();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // updateViaCache:'none' = ตรวจหาเวอร์ชันใหม่จากเซิร์ฟเวอร์ทุกครั้ง · ได้เวอร์ชันใหม่แล้วโหลดหน้าใหม่ 1 ครั้ง (ยกเว้นกำลังชำระเงิน)
+  const hadCtl = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => { setInterval(() => r.update().catch(() => { }), 30 * 60e3); }).catch(() => { });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadCtl || window.__swReloaded) return; const again = () => { if (window.POS && POS.pay && !POS.pay.done) return setTimeout(again, 5000); window.__swReloaded = 1; location.reload(); }; again(); });
+}
 </script>
 </body>
 </html>
