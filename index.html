@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#D6001C">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ร้านเมย์">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <title>May MiniMart — ระบบจัดการร้านเมย์</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,6 +64,10 @@ main{max-width:860px;margin:0 auto;padding:14px 14px calc(96px + var(--safe-b))}
 .iconbtn{border:0;background:transparent;padding:8px;border-radius:10px;cursor:pointer;display:inline-flex}
 .iconbtn:active{background:rgba(0,0,0,.06)}
 .top .iconbtn{color:#fff}
+.iconbtn.tb{opacity:.9;padding:7px}
+.top .iconbtn.tb{margin-left:-2px}
+@media (max-width:480px){.logo i,.top .chip-role{display:none}.top{gap:4px}}
+@media (max-width:340px){.top .who{display:none}}
 /* inputs */
 label.f{display:block;margin-bottom:10px}
 label.f>span{display:block;font-size:13px;color:var(--ink2);margin-bottom:4px;font-weight:500}
@@ -101,6 +110,8 @@ textarea.in{min-height:80px}
 .nav .fab{margin-top:-26px;color:var(--red);font-weight:600}
 body.full .top,body.full .nav{display:none}
 body.full main{max-width:none;padding:0}
+body.kiosk .nav{display:none}
+body.kiosk main{padding-bottom:calc(24px + var(--safe-b))}
 .outbox{position:fixed;right:10px;top:calc(64px + var(--safe-t));z-index:40;background:var(--amber);color:#fff;border-radius:99px;padding:3px 10px;font-size:12px;font-weight:600;box-shadow:var(--sh)}
 .nav .fab .c{width:58px;height:58px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(214,0,28,.4);border:4px solid var(--bg)}
 /* sheet / modal */
@@ -177,7 +188,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '1.0.0';
+const APP_VER = '2.5.0';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -191,7 +202,11 @@ const S = {
 };
 if (!S.device || !S.device.id) { S.device = { id: 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }; LS.set('device', S.device); }
 const devType = () => { const u = navigator.userAgent; if (/iPad|Macintosh/.test(u) && 'ontouchend' in document) return 'iPad'; if (/iPhone/.test(u)) return 'iPhone'; if (/Android/.test(u)) return /Mobile/.test(u) ? 'มือถือ Android' : 'แท็บเล็ต Android'; return 'คอมพิวเตอร์'; };
-const can = p => !!S.user && (S.user.role === 'owner' || !!S.perms[p]);
+const can = p => !!S.user && (S.user.role === 'owner' || !!S.perms[p]);          // อนุญาต หรือ อนุญาตเมื่อใส่รหัสเจ้าของ
+const canStrict = p => !!S.user && (S.user.role === 'owner' || S.perms[p] === true); // อนุญาตโดยไม่ต้องใส่รหัส
+const isKiosk = () => !!S.user && S.user.role !== 'owner' && S.perms.posOnly === true;
+const KIOSK_OK = ['pos', 'scannerset', 'salesreceipts', 'printer', 'displayset', 'scan', 'labels', 'stockcount', 'products', 'staff', 'customers'];
+const seesSales = () => canStrict('reports') || canStrict('ownSales');
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -231,6 +246,9 @@ const IC = {
   trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>', alert: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   check: '<path d="M20 6L9 17l-5-5"/>', file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>', bolt: '<path d="M13 2L3 14h9l-1 8 10-12h-9z"/>',
+  expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  shrink: '<path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/>',
+  switchu: '<circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4"/><path d="M16 14l3 3-3 3M22 17h-6"/>',
   cart: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>',
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/>',
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
@@ -291,12 +309,57 @@ async function compressImage(file, max = 1800, q = .82) {
 /* =========================================================
    API — ออนไลน์ (Apps Script) หรือ โหมดทดลองในเครื่อง
    ========================================================= */
-async function api(action, payload = {}) {
+/* รหัสเจ้าของร้าน: ถ้าเซิร์ฟเวอร์ตอบ PIN_REQUIRED จะเปิดแป้นให้เจ้าของกดรหัส แล้วส่งคำสั่งเดิมซ้ำ
+   รหัสที่ถูกต้องใช้ต่อได้ 3 นาที (หรือจนกดล็อก) */
+const Elev = {
+  pin: null, until: 0,
+  get ok() { return this.pin && Date.now() < this.until; },
+  clear() { this.pin = null; this.until = 0; const b = $('#elev'); b && b.remove(); },
+  set(pin) {
+    this.pin = pin; this.until = Date.now() + 180e3;
+    let b = $('#elev'); if (!b) { b = document.createElement('div'); b.id = 'elev'; b.className = 'outbox'; b.style.cssText = 'background:#7B3FB8;top:calc(92px + var(--safe-t));cursor:pointer'; b.onclick = () => { this.clear(); toast('ล็อกสิทธิ์เจ้าของแล้ว'); }; document.body.appendChild(b); }
+    clearInterval(this.t); this.t = setInterval(() => { if (!this.ok) { this.clear(); clearInterval(this.t); } else b.textContent = '🔓 สิทธิ์เจ้าของ ' + Math.ceil((this.until - Date.now()) / 1000) + ' วิ · แตะเพื่อล็อก'; }, 1000);
+  }
+};
+function ownerPinDlg(reason) {
+  return new Promise(res => {
+    let pin = '';
+    const ov = sheet('ต้องใช้รหัสเจ้าของร้าน', `<div class="center small muted" style="margin-bottom:4px">${esc(reason || '')}</div><div class="dots">${'<i></i>'.repeat(6)}</div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:#7B3FB8;color:#fff;font-size:15px">ยืนยัน</button></div>`, '', { onClose: () => res(null) });
+    const dots = () => $$('.dots i', ov).forEach((d, i) => d.classList.toggle('on', i < pin.length));
+    const ok = () => { if (pin.length < 4) return; ov.remove(); res(pin); };
+    $$('[data-n]', ov).forEach(b => b.onclick = () => { if (pin.length < 8) pin += b.dataset.n; dots(); });
+    $('[data-c]', ov).onclick = () => { pin = ''; dots(); }; $('[data-ok]', ov).onclick = ok;
+    ov.tabIndex = 0; ov.focus(); ov.addEventListener('keydown', e => { if (/^\d$/.test(e.key) && pin.length < 8) { pin += e.key; dots(); } else if (e.key === 'Backspace') { pin = pin.slice(0, -1); dots(); } else if (e.key === 'Enter') ok(); });
+  });
+}
+async function api(action, payload = {}, _retry) {
+  if (Elev.ok && !payload.ownerPin) payload = { ...payload, ownerPin: Elev.pin };
+  try { return await apiRaw(action, payload); }
+  catch (e) {
+    if (/^PIN_(REQUIRED|BAD)/.test(e.message) && !_retry && S.user && S.user.role !== 'owner') {
+      if (/^PIN_BAD/.test(e.message)) { Elev.clear(); toast(e.message.replace(/^PIN_BAD:\s*/, ''), 1); }
+      const was = busyEl ? $('div', busyEl) && $('div', busyEl).textContent : null; busy(0);
+      const pin = await ownerPinDlg(e.message.replace(/^PIN_\w+:\s*/, ''));
+      if (!pin) throw new Error('ยกเลิก — ต้องใช้รหัสเจ้าของร้าน');
+      if (was) busy(1, was);
+      const r = await api(action, { ...payload, ownerPin: pin }, true);
+      Elev.set(pin); return r;
+    }
+    e.message = e.message.replace(/^PIN_\w+:\s*/, ''); throw e;
+  }
+}
+async function apiRaw(action, payload) {
   if (!S.apiUrl) return Local.handle(action, payload);
   let res;
+  // ตัดเวลารอ: Wi-Fi ต่ออยู่แต่ไม่มีเน็ต จะไม่ค้าง (งานหนักให้เวลานานกว่า)
+  const slow = /^(upload|ocr|importProducts|applyReceipt|finishCount|syncOrders|ordersRange|salesMonthly|list)$/.test(action);
+  const ac = window.AbortController ? new AbortController() : null, tm = ac && setTimeout(() => ac.abort(), slow ? 90000 : 15000);
   try {
-    res = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, payload, token: S.token, deviceId: S.device.id }) });
-  } catch (e) { const er = new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต'); er.offline = true; throw er; }
+    if (navigator.onLine === false) throw new Error('offline');
+    res = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, payload, token: S.token, deviceId: S.device.id }), signal: ac ? ac.signal : undefined });
+  } catch (e) { const er = new Error(e.name === 'AbortError' ? 'อินเทอร์เน็ตช้า/ไม่ตอบสนอง — ลองใหม่อีกครั้ง' : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ต'); er.offline = true; Net.set(false); throw er; }
+  finally { tm && clearTimeout(tm); }
+  Net.set(true);
   let j; try { j = await res.json(); } catch (e) { const er = new Error('เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (ตรวจ URL / การ Deploy)'); er.offline = true; throw er; }
   if (!j.ok) {
     if (/^AUTH:/.test(j.error)) { logout(true); throw new Error(j.error.replace('AUTH: ', '')); }
@@ -355,6 +418,7 @@ async function loadProducts(force) {
 async function loadSettings() {
   try {
     const r = await api('bootstrap');
+    if (window.OfflineAuth && r.activeUsers) OfflineAuth.prune(r.activeUsers);
     S.settings = r.settings; S.perms = r.perms; S.defs = r.defs; S.categories = r.categories.sort((a, b) => num(a.sort) - num(b.sort)); S.shift = r.shift;
     LS.set('settings', S.settings); LS.set('perms', S.perms); LS.set('categories', S.categories);
     document.dispatchEvent(new Event('mm:settings'));
@@ -812,60 +876,83 @@ function shell() {
     <div class="logo"><small>ร้าน</small><b>เมย์</b><i>Mini Mart</i></div>
     <div class="sp"></div>
     <div class="who"><div><span class="net ${S.online ? '' : 'off'}"></span>${esc(u.name)}</div><span class="chip-role">${u.role === 'owner' ? 'เจ้าของกิจการ' : 'พนักงาน'}${S.apiUrl ? '' : ' · โหมดทดลอง'}</span></div>
+    ${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="Switch user / Lock">${I(IC.switchu, 22)}</button>
   </header>
   <main id="view"></main>
   <nav class="nav">
     <button data-v="home">${I(IC.home)}หน้าหลัก</button>
     <button data-v="products">${I(IC.box)}สินค้า</button>
     <button data-v="pos" class="fab"><span class="c">${I(IC.cart, 26)}</span>ขาย</button>
-    <button data-v="reports">${I(IC.chart)}รายงาน</button>
+    ${seesSales() ? `<button data-v="reports">${I(IC.chart)}รายงาน</button>` : `<button data-v="scan">${I(IC.scan)}เช็คราคา</button>`}
     <button data-v="more">${I(IC.menu)}เพิ่มเติม</button>
   </nav>`;
   $$('.nav button').forEach(b => b.onclick = () => go(b.dataset.v));
 }
 const VIEWS = {};
 function go(v, arg) {
+  if (isKiosk() && !KIOSK_OK.includes(v)) v = 'pos';
+  if (!isKiosk() && v === 'reports' && !seesSales() && S.user && S.user.role !== 'owner') v = 'home';
   if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
   S.view = v; $$('.nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v || (b.dataset.v === 'more' && !['home', 'products', 'pos', 'reports'].includes(v))));
   document.body.classList.toggle('full', v === 'pos');
+  document.body.classList.toggle('kiosk', isKiosk());
   const el = $('#view'); el.innerHTML = ''; window.scrollTo(0, 0);
   (VIEWS[v] || VIEWS.home)(el, arg);
 }
-function vhead(title, extra = '', back) { return `<div class="vhead">${back ? `<button class="iconbtn" onclick="go('${back}')">${I(IC.back)}</button>` : ''}<h2>${title}</h2>${extra}</div>`; }
+function vhead(title, extra = '', back) { if (isKiosk()) back = 'pos'; return `<div class="vhead">${back ? `<button class="iconbtn" onclick="go('${back}')">${I(IC.back)}</button>` : ''}<h2>${title}</h2>${extra}</div>`; }
 function ownerOnly(el) { if (isOwner()) return false; el.innerHTML = `<div class="card empty">${I(IC.shield, 40)}<p>เมนูนี้สำหรับเจ้าของกิจการเท่านั้น</p></div>`; return true; }
 
 /* ---------- LOGIN ---------- */
-function renderLogin() {
-  let pin = '';
+function renderLogin(mode) {
+  mode = mode || 'pin';               // pin = รหัส 4 หลักอย่างเดียว (พนักงาน/เจ้าของ) · user = ชื่อผู้ใช้ + รหัส (เจ้าของ)
+  const max = mode === 'pin' ? 4 : 8; let pin = '';
   app.innerHTML = `<div class="login">
-    <div class="brand"><div class="mk"><small>ร้าน</small>เมย์</div><div class="mm">Mini Mart</div><div class="muted small" style="margin-top:6px">ระบบจัดการร้านค้า</div></div>
+    <div style="position:fixed;top:calc(8px + var(--safe-t));right:8px;color:var(--ink2)">${FS.btn()}</div>
+    <div class="brand"><div class="mk"><small>ร้าน</small>เมย์</div><div class="mm">Mini Mart</div><div class="muted small" style="margin-top:6px">${esc(S.device.name || '')}</div></div>
     <div class="card" style="width:100%;max-width:360px">
-      <label class="f"><span>ชื่อผู้ใช้</span><input class="in" id="lu" autocomplete="username" autocapitalize="none" value="${esc(LS.get('lastUser', 'owner'))}"></label>
-      <div class="center muted small">ใส่ PIN</div>
-      <div class="dots">${'<i></i>'.repeat(6)}</div>
-      <div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:var(--red);color:#fff;font-size:15px">เข้า</button></div>
-      <div class="center tiny muted" style="margin-top:14px">${S.apiUrl ? 'เชื่อมต่อ: Google Sheet ของร้าน' : 'โหมดทดลอง (เก็บข้อมูลในเครื่องนี้) · เจ้าของ owner/1234 · พนักงาน staff/1111'}</div>
+      ${mode === 'user' ? `<label class="f"><span>ชื่อผู้ใช้ (เจ้าของร้าน)</span><input class="in" id="lu" autocomplete="username" autocapitalize="none" value="${esc(LS.get('lastUser', 'owner'))}"></label>` : ''}
+      <div class="center disp" style="font-size:18px;margin-top:4px">${mode === 'pin' ? 'ใส่รหัส 4 หลัก' : 'ใส่รหัส'}</div>
+      <div class="dots">${'<i></i>'.repeat(max === 4 ? 4 : 6)}</div>
+      <div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button>${mode === 'pin' ? '<button data-del style="font-size:20px">⌫</button>' : '<button data-ok style="background:var(--red);color:#fff;font-size:15px">เข้า</button>'}</div>
+      <div class="center" style="margin-top:12px">${mode === 'pin' ? '<button class="btn ghost sm" id="sw">เจ้าของร้าน: เข้าด้วยชื่อผู้ใช้</button>' : '<button class="btn ghost sm" id="sw">← กลับไปใส่รหัส 4 หลัก</button>'}</div>
+      <div class="center tiny muted" style="margin-top:10px">${!S.apiUrl ? 'โหมดทดลอง · เจ้าของ 1234 · พนักงาน 1111' : navigator.onLine === false ? '<span class="tag amber">ออฟไลน์ — เข้าได้เฉพาะผู้ที่เคยเข้าเครื่องนี้</span>' : 'เชื่อมต่อ: Google Sheet ของร้าน'}</div>
       <div class="center" style="margin-top:6px"><button class="btn ghost sm" id="cfg">${I(IC.gear, 16)} ตั้งค่าการเชื่อมต่อ</button></div>
     </div>
     <div class="tiny muted" style="margin-top:14px">v${APP_VER}</div></div>`;
   const dots = () => $$('.dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
+  let sending = false;
   const submit = async () => {
-    if (pin.length < 4) return toast('PIN อย่างน้อย 4 หลัก', 1);
-    const username = $('#lu').value.trim().toLowerCase();
-    busy(1, 'กำลังเข้าสู่ระบบ...');
+    if (sending) return;
+    if (pin.length < 4) return toast('รหัสอย่างน้อย 4 หลัก', 1);
+    const username = mode === 'user' ? $('#lu').value.trim().toLowerCase() : '';
+    sending = true; busy(1, 'กำลังเข้าสู่ระบบ...');
     try {
-      const r = await api('login', { username, pin, device: { id: S.device.id, type: devType(), ua: navigator.userAgent, name: S.device.name || '' } });
-      S.token = r.token; S.user = r.user; LS.set('token', r.token); LS.set('user', r.user); LS.set('lastUser', username);
+      let r;
+      try { r = await api('login', { username, pin, device: { id: S.device.id, type: devType(), ua: navigator.userAgent, name: S.device.name || '' } }); }
+      catch (e) {
+        if (!e.offline || !S.apiUrl) throw e;
+        // ไม่มีอินเทอร์เน็ต → เข้าระบบแบบออฟไลน์ (เฉพาะคนที่เคยเข้าระบบเครื่องนี้แบบออนไลน์มาแล้ว)
+        busy(1, 'ออฟไลน์ — กำลังตรวจรหัสในเครื่อง...');
+        r = await OfflineAuth.login(pin, username);
+        if (!r) throw new Error('ไม่มีอินเทอร์เน็ต และรหัสนี้ยังไม่เคยเข้าระบบในเครื่องนี้ (ต้องเข้าแบบออนไลน์ 1 ครั้งก่อน)');
+        toast('เข้าระบบแบบออฟไลน์ — ขายได้ตามปกติ บิลจะส่งขึ้นระบบเมื่อมีเน็ต');
+      }
+      if (!r.offline) OfflineAuth.remember(r.user, pin, r.token);
+      S.token = r.token; S.user = r.user; LS.set('token', r.token); LS.set('user', r.user); if (username) LS.set('lastUser', username);
       if (r.device) { S.device = { ...S.device, ...r.device }; LS.set('device', S.device); }
       busy(0); await boot();
-      if (r.mustChangePin) { toast('กรุณาเปลี่ยน PIN เริ่มต้น'); changePinDlg(); }
-    } catch (e) { busy(0); pin = ''; dots(); toast(e.message, 1); }
+      if (r.mustChangePin) { toast('กรุณาเปลี่ยนรหัสเริ่มต้น'); changePinDlg(); }
+    } catch (e) { busy(0); pin = ''; dots(); toast(e.message, 1); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (x) { } }
+    sending = false;
   };
-  $$('.pinpad [data-n]').forEach(b => b.onclick = () => { if (pin.length < 8) pin += b.dataset.n; dots(); if (pin.length === 8) submit(); });
+  const add = d => { if (pin.length >= max) return; pin += d; dots(); if (mode === 'pin' && pin.length === 4) setTimeout(submit, 80); };
+  $$('.pinpad [data-n]').forEach(b => b.onclick = () => add(b.dataset.n));
   $('.pinpad [data-c]').onclick = () => { pin = ''; dots(); };
-  $('.pinpad [data-ok]').onclick = submit;
-  document.onkeydown = e => { if (!$('.login')) return; if (document.activeElement && document.activeElement.id === 'lu') return; if (/^\d$/.test(e.key) && pin.length < 8) { pin += e.key; dots(); } else if (e.key === 'Backspace') { pin = pin.slice(0, -1); dots(); } else if (e.key === 'Enter') submit(); };
+  const del = $('.pinpad [data-del]'); if (del) del.onclick = () => { pin = pin.slice(0, -1); dots(); };
+  const ok = $('.pinpad [data-ok]'); if (ok) ok.onclick = submit;
+  $('#sw').onclick = () => renderLogin(mode === 'pin' ? 'user' : 'pin');
+  document.onkeydown = e => { if (!$('.login')) return; if (document.activeElement && document.activeElement.id === 'lu') { if (e.key === 'Enter') submit(); return; } if (/^\d$/.test(e.key)) add(e.key); else if (e.key === 'Backspace') { pin = pin.slice(0, -1); dots(); } else if (e.key === 'Enter') submit(); };
   $('#cfg').onclick = connectDlg;
 }
 function connectDlg() {
@@ -887,8 +974,43 @@ function changePinDlg() {
   };
 }
 async function logout(silent) {
-  if (!silent) { try { await api('logout'); } catch (e) { } }
-  S.token = ''; S.user = null; LS.del('token'); LS.del('user'); renderLogin();
+  Elev.clear();
+  // สลับผู้ใช้: ไม่ยกเลิก token บนเซิร์ฟเวอร์ (คนเดิมกลับมาเข้าแบบออฟไลน์ได้) · token หมดอายุเองใน 30 วัน หรือเจ้าของปิดอุปกรณ์/ผู้ใช้
+  S.token = ''; S.user = null; LS.del('token'); LS.del('user'); S.shift = null;
+  if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
+  history.replaceState(null, '', location.pathname + location.search); document.body.classList.remove('full', 'kiosk'); renderLogin();
+}
+
+/* ---------- เต็มจอ + สลับผู้ใช้ ---------- */
+const FS = {
+  get el() { return document.fullscreenElement || document.webkitFullscreenElement; },
+  get supported() { return !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen); },
+  get installed() { return matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; },
+  btn(cls) { return `<button class="iconbtn tb fsb ${cls || ''}" onclick="FS.toggle()" title="Full screen">${I(this.el ? IC.shrink : IC.expand, 22)}</button>`; },
+  async toggle() {
+    try {
+      if (this.el) { await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen()); return; }
+      if (this.supported) {
+        const d = document.documentElement; await (d.requestFullscreen ? d.requestFullscreen({ navigationUI: 'hide' }) : d.webkitRequestFullscreen());
+        LS.set('wantFS', true); try { screen.orientation && screen.orientation.lock && 0; } catch (e) { } return;
+      }
+    } catch (e) { }
+    this.help();
+  },
+  help() {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && 'ontouchend' in document);
+    sheet('Full screen', `<p class="small">${ios ? 'iPhone/iPad ไม่รองรับปุ่มเต็มจอในเบราว์เซอร์ — ให้ติดตั้งเป็นแอปแทน แล้วเปิดจากไอคอนบนหน้าจอโฮม จะเต็มจอทุกครั้ง' : 'เบราว์เซอร์นี้ไม่รองรับปุ่มเต็มจอ — ให้ติดตั้งเป็นแอป'}</p>
+      <div class="card small">${ios ? '<b>Safari</b> › ปุ่มแชร์ (สี่เหลี่ยมลูกศรขึ้น) › <b>เพิ่มไปยังหน้าจอโฮม</b> (Add to Home Screen)' : '<b>Chrome</b> › ⋮ › <b>ติดตั้งแอป</b> หรือ <b>เพิ่มลงในหน้าจอหลัก</b> (Install app / Add to Home screen)'}</div>`);
+  },
+  sync() { $$('.fsb').forEach(b => b.innerHTML = I(this.el ? IC.shrink : IC.expand, 22)); if (this.installed && !this.supported) $$('.fsb').forEach(b => b.style.display = 'none'); }
+};
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, () => { FS.sync(); if (!FS.el) LS.set('wantFS', false); }));
+// ถ้าเคยเปิดเต็มจอ: แตะหน้าจอครั้งแรกหลังเปิดแอป จะกลับเข้าเต็มจอให้อัตโนมัติ (เบราว์เซอร์อนุญาตเฉพาะตอนผู้ใช้แตะ)
+addEventListener('pointerdown', e => { if (LS.get('wantFS', false) && !FS.el && FS.supported && !(e.target.closest && e.target.closest('.fsb'))) FS.toggle(); }, { capture: true });
+function switchUser() {
+  const n = (window.Sync && Sync.box.length) || 0;
+  if (n) toast(`บิลรอส่ง ${n} บิล จะส่งอัตโนมัติเมื่อมีคนเข้าระบบ`);
+  logout();
 }
 
 /* ---------- HOME ---------- */
@@ -904,6 +1026,7 @@ VIEWS.home = async el => {
    </div>
    <div id="today"></div><div id="alerts"></div><div id="stats"><div class="card center"><span class="spin dark"></span></div></div>`;
   window.homeToday && homeToday($('#today', el));
+  if (!isOwner()) $$('.qa button', el).forEach(b => { if (/newReceipt/.test(b.getAttribute('onclick')) && !can('receiveGoods')) b.remove(); });
   try {
     await loadProducts();
     const lic = await loadTable('Licenses').catch(() => []);
@@ -933,7 +1056,7 @@ VIEWS.home = async el => {
     }
     $('#stats', el).innerHTML = `<div class="grid2" style="margin-bottom:12px">
       <div class="stat"><div class="k">สินค้าทั้งหมด</div><div class="v">${S.products.length.toLocaleString()}</div></div>
-      <div class="stat"><div class="k">กำไรขั้นต้นเฉลี่ย</div><div class="v">${margin.toFixed(1)}%</div></div>
+      ${canStrict('viewCost') ? `<div class="stat"><div class="k">กำไรขั้นต้นเฉลี่ย</div><div class="v">${margin.toFixed(1)}%</div></div>` : `<div class="stat"><div class="k">สต็อกใกล้หมด</div><div class="v">${low.length}</div></div>`}
       ${isOwner() ? `<div class="stat"><div class="k">มูลค่าสต็อก (ที่นับ)</div><div class="v">${baht(stockVal)}</div></div><div class="stat"><div class="k">ไม่มีต้นทุน</div><div class="v">${S.products.filter(p => !num(p.cost)).length}</div></div>` : ''}
       ${extra}</div>
       ${S.apiUrl ? '' : `<div class="alert blue">${I(IC.alert, 20)}<div>กำลังใช้ <b>โหมดทดลอง</b> ข้อมูลอยู่ในเครื่องนี้เท่านั้น — ไปที่ เพิ่มเติม › ตั้งค่า เพื่อเชื่อม Google Sheet</div></div>`}`;
@@ -967,6 +1090,7 @@ VIEWS.products = async (el, flag) => {
   };
   let t; $('#q', el).oninput = e => { clearTimeout(t); t = setTimeout(() => { PF.q = e.target.value; PF.limit = 60; draw(); }, 150); };
   $('#sc', el).onclick = () => openScanner(code => { const f = findByCode(code); if (f) { productCard(f.p, f.price); return 'close'; } $('#q', el).value = PF.q = code; draw(); return 'close'; });
+  Scanner.on('products', code => { const f = findByCode(code); if (f) { beep(); productCard(f.p, f.price); } else { Scanner.err(); $('#q', el).value = PF.q = code; PF.limit = 60; draw(); } });
   $('#rf', el).onclick = async () => { busy(1, 'กำลังโหลดสินค้า...'); try { await loadProducts(true); draw(); } catch (e) { toast(e.message, 1); } busy(0); };
   if (!S.products.length) { try { await loadProducts(true); } catch (e) { toast(e.message, 1); } } else { buildIndex(); loadProducts().then(draw).catch(() => { }); }
   draw();
@@ -995,8 +1119,12 @@ function stockDlg(p) {
   $('#qq', ov).focus();
   $('#ok', ov).onclick = async () => {
     const q = num($('#qq', ov).value); const cur = num(p.stock); const v = m === 'add' ? cur + q : m === 'sub' ? cur - q : q;
-    try { busy(1); await saveProducts([{ ...p, stock: String(v), trackStock: 'Y' }]); busy(0); ov.remove(); toast('บันทึกสต็อกแล้ว: ' + v); if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); }
+    try { busy(1); await adjustStock([{ sku: p.sku, stock: v }]); busy(0); ov.remove(); toast('บันทึกสต็อกแล้ว: ' + v); if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); }
   };
+}
+async function adjustStock(rows) {
+  const r = await api('adjustStock', { rows });
+  r.rows.forEach(x => { const p = IDX.bySku[x.sku]; if (p) { p.stock = x.stock; p.trackStock = 'Y'; } }); LS.set('products', S.products);
 }
 async function saveProducts(rows) {
   const clean = rows.map(r => { const o = {}; Object.keys(r).forEach(k => { if (k[0] !== '_') o[k] = r[k]; }); return o; });
@@ -1015,7 +1143,7 @@ function editProduct(p0) {
     <div class="row" style="margin-bottom:12px;gap:12px"><div id="pimg" style="width:84px;height:84px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3);flex:none">${curImg ? `<img src="${curImg}" style="width:100%;height:100%;object-fit:cover">` : I(IC.image, 30)}</div>
       <div class="grow"><div class="small" style="font-weight:600">รูปสินค้า (แสดงบนหน้าจอขาย)</div><div class="row wrap" style="margin-top:6px"><label class="btn ghost sm">${I(IC.cam, 16)} ถ่าย/เลือกรูป<input type="file" accept="image/*" id="f_img" class="hidden"></label><button class="btn ghost sm" id="rmimg">ลบรูป</button></div><div class="tiny muted">ย่อขนาดอัตโนมัติ ~10 KB โหลดเร็ว</div></div></div>
     <label class="f"><span>ชื่อสินค้า *</span><input class="in" id="f_name" value="${esc(p.name)}"></label>
-    <label class="f"><span>บาร์โค้ด</span><div class="row"><input class="in grow" id="f_barcode" inputmode="numeric" value="${esc(p.barcode)}"><button class="btn sm" id="bscan" title="สแกน">${I(IC.scan, 18)}</button><button class="btn ghost sm" id="bgen" title="สร้างบาร์โค้ดภายในร้าน">สร้าง</button></div><div class="tiny muted" id="bmsg"></div></label>
+    <div class="f" style="margin-bottom:10px"><span style="display:block;font-size:13px;color:var(--ink2);margin-bottom:4px;font-weight:500">บาร์โค้ด <span class="tiny muted">· ยิงด้วยเครื่อง / แตะ 📷 ถ่ายรูป / แตะสแกนสด</span></span><div class="row">${barcodeFieldHTML('f_barcode', p.barcode)}<button class="btn sm" id="bscan" title="สแกนด้วยกล้องแบบสด">${I(IC.scan, 18)}</button><button class="btn ghost sm" id="bgen" title="สร้างบาร์โค้ดภายในร้าน">สร้าง</button></div><div class="tiny muted" id="bmsg"></div></div>
     <div class="grid2"><label class="f"><span>ราคาขาย *</span><input class="in" id="f_price" type="number" inputmode="decimal" step="any" value="${esc(p.price)}"></label>
     <label class="f ${can('viewCost') ? '' : 'hidden'}"><span>ต้นทุน</span><input class="in" id="f_cost" type="number" inputmode="decimal" step="any" value="${esc(p.cost)}"></label></div>
     <label class="f"><span>หมวดหมู่</span><input class="in" id="f_category" list="catl" value="${esc(p.category)}"><datalist id="catl">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
@@ -1041,6 +1169,7 @@ function editProduct(p0) {
   $('#f_img', ov).onchange = async e => { const f = e.target.files[0]; if (!f) return; newImg = await Img.shrink(f); rmImg = false; $('#pimg', ov).innerHTML = `<img src="${newImg}" style="width:100%;height:100%;object-fit:cover">`; };
   $('#rmimg', ov).onclick = () => { newImg = null; rmImg = true; $('#pimg', ov).innerHTML = I(IC.image, 30); };
   $('#bscan', ov).onclick = () => openScanner(code => { $('#f_barcode', ov).value = code; chk(); return 'close'; });
+  bindBarcodeField(ov, 'f_barcode', () => chk());
   $('#bgen', ov).onclick = () => { $('#f_barcode', ov).value = internalBarcode($('#f_sku', ov).value); chk(); toast('สร้างบาร์โค้ดภายในร้าน (ขึ้นต้น 21)'); };
   const stkVis = () => $('#stk', ov).style.display = $('#f_trackStock', ov).checked ? '' : 'none';
   $('#f_trackStock', ov).onchange = stkVis; stkVis();
@@ -1102,13 +1231,14 @@ VIEWS.scan = el => {
        <div class="seg" id="sm" style="margin-top:10px"><button class="on" data-m="add">บวกเพิ่มเข้าสต็อก</button><button data-m="set">ตั้งเป็นยอดที่นับได้</button></div>
        <button class="btn green block" id="ap" style="margin-top:10px">บันทึกสต็อก</button></div>` : '';
       let sm = 'add'; $$('#sm button', el).forEach(b => b.onclick = () => { sm = b.dataset.m; $$('#sm button', el).forEach(x => x.classList.toggle('on', x === b)); });
-      const ap = $('#ap', el); if (ap) ap.onclick = async () => { try { busy(1); await saveProducts(uniq.map(p => ({ ...p, stock: String(sm === 'add' ? num(p.stock) + p._cnt : p._cnt), trackStock: 'Y' }))); uniq.forEach(p => delete p._cnt); hist.length = 0; busy(0); drawHist(); toast('บันทึกสต็อกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
+      const ap = $('#ap', el); if (ap) ap.onclick = async () => { try { busy(1); await adjustStock(uniq.map(p => ({ sku: p.sku, stock: sm === 'add' ? num(p.stock) + p._cnt : p._cnt }))); uniq.forEach(p => delete p._cnt); hist.length = 0; busy(0); drawHist(); toast('บันทึกสต็อกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
     } else if (mode === 'label') {
       $('#hist', el).innerHTML = LQ.length ? `<div class="card"><div class="row"><h3 class="grow">คิวพิมพ์ฉลาก (${LQ.length})</h3><button class="btn sm" onclick="go('labels')">ไปพิมพ์</button></div></div>` : '';
     }
   };
   $('#go', el).onclick = () => openScanner(show, { continuous: true, title: mode === 'price' ? 'เช็คราคา' : mode === 'stock' ? 'นับสต็อก (สแกนต่อเนื่อง)' : 'เพิ่มเข้าคิวพิมพ์' });
   const kb = $('#kb', el); kb.onkeydown = e => { if (e.key === 'Enter' && kb.value.trim()) { beep(); show(kb.value.trim()); kb.value = ''; } };
+  Scanner.on('scan', code => { const r = show(code); if (findByCode(code)) beep(); else Scanner.err(); return r; });
   if (!S.products.length) loadProducts(true).catch(e => toast(e.message, 1)); else buildIndex();
   setTimeout(() => kb.focus(), 100);
 };
@@ -1152,6 +1282,7 @@ VIEWS.labels = (el, items) => {
   };
   $$('select,input', el).forEach(i => i.addEventListener('change', preview));
   $('#addp', el).onclick = () => pickProducts(ps => { ps.forEach(p => LQ.push({ p, copies: 1 })); drawQ(); preview(); });
+  Scanner.on('labels', code => { const f = findByCode(code); if (f) { beep(); LQ.push({ p: f.p, copies: 1 }); drawQ(); preview(); toast('เพิ่มเข้าคิว: ' + f.p.name); } else { Scanner.err(); toast('ไม่พบ ' + code, 1); } });
   $('#adds', el).onclick = () => openScanner((code, ctx) => { const f = findByCode(code); if (f) { LQ.push({ p: f.p, copies: 1 }); ctx.showLast(`<b>${esc(f.p.name)}</b> เพิ่มแล้ว (${LQ.length})`); drawQ(); preview(); } else ctx.showLast('ไม่พบ ' + esc(code)); return ''; }, { continuous: true, title: 'สแกนเพิ่มเข้าคิว' });
   renderPrinterBadge = () => { const s = $('#pst', el); if (!s) return; s.textContent = NB.connected ? 'เชื่อมต่อแล้ว: ' + (NB.dev.name || '') : (navigator.bluetooth ? 'ยังไม่เชื่อมต่อ' : 'อุปกรณ์นี้ไม่รองรับ Web Bluetooth — ใช้ “บันทึกรูป PNG” แล้วพิมพ์ผ่านแอป NIIMBOT'); $('#con', el).textContent = NB.connected ? 'ตัดการเชื่อมต่อ' : 'เชื่อมต่อ'; };
   renderPrinterBadge();
@@ -1331,17 +1462,19 @@ function matchDlg(it, done) {
 VIEWS.more = el => {
   const own = isOwner();
   const items = [
-    ['salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 'ดูย้อนหลัง พิมพ์ซ้ำ คืนเงิน', 1],
+    ['dataquality', IC.count, 'ความครบถ้วนของข้อมูล', 'ต้นทุน บาร์โค้ด สต็อก ปุ่มระบุราคา — คะแนนร้าน', own],
+    ['salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', seesSales() ? 'ดูย้อนหลัง พิมพ์ซ้ำ คืนเงิน' : 'บิลของฉันวันนี้ · พิมพ์ซ้ำ', 1],
     ['customers', IC.user, 'ฐานลูกค้า', 'เบอร์โทร ยอดซื้อ แต้มสะสม เงินเชื่อ', can('customers')],
-    ['inventory', IC.count, 'สินค้าคงคลัง', 'ตรวจนับสต็อก ใบสั่งซื้อ มูลค่าสต็อก', can('stockCount') || can('receiveGoods') || can('viewCost')],
+    ['inventory', IC.count, 'สินค้าคงคลัง', 'ตรวจนับสต็อก ใบสั่งซื้อ มูลค่าสต็อก', can('stockCount') || can('receiveGoods') || canStrict('viewCost')],
     ['receipts', IC.cam, 'ใบเสร็จร้านค้าส่ง', 'ถ่ายรูป อ่านรายการ รับสินค้าเข้า', can('receiveGoods')],
     ['labels', IC.print, 'พิมพ์ฉลาก / บาร์โค้ด', 'NIIMBOT B1 / B21 · แผ่น A4', 1],
     ['categories', IC.grid, 'หมวดหมู่สินค้า', 'ชื่อ สี ลำดับ', can('editProducts')],
     ['staff', IC.users, 'พนักงาน', 'ผู้ใช้ สิทธิ์ ลงเวลา ยอดขายพนักงาน', 1],
-    ['sales', IC.sale, 'ยอดขายรายเดือน (ภาษี)', 'ยอดจาก POS + กรอกเองย้อนหลัง', own],
+    ['sales', IC.sale, 'ยอดขายรายเดือน', 'นำเข้า/ส่งออก Excel (Loyverse) · ยอด POS · ภาพรวมหลายปี', own],
     ['tax', IC.tax, 'ภาษีเงินได้บุคคลธรรมดา', 'คำนวณ เปรียบเทียบวิธีหักค่าใช้จ่าย กำหนดยื่น', own],
     ['licenses', IC.shield, 'ใบอนุญาต', 'สุรา ยาสูบ และอื่นๆ แจ้งเตือนก่อนหมดอายุ', 1],
     ['io', IC.io, 'นำเข้า / ส่งออกไฟล์', 'Excel / CSV รูปแบบเดียวกับไฟล์ตัวอย่าง', own],
+    ['scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 'USB / Bluetooth / Serial · ทดสอบและตั้งค่า', 1],
     ['printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 'Bluetooth / USB · ออกแบบใบเสร็จ', 1],
     ['payset', IC.sale, 'การชำระเงิน & แต้ม', 'พร้อมเพย์ QR บัตรสวัสดิการ เงินเชื่อ แต้มสะสม', own],
     ['displayset', IC.monitor, 'จอแสดงผลฝั่งลูกค้า', 'เปิดจอที่ 2 / จับคู่แท็บเล็ต', 1],
@@ -1353,31 +1486,117 @@ VIEWS.more = el => {
   $('#lo', el).onclick = () => logout();
 };
 
-/* ---------- SALES (รายเดือนสำหรับภาษี) ---------- */
+/* ---------- SALES (รายเดือน: POS + นำเข้าจาก Loyverse/Excel) ---------- */
 async function monthlySales(y) {
   const [man, pos] = await Promise.all([loadTable('Sales').catch(() => []), api('salesMonthly', { year: y }).then(r => r.months).catch(() => ({}))]);
   S.sales = man;
   return TH_MF.map((m, i) => {
     const mm = String(i + 1).padStart(2, '0'), id = `M-${y}-${mm}`, r = man.find(x => x.id === id), p = pos[mm] || {};
     const manual = r && r.amount !== '' ? num(r.amount) : null;
-    return { i, mm, id, name: m, pos: num(p.net), posCost: num(p.cost), count: p.count || 0, manual, amount: manual != null ? manual : num(p.net) };
+    const src = manual != null ? (r.source || 'กรอกเอง') : (p.count ? 'POS' : '');
+    const d = manual != null
+      ? { gross: r.gross !== '' && r.gross != null ? num(r.gross) : manual, refund: num(r.refund), disc: num(r.discount), cost: num(r.cost), hasCost: r.cost !== '' && r.cost != null }
+      : { gross: num(p.gross), refund: num(p.refund), disc: num(p.disc), cost: num(p.cost), hasCost: !!p.count };
+    const amount = manual != null ? manual : num(p.net);
+    return { i, y: +y, mm, id, name: m, pos: num(p.net), posCost: num(p.cost), count: p.count || 0, manual, amount, src, ...d, profit: amount - d.cost };
   });
+}
+const SALES_HEAD = ['วันที่', 'ยอดขายรวม', 'การคืนเงิน', 'ส่วนลด', 'ยอดขายสุทธิ', 'ต้นทุนของสินค้า', 'กำไรรวม', 'กำไร', 'แหล่งข้อมูล'];
+const SMAP = [['date', /^(วันที่|date|เดือน)/i], ['gross', /^(ยอดขายรวม|gross sales)/i], ['refund', /^(การคืนเงิน|คืนเงิน|refunds?)/i], ['discount', /^(ส่วนลด|discounts?)/i], ['net', /^(ยอดขายสุทธิ|net sales)/i], ['cost', /^(ต้นทุน|cost of goods)/i], ['profit', /^(กำไรรวม|gross profit)/i]];
+function parseMonth(v) {
+  if (v instanceof Date && !isNaN(v)) { const d = new Date(v.getTime() + 12 * 3600e3); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+  if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 864e5) + 12 * 3600e3); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); }
+  const s = String(v || '').trim(); let m, y, mo;
+  if ((m = s.match(/^(\d{4})[-\/.](\d{1,2})/))) { y = +m[1]; mo = +m[2]; }
+  else if ((m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/))) { y = +m[3]; mo = +m[2]; }
+  else if ((m = s.match(/^(\d{1,2})[-\/.](\d{2,4})$/))) { y = +m[2]; mo = +m[1]; }
+  else { const ti = [...TH_M, ...TH_MF].findIndex(t => s.includes(t.replace(/\./g, '').slice(0, 3)) || s.includes(t)); const ym = s.match(/(\d{2,4})\s*$/); if (ti >= 0 && ym) { mo = ti % 12 + 1; y = +ym[1]; } }
+  if (!y || !mo || mo > 12) return null;
+  if (y < 100) y += y > 50 ? 2500 : 2000; if (y > 2400) y -= 543;
+  return y + '-' + String(mo).padStart(2, '0');
+}
+async function readSheetRows(file) {
+  if (/\.xlsx?$/i.test(file.name)) { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }); return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }); }
+  return parseCSV(await file.text());
+}
+function rowsToMonthly(rows) {
+  const hi = rows.findIndex(r => r.some(c => /^(วันที่|date)/i.test(String(c).trim())) && r.some(c => /(ยอดขาย|sales)/i.test(String(c))));
+  if (hi < 0) throw new Error('ไม่พบหัวตาราง “วันที่ / ยอดขาย” (ใช้ไฟล์สรุปยอดขายที่ส่งออกจาก Loyverse หรือรูปแบบเดียวกัน)');
+  const head = rows[hi].map(h => String(h).trim()), ix = {};
+  SMAP.forEach(([k, re]) => { const i = head.findIndex(h => re.test(h)); if (i >= 0) ix[k] = i; });
+  if (ix.net == null && ix.gross == null) throw new Error('ไม่พบคอลัมน์ยอดขาย');
+  const M = {}; let bad = 0;
+  rows.slice(hi + 1).forEach(r => {
+    const ym = parseMonth(r[ix.date]); if (!ym) { if (r.some(c => String(c).trim())) bad++; return; }
+    const g = k => ix[k] != null ? num(r[ix[k]]) : 0;
+    const x = M[ym] || (M[ym] = { ym, gross: 0, refund: 0, discount: 0, net: 0, cost: 0, hasCost: ix.cost != null, days: 0 });
+    x.gross += g('gross'); x.refund += g('refund'); x.discount += g('discount'); x.cost += g('cost'); x.days++;
+    x.net += ix.net != null ? g('net') : g('gross') - g('refund') - g('discount');
+  });
+  return { months: Object.values(M).sort((a, b) => a.ym.localeCompare(b.ym)), bad };
 }
 VIEWS.sales = async el => {
   if (ownerOnly(el)) return;
   const y0 = +todayISO().slice(0, 4);
-  el.innerHTML = vhead('ยอดขายรายเดือน (ใช้คำนวณภาษี)', '', 'more') + `<div class="card"><p class="small muted" style="margin-top:0">ระบบดึงยอดขายสุทธิจากหน้าขาย (POS) ให้อัตโนมัติ เดือนที่ยังไม่ได้ใช้ POS ของระบบนี้ (เช่น ใช้ Loyverse) ให้กรอก “ยอดที่ใช้จริง” เอง — ถ้ากรอก จะใช้ค่าที่กรอกแทนยอด POS</p>
-   <select class="in" id="yy">${[y0, y0 - 1, y0 - 2].map(y => `<option value="${y}">ปี ${y + 543}</option>`).join('')}</select></div><div class="card" id="mm"><span class="spin dark"></span></div>`;
-  const draw = async () => {
-    const y = $('#yy', el).value; const rows = await monthlySales(y); let tot = 0; rows.forEach(r => tot += r.amount);
-    $('#mm', el).innerHTML = `<table class="t"><tr><th>เดือน</th><th class="right">จาก POS</th><th class="right">ยอดที่ใช้ (กรอกทับ)</th></tr>` + rows.map(r => `<tr><td>${r.name}</td><td class="right num">${r.pos ? money(r.pos) : '<span class="muted">-</span>'}</td><td class="right"><input class="in num right" style="max-width:150px;min-height:36px" type="number" step="any" data-id="${r.id}" value="${r.manual != null ? r.manual : ''}" placeholder="${r.pos ? money(r.pos, 0) : '0'}"></td></tr>`).join('') + `</table><div class="kv" style="font-weight:700;margin-top:8px"><span>รวมทั้งปี</span><span>${baht(tot)}</span></div><button class="btn block green" id="sv" style="margin-top:10px">บันทึก</button>`;
+  el.innerHTML = vhead('ยอดขายรายเดือน', '', 'more') + `
+   <div class="card"><div class="row wrap" style="gap:8px"><label class="btn grow">${I(IC.io, 18)} นำเข้าไฟล์ยอดขาย (Excel/CSV)<input type="file" id="fi" accept=".xlsx,.xls,.csv" class="hidden"></label><button class="btn ghost grow" id="ex">ส่งออก Excel</button><button class="btn ghost grow" id="exc">ส่งออก CSV</button></div>
+     <div class="tiny muted" style="margin-top:8px">รองรับไฟล์ “สรุปยอดขาย” ที่ส่งออกจาก Loyverse (รายเดือนหรือรายวัน ระบบจะรวมเป็นรายเดือนให้) · เดือนที่นำเข้าจะใช้ยอดจากไฟล์แทนยอด POS ในการคำนวณภาษี</div><div id="pv"></div></div>
+   <div class="card" id="ov"><span class="spin dark"></span></div>
+   <div class="card"><div class="row" style="margin-bottom:8px"><h3 class="grow">รายละเอียดรายเดือน</h3><select class="in" id="yy" style="width:auto"></select></div><div id="mm"><span class="spin dark"></span></div></div>`;
+  let years = [];
+  const allYears = async () => {
+    const man = await loadTable('Sales').catch(() => []);
+    const ys = new Set([y0]); man.forEach(r => { const y = +String(r.date).slice(0, 4); if (y > 2000) ys.add(y); });
+    years = [...ys].sort((a, b) => b - a);
+    $('#yy', el).innerHTML = years.map(y => `<option value="${y}">ปี ${y + 543}</option>`).join('');
+    const data = (await Promise.all(years.slice().reverse().map(y => monthlySales(y)))).flat().filter(m => m.y < y0 || +m.mm <= +todayISO().slice(5, 7));
+    S.allMonths = data;
+    const first = data.findIndex(m => m.amount); const D = first >= 0 ? data.slice(first) : [];
+    const tot = D.reduce((s, m) => s + m.amount, 0), byY = {}; D.forEach(m => { const b = byY[m.y] || (byY[m.y] = { net: 0, cost: 0, n: 0, hc: true }); b.net += m.amount; b.cost += m.cost; if (m.amount) b.n++; if (m.amount && !m.hasCost) b.hc = false; });
+    $('#ov', el).innerHTML = D.length ? `<h3>ภาพรวม ${D.length} เดือน · ${baht(tot)}</h3>${barChart(D.map(m => ({ l: TH_M[m.i].replace('.', '') + String(m.y + 543).slice(-2), t: TH_MF[m.i] + ' ' + (m.y + 543) + (m.src ? ' (' + m.src + ')' : ''), v: m.amount })))}
+      <div class="scroll-x" style="margin-top:8px"><table class="t"><tr><th>ปี</th><th class="right">ยอดขายสุทธิ</th><th class="right">เฉลี่ย/เดือน</th><th class="right">ต้นทุน</th><th class="right">กำไร</th><th class="right">เทียบเกณฑ์ VAT</th></tr>${Object.entries(byY).sort((a, b) => b[0] - a[0]).map(([y, b]) => `<tr><td>${+y + 543}</td><td class="right num">${money(b.net, 0)}</td><td class="right num">${money(b.n ? b.net / b.n : 0, 0)}</td><td class="right num">${b.hc ? money(b.cost, 0) : '<span class="muted">ไม่ครบ</span>'}</td><td class="right num">${b.hc ? money(b.net - b.cost, 0) : '-'}</td><td class="right"><span class="tag ${b.net > 1.8e6 ? 'red' : b.net > 1.44e6 ? 'amber' : 'green'}">${(b.net / 1.8e6 * 100).toFixed(0)}%</span></td></tr>`).join('')}</table></div>
+      ${Object.values(byY).some(b => b.net > 1.8e6) ? `<div class="alert red" style="margin-top:8px">${I(IC.alert, 18)}<div>มีปีที่ยอดขายเกิน 1.8 ล้านบาท ซึ่งเป็นเกณฑ์ที่ต้องจดทะเบียนภาษีมูลค่าเพิ่ม (VAT) — ควรปรึกษาสรรพากรพื้นที่หรือนักบัญชี</div></div>` : ''}` : '<div class="muted small">ยังไม่มีข้อมูลยอดขาย — นำเข้าไฟล์จาก Loyverse หรือเริ่มขายผ่านหน้า POS</div>';
+    drawYear();
+  };
+  const drawYear = () => {
+    const y = +$('#yy', el).value; const rows = (S.allMonths || []).filter(m => m.y === y).length ? S.allMonths.filter(m => m.y === y) : [];
+    const full = TH_MF.map((n, i) => rows.find(r => r.i === i) || { i, y, name: n, id: `M-${y}-${String(i + 1).padStart(2, '0')}`, amount: 0, pos: 0, manual: null, src: '', cost: 0, gross: 0, refund: 0, disc: 0, hasCost: false });
+    let tot = 0; full.forEach(r => tot += r.amount);
+    $('#mm', el).innerHTML = `<div class="scroll-x"><table class="t"><tr><th>เดือน</th><th class="right">ยอดขายสุทธิ</th><th class="right">ต้นทุน</th><th>ที่มา</th><th class="right">แก้ไข/กรอกเอง</th></tr>${full.map(r => `<tr><td>${r.name}</td><td class="right num">${r.amount ? money(r.amount, 0) : '<span class="muted">-</span>'}${r.manual != null && r.pos ? `<div class="tiny muted">POS ${money(r.pos, 0)}</div>` : ''}</td><td class="right num">${r.hasCost ? money(r.cost, 0) : '<span class="muted">-</span>'}</td><td>${r.src ? `<span class="tag ${r.src === 'POS' ? 'green' : r.src === 'กรอกเอง' ? 'gray' : 'blue'}">${esc(r.src)}</span>` : ''}</td><td class="right"><input class="in num right" style="max-width:130px;min-height:34px" type="number" step="any" data-id="${r.id}" value="${r.manual != null ? r.manual : ''}" placeholder="${r.pos ? money(r.pos, 0) : ''}"></td></tr>`).join('')}</table></div>
+      <div class="kv" style="font-weight:700;margin-top:8px"><span>รวมปี ${y + 543}</span><span>${baht(tot)}</span></div>
+      <div class="tiny muted">ช่องว่าง = ใช้ยอดจาก POS · ลบตัวเลขออกแล้วบันทึก = กลับไปใช้ยอด POS</div><button class="btn block green" id="sv" style="margin-top:10px">บันทึกการแก้ไข</button>`;
     $('#sv', el).onclick = async () => {
-      const ins = $$('[data-id]', el); const rows2 = ins.filter(i => i.value !== '').map(i => ({ id: i.dataset.id, date: i.dataset.id.slice(2) + '-01', amount: i.value }));
-      const clear = ins.filter(i => i.value === '' && S.sales.some(x => x.id === i.dataset.id)).map(i => i.dataset.id);
-      try { busy(1); if (rows2.length) await api('upsert', { table: 'Sales', rows: rows2 }); if (clear.length) await api('remove', { table: 'Sales', ids: clear }); busy(0); toast('บันทึกแล้ว'); draw(); } catch (e) { busy(0); toast(e.message, 1); }
+      const ins = $$('[data-id]', el), man = S.sales || [];
+      const up = ins.filter(i => i.value !== '' && String(num((man.find(x => x.id === i.dataset.id) || {}).amount)) !== String(num(i.value)) ).map(i => { const old = man.find(x => x.id === i.dataset.id) || {}; const ch = old.amount !== undefined && num(old.amount) !== num(i.value); return { id: i.dataset.id, date: i.dataset.id.slice(2) + '-01', amount: i.value, source: ch || !old.id ? 'กรอกเอง' : old.source, ...(ch || !old.id ? { gross: '', refund: '', discount: '', cost: '', profit: '' } : {}) }; });
+      const clear = ins.filter(i => i.value === '' && man.some(x => x.id === i.dataset.id)).map(i => i.dataset.id);
+      try { busy(1); if (up.length) await api('upsert', { table: 'Sales', rows: up }); if (clear.length) await api('remove', { table: 'Sales', ids: clear }); busy(0); toast('บันทึกแล้ว'); allYears(); } catch (e) { busy(0); toast(e.message, 1); }
     };
   };
-  $('#yy', el).onchange = draw; draw();
+  $('#yy', el).onchange = drawYear;
+  $('#fi', el).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; e.target.value = '';
+    try {
+      busy(1, 'กำลังอ่านไฟล์...'); const { months, bad } = rowsToMonthly(await readSheetRows(f)); busy(0);
+      if (!months.length) throw new Error('ไม่พบข้อมูลยอดขายในไฟล์');
+      const posMonths = new Set((S.allMonths || []).filter(m => m.pos).map(m => m.y + '-' + m.mm));
+      const overlap = months.filter(m => posMonths.has(m.ym)).length, tot = months.reduce((s, m) => s + m.net, 0);
+      const lowCost = months.filter(m => m.hasCost && m.net && m.cost / m.net < .2).length;
+      $('#pv', el).innerHTML = `<div class="alert blue" style="margin-top:10px">${I(IC.check, 18)}<div>พบ <b>${months.length}</b> เดือน (${thDate(months[0].ym + '-01')} – ${thDate(months[months.length - 1].ym + '-01')}) · ยอดขายสุทธิรวม <b>${baht(tot)}</b>${months.some(m => m.days > 1) ? ' · รวมจากรายวัน' : ''}${bad ? ` · ข้าม ${bad} แถวที่อ่านวันที่ไม่ได้` : ''}</div></div>
+        ${lowCost ? `<div class="alert amber">${I(IC.alert, 18)}<div>${lowCost} เดือนมีต้นทุนต่ำกว่า 20% ของยอดขาย (อาจเป็นช่วงที่ยังไม่ได้ใส่ต้นทุนสินค้าใน Loyverse) — กำไรของเดือนเหล่านั้นจะสูงเกินจริง</div></div>` : ''}
+        <div class="scroll-x" style="max-height:220px;overflow:auto"><table class="t"><tr><th>เดือน</th><th class="right">ยอดขายรวม</th><th class="right">คืนเงิน</th><th class="right">สุทธิ</th><th class="right">ต้นทุน</th></tr>${months.slice().reverse().map(m => `<tr><td>${TH_M[+m.ym.slice(5) - 1]} ${+m.ym.slice(0, 4) + 543}</td><td class="right num">${money(m.gross, 0)}</td><td class="right num">${money(m.refund, 0)}</td><td class="right num"><b>${money(m.net, 0)}</b></td><td class="right num">${m.hasCost ? money(m.cost, 0) : '-'}</td></tr>`).join('')}</table></div>
+        ${overlap ? `<label class="row small" style="margin-top:8px"><input type="checkbox" id="skp"> ข้าม ${overlap} เดือนที่มียอดขายจาก POS ของระบบนี้แล้ว (ถ้าไม่ติ๊ก จะใช้ยอดจากไฟล์แทน)</label>` : ''}
+        <button class="btn green block" id="go" style="margin-top:10px">นำเข้า ${months.length} เดือน</button>`;
+      $('#go', el).onclick = async () => {
+        const skip = $('#skp', el) && $('#skp', el).checked;
+        const rows = months.filter(m => !(skip && posMonths.has(m.ym))).map(m => ({ id: 'M-' + m.ym, date: m.ym + '-01', amount: String(Math.round(m.net * 100) / 100), gross: String(m.gross), refund: String(m.refund), discount: String(m.discount), cost: m.hasCost ? String(m.cost) : '', profit: m.hasCost ? String(Math.round((m.net - m.cost) * 100) / 100) : '', source: 'นำเข้า', note: f.name.slice(0, 80) }));
+        try { busy(1, 'กำลังนำเข้า...'); await api('upsert', { table: 'Sales', rows }); busy(0); toast(`นำเข้า ${rows.length} เดือนแล้ว`); $('#pv', el).innerHTML = ''; allYears(); } catch (err) { busy(0); toast(err.message, 1); }
+      };
+    } catch (err) { busy(0); toast(err.message, 1); }
+  };
+  const exportRows = () => [SALES_HEAD].concat((S.allMonths || []).filter(m => m.amount).slice().reverse().map(m => [`${m.y}-${m.mm}-01`, m.gross, m.refund, m.disc, m.amount, m.hasCost ? m.cost : '', m.hasCost ? m.amount - m.cost : '', m.hasCost && m.amount ? Math.round((m.amount - m.cost) / m.amount * 100) / 100 : '', m.src]));
+  $('#exc', el).onclick = () => download(`sales-summary-monthly_${todayISO()}.csv`, toCSV(exportRows()));
+  $('#ex', el).onclick = async () => { try { busy(1); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const R = exportRows().map((r, i) => i ? [new Date(r[0] + 'T00:00:00')].concat(r.slice(1)) : r); const ws = XLSX.utils.aoa_to_sheet(R, { cellDates: true }); ws['!cols'] = [{ wch: 12 }].concat(Array(8).fill({ wch: 14 })); for (let i = 1; i < R.length; i++) { const c = ws[XLSX.utils.encode_cell({ r: i, c: 0 })]; if (c) c.z = 'mmm yyyy'; } const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'sales-summary'); download(`sales-summary-monthly_${todayISO()}.xlsx`, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })])); busy(0); } catch (e) { busy(0); toast(e.message, 1); } };
+  allYears();
 };
 
 /* ---------- TAX ---------- */
@@ -1552,13 +1771,21 @@ VIEWS.users = async el => {
 };
 function userForm(u, done) {
   const isNew = !u; u = u || { role: 'staff', active: 'Y' };
-  const ov = sheet(isNew ? 'เพิ่มผู้ใช้' : 'แก้ไขผู้ใช้', `<label class="f"><span>ชื่อที่แสดง</span><input class="in" id="u_name" value="${esc(u.name)}"></label>
-   <label class="f"><span>ชื่อผู้ใช้ (ภาษาอังกฤษ)</span><input class="in" id="u_username" autocapitalize="none" value="${esc(u.username)}"></label>
-   <label class="f"><span>${isNew ? 'PIN (4-8 หลัก)' : 'PIN ใหม่ (เว้นว่างถ้าไม่เปลี่ยน)'}</span><input class="in" id="u_pin" type="password" inputmode="numeric"></label>
-   <div class="grid2"><label class="f"><span>สิทธิ์</span><select class="in" id="u_role"><option value="staff">พนักงาน</option><option value="owner">เจ้าของกิจการ</option></select></label><label class="f"><span>สถานะ</span><select class="in" id="u_active"><option value="Y">ใช้งาน</option><option value="N">ปิดใช้งาน</option></select></label></div>`,
+  const ov = sheet(isNew ? 'เพิ่มพนักงาน/ผู้ใช้' : 'แก้ไขผู้ใช้', `<label class="f"><span>ชื่อที่แสดง (เช่น ชื่อเล่น) *</span><input class="in" id="u_name" value="${esc(u.name)}"></label>
+   <div class="grid2"><label class="f"><span>สิทธิ์</span><select class="in" id="u_role"><option value="staff">พนักงาน</option><option value="owner">เจ้าของกิจการ</option></select></label><label class="f"><span>สถานะ</span><select class="in" id="u_active"><option value="Y">ใช้งาน</option><option value="N">ปิดใช้งาน</option></select></label></div>
+   <label class="f"><span id="pl"></span><div class="row"><input class="in grow num" id="u_pin" inputmode="numeric" autocomplete="off" style="font-size:22px;letter-spacing:6px;font-family:Prompt"><button class="btn ghost sm" id="rnd">สุ่มรหัส</button></div><div class="tiny muted" id="ph"></div></label>
+   <details id="adv"><summary class="small muted">ชื่อผู้ใช้สำหรับเข้าระบบแบบพิมพ์ชื่อ (เจ้าของ)</summary><label class="f" style="margin-top:8px"><span>ชื่อผู้ใช้ (a-z 0-9) เว้นว่าง = สร้างให้อัตโนมัติ</span><input class="in" id="u_username" autocapitalize="none" value="${esc(u.username)}"></label></details>`,
     `<button class="btn block" id="sv">บันทึก</button>`);
   $('#u_role', ov).value = u.role; $('#u_active', ov).value = u.active || 'Y';
-  $('#sv', ov).onclick = async () => { const p = { id: u.id }; ['name', 'username', 'pin', 'role', 'active'].forEach(k => p[k] = $('#u_' + k, ov).value.trim()); try { busy(1); await api('saveUser', p); busy(0); ov.remove(); toast('บันทึกแล้ว'); done(); } catch (e) { busy(0); toast(e.message, 1); } };
+  const upd = () => { const st = $('#u_role', ov).value === 'staff'; $('#pl', ov).textContent = (isNew ? '' : 'เปลี่ยน') + (st ? 'รหัสเข้าระบบ 4 หลัก' : 'รหัสเจ้าของ 4-8 หลัก') + (isNew ? ' *' : ' (เว้นว่าง = ใช้รหัสเดิม)'); $('#u_pin', ov).maxLength = st ? 4 : 8; $('#ph', ov).textContent = st ? 'พนักงานกดรหัสนี้ที่หน้าเข้าระบบได้เลย ไม่ต้องพิมพ์ชื่อ · รหัสห้ามซ้ำกับคนอื่น · พนักงานเปลี่ยนรหัสเองไม่ได้' : 'รหัสนี้ใช้อนุมัติงานแทนพนักงานด้วย (แก้ราคา/คืนเงิน ฯลฯ) อย่าบอกพนักงาน'; };
+  $('#u_role', ov).onchange = upd; upd();
+  $('#u_pin', ov).oninput = e => e.target.value = e.target.value.replace(/\D/g, '');
+  $('#rnd', ov).onclick = () => { let p; do { p = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); } while (/^(\d)\1{3}$|1234|4321|0000/.test(p)); $('#u_pin', ov).value = p; };
+  $('#sv', ov).onclick = async () => {
+    const p = { id: u.id }; ['name', 'username', 'pin', 'role', 'active'].forEach(k => p[k] = $('#u_' + k, ov).value.trim());
+    if (p.role === 'staff' && p.pin && !/^\d{4}$/.test(p.pin)) return toast('รหัสพนักงานต้องเป็นตัวเลข 4 หลัก', 1);
+    try { busy(1); await api('saveUser', p); busy(0); ov.remove(); toast(p.pin ? `บันทึกแล้ว · รหัสของ ${p.name}: ${p.pin}` : 'บันทึกแล้ว'); done(); } catch (e) { busy(0); toast(e.message, 1); }
+  };
 }
 
 /* ---------- SETTINGS ---------- */
@@ -1571,7 +1798,7 @@ VIEWS.settings = el => {
     <label class="f"><span>ที่อยู่</span><input class="in" id="s_address" value="${esc(st.address || '')}"></label>
     <div class="grid2"><label class="f"><span>โทร</span><input class="in" id="s_phone" value="${esc(st.phone || '')}"></label><label class="f"><span>อีเมลรับแจ้งเตือน</span><input class="in" id="s_alertEmail" type="email" value="${esc(st.alertEmail || '')}"></label></div>
     <div class="row"><button class="btn grow" id="ss">บันทึก</button>${S.apiUrl ? '<button class="btn ghost grow" id="ta">ทดสอบส่งอีเมลแจ้งเตือน</button>' : ''}</div></div>` : ''}
-   <div class="card"><h3>บัญชีของฉัน</h3><div class="kv"><span>ผู้ใช้</span><b>${esc(S.user.username)}</b></div><button class="btn ghost block" style="margin-top:8px" onclick="changePinDlg()">เปลี่ยน PIN</button></div>
+   <div class="card"><h3>บัญชีของฉัน</h3><div class="kv"><span>ผู้ใช้</span><b>${esc(S.user.username)}</b></div>${isOwner() ? '<button class="btn ghost block" style="margin-top:8px" onclick="changePinDlg()">เปลี่ยนรหัสของฉัน</button>' : '<div class="tiny muted" style="margin-top:6px">ต้องการเปลี่ยนรหัส ให้เจ้าของร้านเปลี่ยนให้ที่เมนู พนักงาน</div>'}</div>
    <div class="card"><h3>การเชื่อมต่อ</h3><div class="kv"><span>ฐานข้อมูล</span><b>${S.apiUrl ? 'Google Sheet (ออนไลน์)' : 'โหมดทดลองในเครื่อง'}</b></div>
     ${own ? `<button class="btn ghost block" id="cn" style="margin-top:8px">เปลี่ยน URL เซิร์ฟเวอร์</button>` : ''}
     <button class="btn ghost block" id="cc" style="margin-top:8px">ล้างแคชในเครื่อง</button>
@@ -1592,11 +1819,26 @@ async function boot() {
   document.onkeydown = null;
   shell(); buildIndex();
   const first = loadSettings();
-  if (!S.settings.shopName) await first;
+  if (!S.settings.shopName || !Object.keys(S.perms || {}).length) await first;
   window.Sync && Sync.start();
-  const v = h0 || 'home';
+  const v = isKiosk() ? 'pos' : (h0 || 'home');
   go(VIEWS[v] ? v : 'home');
+  IdleLock.start();
 }
+/* ล็อกหน้าจอเมื่อไม่ได้ใช้งาน (กันคนอื่นใช้สิทธิ์เจ้าของบนเครื่องที่วางไว้หน้าร้าน) */
+const IdleLock = {
+  last: Date.now(),
+  start() {
+    if (this.on) return; this.on = true;
+    ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => this.last = Date.now(), { passive: true }));
+    setInterval(() => {
+      if (!S.user) return;
+      const mins = num(cfg('idleLock', '10'));
+      const applies = S.user.role === 'owner' || !isKiosk();
+      if (mins > 0 && applies && Date.now() - this.last > mins * 60e3) { Elev.clear(); toast('ล็อกหน้าจออัตโนมัติ (ไม่ได้ใช้งาน ' + mins + ' นาที)'); logout(); }
+    }, 20e3);
+  }
+};
 window.addEventListener('online', () => { S.online = true; const n = $('.net'); n && n.classList.remove('off'); });
 window.addEventListener('offline', () => { S.online = false; const n = $('.net'); n && n.classList.add('off'); });
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (S.user && VIEWS[v] && v !== S.view) go(v); });
@@ -1604,12 +1846,15 @@ loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.al
 </script>
 <script src="js/qr.js"></script>
 <script src="js/logic.js"></script>
+<script src="js/offline.js"></script>
+<script src="js/scanner.js"></script>
 <script src="js/printer.js"></script>
 <script src="js/pos.js"></script>
 <script src="js/display.js"></script>
 <script src="js/reports.js"></script>
 <script src="js/inventory.js"></script>
 <script src="js/people.js"></script>
+<script src="js/quality.js"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });

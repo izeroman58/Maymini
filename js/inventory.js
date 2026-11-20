@@ -74,6 +74,7 @@ VIEWS.stockcount = async el => {
     setCount(p, 1, true); ctx && ctx.showLast(`<div class="row"><b class="grow">${esc(p.name)}</b><span class="tag green">${d.counts[p.sku].c}</span></div>`); draw();
   };
   $('#scn', el).onclick = () => openScanner((c, ctx) => hit(c, ctx), { continuous: d.mode === 'inc', title: 'สแกนนับสต็อก' });
+  Scanner.on('stockcount', c => { if (findByCode(c)) { beep(); hit(c); } else { Scanner.err(); toast('ไม่พบ ' + c, 1); } });
   const kb = $('#kb', el);
   kb.onkeydown = e => { if (e.key === 'Enter' && kb.value.trim()) { const v = kb.value.trim(); if (findByCode(v)) { beep(); hit(v); kb.value = ''; q = ''; } else { q = v; } draw(); } };
   kb.oninput = () => { if (!/^\d{8,}$/.test(kb.value)) { q = kb.value; limit = 80; draw(); } };

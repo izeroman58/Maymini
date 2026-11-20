@@ -52,7 +52,8 @@ async function customerDetail(c) {
 const SR = { r: 'month', from: todayISO().slice(0, 8) + '01', to: todayISO() };
 VIEWS.staff = async (el, tab) => {
   tab = tab || S.staffTab || (isOwner() ? 'users' : 'clock'); S.staffTab = tab;
-  const tabs = [isOwner() && ['users', 'ผู้ใช้'], isOwner() && ['perms', 'สิทธิ์'], ['clock', 'ลงเวลา'], ['sales', 'ยอดขาย']].filter(Boolean);
+  const tabs = [isOwner() && ['users', 'ผู้ใช้'], isOwner() && ['perms', 'สิทธิ์'], ['clock', 'ลงเวลา'], seesSales() && ['sales', 'ยอดขาย']].filter(Boolean);
+  if (!tabs.some(t => t[0] === tab)) tab = 'clock';
   el.innerHTML = vhead('พนักงาน', '', 'more') + `<div class="seg" style="margin-bottom:12px">${tabs.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? 'on' : ''}">${n}</button>`).join('')}</div><div id="sb"></div>`;
   $$('.seg [data-t]', el).forEach(b => b.onclick = () => go('staff', b.dataset.t));
   const sb = $('#sb', el);
@@ -64,10 +65,20 @@ VIEWS.staff = async (el, tab) => {
     $('#add', sb).onclick = () => userForm(null, () => go('staff', 'users'));
   } else if (tab === 'perms') {
     const r = await api('perms').catch(e => (toast(e.message, 1), null)); if (!r) return;
-    sb.innerHTML = `<div class="card"><h3>สิ่งที่พนักงานทำได้</h3><p class="small muted" style="margin-top:0">มีผลกับผู้ใช้ที่เป็น “พนักงาน” ทุกคน (เจ้าของทำได้ทุกอย่าง)</p>${Object.entries(r.defs).map(([k, d]) => `<label class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><span class="grow">${esc(d[0])}</span><input type="checkbox" data-k="${k}" ${r.perms[k] ? 'checked' : ''} style="width:22px;height:22px"></label>`).join('')}
-      <label class="row" style="padding:10px 0"><span class="grow">อุปกรณ์ใหม่ที่พนักงานเข้าใช้ ต้องให้เจ้าของอนุมัติก่อน</span><input type="checkbox" id="da" ${S.settings.deviceApproval === 'Y' ? 'checked' : ''} style="width:22px;height:22px"></label>
-      <button class="btn block green" id="sv" style="margin-top:8px">บันทึกสิทธิ์</button></div>`;
-    $('#sv', sb).onclick = async () => { const o = {}; $$('[data-k]', sb).forEach(c => o[c.dataset.k] = c.checked); try { busy(1); await saveSetting('perms', o); await saveSetting('deviceApproval', $('#da', sb).checked ? 'Y' : 'N'); busy(0); toast('บันทึกสิทธิ์แล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
+    const v2s = v => v === 'pin' ? 'pin' : v ? 'y' : 'n';
+    sb.innerHTML = `<div class="card"><h3>สิ่งที่พนักงานทำได้</h3><p class="small muted" style="margin-top:0">ใช้กับผู้ใช้ที่เป็น “พนักงาน” ทุกคน · เจ้าของทำได้ทุกอย่าง · <b>🔒 ใส่รหัสเจ้าของ</b> = พนักงานทำได้เมื่อเจ้าของมากดรหัสให้ (ใช้ต่อได้ 3 นาที)</p>
+      ${Object.entries(r.defs).map(([k, d]) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line);gap:10px"><span class="grow small">${esc(d[0])}</span>${d[2]
+        ? `<select class="in" data-k="${k}" style="width:auto;min-height:36px;padding:4px 8px"><option value="y">✅ อนุญาต</option><option value="pin">🔒 ใส่รหัสเจ้าของ</option><option value="n">⛔ ไม่อนุญาต</option></select>`
+        : `<input type="checkbox" data-k="${k}" ${r.perms[k] ? 'checked' : ''} style="width:22px;height:22px">`}</div>`).join('')}
+      <div class="row" style="padding:10px 0;gap:10px"><span class="grow small">อุปกรณ์ใหม่ที่พนักงานเข้าใช้ ต้องให้เจ้าของอนุมัติก่อน</span><input type="checkbox" id="da" ${S.settings.deviceApproval === 'Y' ? 'checked' : ''} style="width:22px;height:22px"></div>
+      <div class="row" style="padding:6px 0;gap:10px"><span class="grow small">ล็อกหน้าจอ/ออกจากระบบอัตโนมัติ เมื่อไม่ได้ใช้งาน (นาที, 0 = ปิด)<div class="tiny muted">ใช้กับเจ้าของและพนักงานที่ไม่ได้อยู่ในโหมดพนักงานขาย</div></span><input class="in" type="number" id="il" value="${esc(cfg('idleLock', '10'))}" style="width:80px"></div>
+      <button class="btn block green" id="sv" style="margin-top:8px">บันทึกสิทธิ์</button></div>
+      <div class="card small"><b>แนะนำสำหรับร้าน:</b> เปิด “โหมดพนักงานขาย” · ต้นทุน/รายงาน = ไม่อนุญาต · แก้ไขสินค้า แก้ราคา คืนเงิน = ใส่รหัสเจ้าของ · ตรวจนับสต็อก = อนุญาต</div>`;
+    $$('select[data-k]', sb).forEach(x => x.value = v2s(r.perms[x.dataset.k]));
+    $('#sv', sb).onclick = async () => {
+      const o = {}; $$('[data-k]', sb).forEach(c => o[c.dataset.k] = c.type === 'checkbox' ? c.checked : c.value === 'pin' ? 'pin' : c.value === 'y');
+      try { busy(1); await saveSetting('perms', o); await saveSetting('deviceApproval', $('#da', sb).checked ? 'Y' : 'N'); await saveSetting('idleLock', String(Math.max(0, num($('#il', sb).value)))); await loadSettings(); busy(0); toast('บันทึกสิทธิ์แล้ว — พนักงานจะเห็นผลเมื่อเปิดแอปครั้งถัดไป'); } catch (e) { busy(0); toast(e.message, 1); }
+    };
   } else if (tab === 'clock') {
     sb.innerHTML = `<div class="card center"><div class="small muted">${esc(S.user.name)}</div><div class="disp" style="font-size:22px;margin:6px 0">${S.shift ? 'กำลังทำงาน ตั้งแต่ ' + esc(S.shift.inAt.slice(11, 16)) + ' น.' : 'ยังไม่ได้ลงเวลาเข้างาน'}</div><button class="btn ${S.shift ? '' : 'green'}" id="ck" style="min-width:200px">${I(IC.clock, 18)} ${S.shift ? 'ลงเวลาออกงาน' : 'ลงเวลาเข้างาน'}</button></div><div id="rp"></div><div id="sl"></div>`;
     $('#ck', sb).onclick = async () => { await clockToggle(); go('staff', 'clock'); };

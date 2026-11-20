@@ -129,7 +129,18 @@ const Sync = {
     } catch (e) { if (manual || !e.offline) toast('ส่งบิลไม่สำเร็จ: ' + e.message, 1); }
     this.busy = false; this.badge();
   },
-  start() { this.badge(); clearInterval(this.timer); this.timer = setInterval(() => this.flush(), 20000); window.addEventListener('online', () => this.flush()); this.flush(); Img.sync(); RP.autoConnect(); }
+  start() {
+    this.badge(); clearInterval(this.timer); this.timer = setInterval(() => this.flush(), 20000);
+    if (!this.hooked) { this.hooked = true; document.addEventListener('mm:online', () => this.back()); document.addEventListener('visibilitychange', () => { if (!document.hidden) this.flush(); }); }
+    this.flush(); Img.sync(); RP.autoConnect();
+  },
+  // เน็ตกลับมา: ส่งบิลค้าง แล้วดึงราคา/สินค้า/สิทธิ์ล่าสุด
+  async back() {
+    if (!S.user) return;
+    await this.flush();
+    try { await loadProducts(true); await loadSettings(); Img.sync(); if (S.view === 'pos' && !POS.pay) POS.render(); } catch (e) { }
+    if (!this.box.length) toast('ออนไลน์แล้ว — ส่งข้อมูลครบ และอัปเดตราคาล่าสุดแล้ว');
+  },
 };
 window.Sync = Sync;
 
@@ -208,6 +219,20 @@ function keypad(title, init, cb, opt = {}) {
   ov.tabIndex = 0; ov.focus();
 }
 
+/* ---------- ขอสิทธิ์ชั่วคราวด้วยรหัสเจ้าของ (สำหรับการกระทำที่ทำในเครื่อง เช่น แก้ราคา ส่วนลด ลบรายการ) ---------- */
+async function gate(perm) {
+  if (canStrict(perm) || Elev.ok) return true;
+  if (S.perms[perm] !== 'pin') { toast('ไม่มีสิทธิ์: ' + ((S.defs[perm] || [])[0] || perm), 1); return false; }
+  const pin = await ownerPinDlg((S.defs[perm] || [])[0] || '');
+  if (!pin) return false;
+  try { busy(1, 'กำลังตรวจรหัส...'); await apiRaw('checkPin', { ownerPin: pin }); busy(0); Elev.set(pin); OfflineAuth.rememberOwnerPin(pin); return true; }
+  catch (e) {
+    busy(0);
+    if (e.offline && await OfflineAuth.checkOwnerPin(pin)) { Elev.set(pin); toast('อนุมัติแบบออฟไลน์'); return true; }
+    toast(e.offline ? 'ออฟไลน์: เครื่องนี้ยังไม่เคยบันทึกรหัสเจ้าของ (ให้เจ้าของเข้าระบบ/อนุมัติแบบออนไลน์ในเครื่องนี้ 1 ครั้ง)' : e.message.replace(/^PIN_\w+:\s*/, ''), 1); return false;
+  }
+}
+
 /* ---------- POS ---------- */
 const TILE_COLORS = ['#43A047', '#7CB342', '#C0CA33', '#FB8C00', '#F4511E', '#E53935', '#D81B60', '#8E24AA', '#3949AB', '#1E88E5', '#00ACC1', '#00897B', '#6D4C41', '#757575', '#E0E0E0'];
 const POS = {
@@ -253,7 +278,7 @@ const POS = {
   },
   scan(code) {
     const f = findByCode(code);
-    if (!f) { toast('ไม่พบสินค้า ' + code, 1); if (can('editProducts')) setTimeout(() => confirmDlg(`ไม่พบบาร์โค้ด <b>${esc(code)}</b> — เพิ่มเป็นสินค้าใหม่?`, 'เพิ่มสินค้า').then(y => y && editProduct({ barcode: code })), 200); return false; }
+    if (!f) { toast('ไม่พบสินค้า ' + code, 1); if (can('editProducts') && !isKiosk()) setTimeout(() => confirmDlg(`ไม่พบบาร์โค้ด <b>${esc(code)}</b> — เพิ่มเป็นสินค้าใหม่?`, 'เพิ่มสินค้า').then(y => y && editProduct({ barcode: code })), 200); return false; }
     this.add(f.p, f.price != null ? { price: f.price } : {}); return true;
   },
   newTicket() { this.t = { items: [], customer: null, discount: null, pointsUse: 0 }; this.pay = null; this.save(); this.render(); },
@@ -262,27 +287,23 @@ const POS = {
   mount(el) {
     this.el = el;
     el.innerHTML = `<div class="pos" id="pos">
-      <div class="pos-l"><div class="pbar"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button><div class="ttl" id="pt"></div>
-        <button class="iconbtn" id="ps" title="ค้นหา">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="สแกน">${I(IC.scan, 22)}</button></div>
+      <div class="pos-l"><div class="pbar"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button><div class="ttl" id="pt"></div><span class="netpill"></span>
+        <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="Switch user">${I(IC.switchu, 22)}</button></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
         <div class="cartbar" id="cbar"></div></div>
       <div class="pos-r" id="pr"></div></div>`;
     $('#pm', el).onclick = () => this.menu();
     $('#ps', el).onclick = () => this.search();
     $('#pcam', el).onclick = () => openScanner((code, ctx) => { const ok = this.scan(code); ctx.showLast(ok ? `<b>${esc(this.t.items[this.lastAdded].name)}</b> · รวม ${baht(this.totals().total)}` : 'ไม่พบ ' + esc(code)); return ''; }, { continuous: true, title: 'สแกนขายสินค้า' });
-    // เครื่องยิงบาร์โค้ด (keyboard wedge)
-    let buf = '', last = 0;
-    const kh = e => {
-      if (S.view !== 'pos' || $('.ov') || $('.scan')) return;
-      const tag = (document.activeElement || {}).tagName; if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      const now = Date.now(); if (now - last > 80) buf = ''; last = now;
-      if (e.key === 'Enter') { if (buf.length >= 3) { this.scan(buf); e.preventDefault(); } buf = ''; }
-      else if (e.key.length === 1) buf += e.key;
-    };
-    document.addEventListener('keydown', kh);
+    // เครื่องยิงบาร์โค้ด USB/Bluetooth/Serial — รับผ่านตัวรับกลาง (js/scanner.js)
+    Scanner.on('pos', code => {
+      if (this.pay && this.pay.done) this.newTicket();           // ยิงชิ้นถัดไปได้เลยหลังรับเงิน = เริ่มบิลใหม่
+      else if (this.pay) { Scanner.err(); return toast('กำลังชำระเงิน — กด “กลับ” ก่อนเพิ่มสินค้า', 1); }
+      if (!this.scan(code)) Scanner.err();
+    });
     const ps = () => this.render();
     document.addEventListener('mm:settings', ps);
-    S.cleanup = () => { document.removeEventListener('keydown', kh); document.removeEventListener('mm:settings', ps); };
+    S.cleanup = () => { document.removeEventListener('mm:settings', ps); };
     this.render();
     if (!S.products.length) loadProducts(true).then(() => this.render()).catch(e => toast(e.message, 1)); else { buildIndex(); loadProducts().catch(() => { }); }
     loadCustomers();
@@ -320,11 +341,11 @@ const POS = {
       const fill = isPage && !narrow;
       $('#pmain', this.el).innerHTML = `<div class="pgrid ${fill ? 'fill' : ''}" style="grid-template-columns:repeat(${cols},1fr);${fill ? `grid-template-rows:repeat(${L.rows},1fr)` : 'grid-auto-rows:minmax(88px,auto)'}">${html}</div>` +
         (this.edit && isPage ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">โหมดแก้ไขหน้าขาย — แตะช่องเพื่อแก้</b><button class="btn ghost sm" id="pgn">ชื่อหน้า</button><button class="btn ghost sm" id="pga">+ หน้าใหม่</button>${L.pages.length > 1 ? '<button class="btn ghost sm" id="pgd">ลบหน้า</button>' : ''}<button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '') + this.tabsHTML(tabs);
-      const ed1 = $('#ed1', this.el); if (ed1) ed1.onclick = () => { this.edit = true; this.render(); };
+      const ed1 = $('#ed1', this.el); if (ed1) ed1.onclick = async () => { if (await gate('editProducts')) { this.edit = true; this.render(); } };
       $$('[data-i]', this.el).forEach(b => {
         const i = +b.dataset.i; let pressT;
         b.onclick = () => { if (this.edit) return this.editTile(i); const t = L.pages[this.tab].tiles[i]; if (!t) return; if (t.t === 'c') { this.tab = L.pages.length; this.cat = t.ref; LS.set('posTab', this.tab); this.render(); } else this.add(IDX.bySku[t.ref]); };
-        if (can('editProducts')) { b.addEventListener('pointerdown', () => pressT = setTimeout(() => { this.edit = true; this.render(); navigator.vibrate && navigator.vibrate(30); }, 700)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(pressT))); }
+        if (can('editProducts')) { b.addEventListener('pointerdown', () => pressT = setTimeout(async () => { if (!(await gate('editProducts'))) return; this.edit = true; this.render(); navigator.vibrate && navigator.vibrate(30); }, 700)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(pressT))); }
       });
       $$('[data-cat]', this.el).forEach(b => b.onclick = () => { this.cat = b.dataset.cat; this.render(); });
       $$('[data-back]', this.el).forEach(b => b.onclick = () => { this.cat = null; this.render(); });
@@ -401,24 +422,25 @@ const POS = {
     $$('.titem', pr).forEach(r => r.onclick = () => { if (!this.pay) this.editItem(+r.dataset.i); });
   },
   editItem(i) {
-    const it = this.t.items[i]; const pe = can('priceEdit');
+    const it = this.t.items[i]; const pe = canStrict('priceEdit') || Elev.ok, pePin = !pe && S.perms.priceEdit === 'pin';
     const ov = sheet(esc(it.name), `<div class="row" style="justify-content:center;gap:14px;margin:6px 0 14px"><button class="btn ghost" id="m" style="width:60px;font-size:24px">−</button><input class="in center" id="q" type="number" inputmode="decimal" step="any" value="${it.qty}" style="width:120px;font-size:24px;font-family:Prompt"><button class="btn ghost" id="p" style="width:60px;font-size:24px">+</button></div>
-      <label class="f"><span>ราคาต่อหน่วย ${pe ? '' : '(ไม่มีสิทธิ์แก้ราคา)'}</span><input class="in" id="pr" type="number" inputmode="decimal" step="any" value="${it.price}" ${pe ? '' : 'readonly'}></label>`,
+      <label class="f"><span>ราคาต่อหน่วย ${pe ? '' : pePin ? '' : '(ไม่มีสิทธิ์แก้ราคา)'}</span><div class="row"><input class="in grow" id="pr" type="number" inputmode="decimal" step="any" value="${it.price}" ${pe ? '' : 'readonly'}>${pePin ? `<button class="btn ghost sm" id="unl">🔒 แก้ราคา</button>` : ''}</div></label>`,
       `${can('clearTicket') ? `<button class="btn ghost grow" id="rm" style="color:var(--red)">${I(IC.trash, 18)} ลบ</button>` : ''}<button class="btn grow green" id="ok">ตกลง</button>`);
-    const q = $('#q', ov), step = it.byWeight === 'Y' ? .1 : 1;
+    const q = $('#q', ov), step = it.byWeight === 'Y' ? .1 : 1; let canPr = pe;
+    const unl = $('#unl', ov); if (unl) unl.onclick = async () => { if (await gate('priceEdit')) { canPr = true; $('#pr', ov).readOnly = false; $('#pr', ov).focus(); unl.remove(); } };
     $('#m', ov).onclick = () => q.value = Math.max(step, Math.round((num(q.value) - step) * 1000) / 1000);
     $('#p', ov).onclick = () => q.value = Math.round((num(q.value) + step) * 1000) / 1000;
-    $('#ok', ov).onclick = () => { const v = num(q.value); if (v <= 0) { if (!can('clearTicket')) return toast('ไม่มีสิทธิ์ลบรายการ', 1); this.t.items.splice(i, 1); } else { it.qty = v; if (pe) it.price = num($('#pr', ov).value); } ov.remove(); this.save(); };
-    const rm = $('#rm', ov); if (rm) rm.onclick = () => { this.t.items.splice(i, 1); ov.remove(); this.save(); };
+    $('#ok', ov).onclick = async () => { const v = num(q.value); if (v <= 0) { if (!(await gate('clearTicket'))) return; this.t.items.splice(i, 1); } else { if (v < num(it.qty) && !(await gate('clearTicket'))) return; it.qty = v; if (canPr) it.price = num($('#pr', ov).value); } ov.remove(); this.save(); };
+    const rm = $('#rm', ov); if (rm) rm.onclick = async () => { if (!(await gate('clearTicket'))) return; this.t.items.splice(i, 1); ov.remove(); this.save(); };
   },
   ticketMenu() {
     const held = LS.get('held', []);
     const acts = [
-      can('discount') && ['ส่วนลดท้ายบิล', () => this.discountDlg()],
+      can('discount') && ['ส่วนลดท้ายบิล' + (canStrict('discount') ? '' : ' 🔒'), async () => { if (await gate('discount')) this.discountDlg(); }],
       this.t.customer && ptsCfg().enabled && num(this.t.customer.points) > 0 && ['ใช้แต้มสะสมเป็นส่วนลด', () => this.pointsDlg()],
       this.t.items.length && ['พักบิลนี้', () => { held.push({ ...this.t, at: LocalDB.now() }); LS.set('held', held); this.newTicket(); toast('พักบิลแล้ว'); }],
       held.length && [`เรียกบิลที่พักไว้ (${held.length})`, () => this.heldDlg()],
-      this.t.items.length && can('clearTicket') && ['ล้างบิล', async () => { if (await confirmDlg('ล้างรายการทั้งหมด?', 'ล้าง', true)) this.newTicket(); }]
+      this.t.items.length && can('clearTicket') && ['ล้างบิล' + (canStrict('clearTicket') ? '' : ' 🔒'), async () => { if (await gate('clearTicket') && await confirmDlg('ล้างรายการทั้งหมด?', 'ล้าง', true)) this.newTicket(); }]
     ].filter(Boolean);
     const ov = sheet('ตัวเลือกบิล', `<div class="list">${acts.map((a, i) => `<div class="item" data-a="${i}"><div class="grow t">${a[0]}</div></div>`).join('') || '<div class="empty">ไม่มีตัวเลือก</div>'}</div>`);
     $$('[data-a]', ov).forEach(x => x.onclick = () => { ov.remove(); acts[+x.dataset.a][1](); });
@@ -449,15 +471,23 @@ const POS = {
     setTimeout(() => $('#q', ov).focus(), 100);
   },
   async menu() {
-    const sh = S.shift;
+    const sh = S.shift, k = isKiosk();
     const acts = [
-      ['หน้าหลัก', IC.home, () => go('home')],
-      ['ใบเสร็จรับเงิน', IC.receipt, () => go('salesreceipts')],
+      !k && ['หน้าหลัก', IC.home, () => go('home')],
+      ['ใบเสร็จรับเงิน' + (seesSales() ? '' : ' (วันนี้)'), IC.receipt, () => go('salesreceipts')],
+      ['เช็คราคา / สแกน', IC.scan, () => go('scan')],
+      ['เครื่องยิงบาร์โค้ด (ทดสอบ/ตั้งค่า)', IC.scan, () => go('scannerset')],
+      k && ['สินค้า' + (canStrict('editProducts') ? '' : ' (แก้ไขต้องใช้รหัส)'), IC.box, () => go('products')],
+      k && can('stockCount') && ['ตรวจนับสต็อก', IC.count, () => go('stockcount')],
+      k && can('customers') && ['ฐานลูกค้า', IC.user, () => go('customers')],
+      k && ['พิมพ์ฉลาก/บาร์โค้ด', IC.tag, () => go('labels')],
       [sh ? 'ลงเวลาออกงาน' : 'ลงเวลาเข้างาน', IC.clock, () => clockToggle()],
       ['จอแสดงผลฝั่งลูกค้า', IC.monitor, () => go('displayset')],
       ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
-      can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)', IC.edit, () => { this.edit = !this.edit; if (this.tab >= this.layout().pages.length) this.tab = 0; this.render(); }],
-      ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)]
+      can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)' + (canStrict('editProducts') ? '' : ' 🔒'), IC.edit, async () => { if (!this.edit && !(await gate('editProducts'))) return; this.edit = !this.edit; if (this.tab >= this.layout().pages.length) this.tab = 0; this.render(); }],
+      ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)],
+      Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }],
+      ['ออกจากระบบ / เปลี่ยนผู้ใช้', IC.logout, async () => { if (Sync.box.length && !(await confirmDlg(`ยังมีบิลรอส่ง ${Sync.box.length} บิล (จะส่งให้เมื่อเข้าระบบครั้งถัดไป) ออกจากระบบ?`, 'ออก'))) return; logout(); }]
     ].filter(Boolean);
     const ov = sheet(`${esc(S.user.name)} · ${esc(S.device.name || 'เครื่องนี้')}`, `<div class="list menu">${acts.map((a, i) => `<div class="item" data-a="${i}"><div class="av">${I(a[1], 20)}</div><div class="grow t">${a[0]}</div></div>`).join('')}</div>`);
     $$('[data-a]', ov).forEach(x => x.onclick = () => { ov.remove(); acts[+x.dataset.a][2](); });
@@ -495,7 +525,7 @@ const POS = {
     const part = () => P.split ? Math.min(remain, num($('#part', this.el).value) || remain) : remain;
     $('#pback', this.el).onclick = () => { this.pay = null; this.render(); this.pushDisplay(); };
     $('#spl', this.el).onchange = e => { P.split = e.target.checked; this.renderPay(); };
-    $$('[data-pt]', this.el).forEach(b => b.onclick = () => { P.type = b.dataset.pt; this.renderPay(); });
+    $$('[data-pt]', this.el).forEach(b => b.onclick = async () => { if (b.dataset.pt === 'credit' && !(await gate('credit'))) return; P.type = b.dataset.pt; this.renderPay(); });
     $$('[data-rp]', this.el).forEach(a => a.onclick = () => { P.payments.splice(+a.dataset.rp, 1); this.renderPay(); });
     const addPay = (type, amount, cash) => {
       P.payments.push({ type, amount: Math.round(amount * 100) / 100 });

@@ -9,7 +9,7 @@ var Logic = (function () {
     Categories: { key: 'name', read: 'all', write: 'editProducts', cols: ['name', 'color', 'sort'] },
     Images: { key: 'sku', read: 'all', write: 'editProducts', cols: ['sku', 'data', 'updatedAt'] },
     Receipts: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', own: 'createdBy', cols: ['id', 'date', 'supplier', 'supplierTaxId', 'docNo', 'type', 'subtotal', 'vat', 'total', 'payMethod', 'fileId', 'fileUrl', 'items', 'stockApplied', 'note', 'createdAt', 'createdBy'] },
-    Sales: { key: 'id', read: 'owner', write: 'owner', cols: ['id', 'date', 'amount', 'note', 'createdAt', 'createdBy'] },
+    Sales: { key: 'id', read: 'owner', write: 'owner', cols: ['id', 'date', 'amount', 'gross', 'refund', 'discount', 'cost', 'profit', 'source', 'note', 'createdAt', 'createdBy'] },
     Orders: { key: 'id', read: 'none', write: 'none', dateCol: 'date', cols: ['id', 'date', 'deviceId', 'deviceName', 'cashier', 'cashierName', 'customerId', 'customerName', 'items', 'itemCount', 'subtotal', 'discount', 'total', 'cost', 'payments', 'payType', 'cash', 'change', 'pointsEarned', 'pointsUsed', 'status', 'refundOf', 'note', 'syncedAt'] },
     Customers: { key: 'id', read: 'customers', write: 'customers', cols: ['id', 'name', 'phone', 'note', 'totalSpent', 'visits', 'points', 'credit', 'creditLimit', 'lastVisit', 'createdAt'] },
     CustomerTx: { key: 'id', read: 'customers', write: 'none', dateCol: 'date', cols: ['id', 'date', 'customerId', 'type', 'amount', 'points', 'ref', 'by', 'note'] },
@@ -23,13 +23,17 @@ var Logic = (function () {
     Log: { key: 'time', read: 'owner', write: 'none', cols: ['time', 'user', 'action', 'detail'] }
   };
 
-  // สิทธิ์เริ่มต้นของพนักงาน (เจ้าของทำได้ทุกอย่าง) — แก้ได้ที่ เมนูพนักงาน › สิทธิ์
+  // สิทธิ์ของพนักงาน (เจ้าของทำได้ทุกอย่าง) — ค่า: true = อนุญาต, 'pin' = ต้องใส่รหัสเจ้าของร้านทุกครั้ง, false = ไม่อนุญาต
+  // [ชื่อ, ค่าเริ่มต้น, ใช้โหมดรหัสได้ไหม]
   var PERMS = {
-    sell: ['ขายสินค้า (POS)', true], discount: ['ให้ส่วนลด', true], priceEdit: ['แก้ราคาตอนขาย', false],
-    clearTicket: ['ลบรายการ/ล้างบิล', true], refund: ['คืนเงิน/ยกเลิกใบเสร็จ', false], credit: ['ขายเงินเชื่อ/รับชำระหนี้', true],
-    customers: ['จัดการฐานลูกค้า', true], viewCost: ['ดูต้นทุน/กำไร', false], editProducts: ['เพิ่ม/แก้ไขสินค้า', true],
-    receiveGoods: ['รับสินค้า/ใบเสร็จร้านส่ง/ใบสั่งซื้อ', true], stockCount: ['ตรวจนับสต็อก', true], reports: ['ดูรายงานยอดขายทั้งหมด', false]
+    posOnly: ['โหมดพนักงานขาย: เข้าได้เฉพาะหน้าขาย (ซ่อนเมนูอื่น)', true, false],
+    sell: ['ขายสินค้า (POS)', true, false], discount: ['ให้ส่วนลด', true, true], priceEdit: ['แก้ราคาตอนขาย', 'pin', true],
+    clearTicket: ['ลบรายการ/ล้างบิล', true, true], refund: ['คืนเงิน/ยกเลิกใบเสร็จ', 'pin', true], credit: ['ขายเงินเชื่อ/รับชำระหนี้', true, true],
+    customers: ['จัดการฐานลูกค้า', true, true], editProducts: ['เพิ่ม/แก้ไข/ลบสินค้า บาร์โค้ด รูป', 'pin', true],
+    receiveGoods: ['รับสินค้า/ใบเสร็จร้านส่ง/ใบสั่งซื้อ', true, true], stockCount: ['ตรวจนับสต็อก/ปรับสต็อก', true, true],
+    viewCost: ['ดูต้นทุน/กำไร', false, false], ownSales: ['ดูยอดขายของตัวเองย้อนหลัง', false, false], reports: ['ดูรายงานยอดขายทั้งหมดของร้าน', false, false]
   };
+  var OWNERPIN = null, PINOK = null;
 
   function n(v) { var x = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(x) ? x : 0; }
   function r2(x) { return Math.round(x * 100) / 100; }
@@ -39,16 +43,30 @@ var Logic = (function () {
 
   function perms(db) {
     var s = db.settings(), p = J(s.perms, {}), out = {};
-    Object.keys(PERMS).forEach(function (k) { out[k] = k in p ? !!p[k] : PERMS[k][1]; });
+    Object.keys(PERMS).forEach(function (k) { var v = k in p ? p[k] : PERMS[k][1]; out[k] = v === 'pin' && PERMS[k][2] ? 'pin' : !!v; });
     return out;
+  }
+  // ตรวจรหัสเจ้าของร้าน (ส่งมาเป็น payload.ownerPin)
+  function pinOk(db) {
+    if (PINOK !== null) return PINOK;
+    if (!OWNERPIN) return (PINOK = false);
+    PINOK = db.read('Users', {}).some(function (x) { return x.role === 'owner' && x.active !== 'N' && x.pinHash === db.hash(String(OWNERPIN)); });
+    if (!PINOK) err('PIN_BAD: รหัสเจ้าของร้านไม่ถูกต้อง');
+    return PINOK;
   }
   function can(db, u, p) {
     if (!u) return false;
     if (u.role === 'owner' || p === 'all') return true;
     if (p === 'owner' || p === 'none') return false;
-    return !!perms(db)[p];
+    var v = perms(db)[p];
+    return v === true || (v === 'pin' && pinOk(db));
   }
-  function need(db, u, p) { if (!can(db, u, p)) err('สิทธิ์ไม่เพียงพอ' + (PERMS[p] ? ' (' + PERMS[p][0] + ')' : ' (เฉพาะเจ้าของกิจการ)')); }
+  function need(db, u, p) {
+    if (can(db, u, p)) return;
+    if (PERMS[p] && perms(db)[p] === 'pin') err('PIN_REQUIRED: ต้องใส่รหัสเจ้าของร้าน — ' + PERMS[p][0]);
+    err('สิทธิ์ไม่เพียงพอ' + (PERMS[p] ? ' (' + PERMS[p][0] + ')' : ' (เฉพาะเจ้าของกิจการ)'));
+  }
+  function strict(db, u, p) { return u.role === 'owner' || perms(db)[p] === true; }
 
   // ---------- generic ----------
   function list(db, u, t, opt) {
@@ -58,6 +76,7 @@ var Logic = (function () {
     var rows = db.read(t, opt || {});
     if (ownOnly || (sc.own && u.role !== 'owner' && t === 'Receipts')) rows = rows.filter(function (r) { return r[sc.own] === u.username; });
     if (t === 'Users') rows = rows.map(function (r) { var c = {}; for (var k in r) if (k !== 'pinHash') c[k] = r[k]; return c; });
+    if (t === 'Products' && !strict(db, u, 'viewCost')) rows = rows.map(function (r) { var c = Object.assign({}, r); c.cost = ''; return c; });
     if (t === 'Settings' && u.role !== 'owner') rows = rows.filter(function (r) { return String(r.key).indexOf('secret') !== 0; });
     return rows;
   }
@@ -68,7 +87,7 @@ var Logic = (function () {
     rows = (rows || []).map(function (r) {
       var c = clean(t, r);
       if (!c[sc.key]) err('ไม่มีค่า ' + sc.key);
-      if (t === 'Products') { c.updatedAt = db.now(); c.updatedBy = u.username; if (!can(db, u, 'viewCost') && 'cost' in c) delete c.cost; }
+      if (t === 'Products') { c.updatedAt = db.now(); c.updatedBy = u.username; if (!strict(db, u, 'viewCost') && 'cost' in c) delete c.cost; }
       if (t === 'Images') c.updatedAt = db.now();
       if ((t === 'Receipts' || t === 'Sales') && !r.createdAt) { c.createdAt = db.now(); c.createdBy = u.username; }
       if (t === 'Licenses') c.updatedAt = db.now();
@@ -95,7 +114,7 @@ var Logic = (function () {
   }
   function remove(db, u, t, ids) {
     var sc = SCHEMA[t]; if (!sc || t === 'Log' || t === 'Orders') err('ไม่อนุญาต');
-    if (t === 'Categories' || t === 'Images') need(db, u, 'editProducts'); else need(db, u, 'owner');
+    if (t === 'Categories' || t === 'Images' || t === 'Products') need(db, u, 'editProducts'); else need(db, u, 'owner');
     if (t === 'Users') {
       var left = db.read('Users', {}).filter(function (x) { return ids.indexOf(x.id) < 0 && x.role === 'owner' && x.active !== 'N'; });
       if (!left.length) err('ต้องมีเจ้าของกิจการอย่างน้อย 1 คน');
@@ -106,14 +125,27 @@ var Logic = (function () {
   }
 
   // ---------- users / devices ----------
+  // เข้าระบบ: พนักงานใช้รหัส 4 หลักอย่างเดียว (username ว่าง) · เจ้าของใช้รหัสอย่างเดียว หรือ ชื่อผู้ใช้+รหัส ก็ได้
   function login(db, username, pin, dev) {
-    username = String(username || '').trim().toLowerCase();
-    var user = db.read('Users', {}).filter(function (x) { return String(x.username).toLowerCase() === username && String(x.active) !== 'N'; })[0];
-    if (!user || user.pinHash !== db.hash(String(pin))) err('ชื่อผู้ใช้หรือ PIN ไม่ถูกต้อง');
+    username = String(username || '').trim().toLowerCase(); pin = String(pin || '');
+    var h = db.hash(pin), act = db.read('Users', {}).filter(function (x) { return String(x.active) !== 'N'; }), user;
+    if (username) {
+      user = act.filter(function (x) { return String(x.username).toLowerCase() === username; })[0];
+      if (!user || user.pinHash !== h) err('ชื่อผู้ใช้หรือรหัสไม่ถูกต้อง');
+    } else {
+      var m = act.filter(function (x) { return x.pinHash === h; });
+      if (!m.length) err('รหัสไม่ถูกต้อง');
+      if (m.length > 1) err('รหัสนี้ซ้ำกันหลายบัญชี — ให้เจ้าของร้านเปลี่ยนรหัสให้ไม่ซ้ำกัน');
+      user = m[0];
+    }
     var info = { id: user.id, name: user.name, username: user.username, role: user.role };
     var device = registerDevice(db, info, dev || {});
     db.log(info, 'login', device ? device.name : '');
-    return { user: info, device: device, mustChangePin: user.pinHash === db.hash('1234') };
+    return { user: info, device: device, mustChangePin: user.role === 'owner' && user.pinHash === db.hash('1234') };
+  }
+  function pinTaken(db, pin, exceptId) {
+    var h = db.hash(String(pin));
+    return db.read('Users', {}).some(function (x) { return x.id !== exceptId && String(x.active) !== 'N' && x.pinHash === h; });
   }
   function registerDevice(db, u, dev) {
     if (!dev.id) return null;
@@ -133,24 +165,37 @@ var Logic = (function () {
   function saveUser(db, u, p) {
     need(db, u, 'owner');
     var users = db.read('Users', {});
-    var uname = String(p.username || '').trim().toLowerCase();
-    if (!/^[a-z0-9._-]{2,30}$/.test(uname)) err('ชื่อผู้ใช้ใช้ a-z 0-9 . _ - (2-30 ตัว)');
     var row = p.id ? users.filter(function (x) { return x.id === p.id; })[0] : null;
+    var role = p.role === 'owner' ? 'owner' : 'staff';
+    var uname = String(p.username || '').trim().toLowerCase();
+    if (!uname) { // พนักงานไม่ต้องมีชื่อผู้ใช้ — สร้างให้อัตโนมัติ
+      if (row) uname = row.username; else { var k = 1; while (users.some(function (x) { return String(x.username) === 'staff' + k; })) k++; uname = 'staff' + k; }
+    }
+    if (!/^[a-z0-9._-]{2,30}$/.test(uname)) err('ชื่อผู้ใช้ใช้ a-z 0-9 . _ - (2-30 ตัว)');
     if (users.some(function (x) { return String(x.username).toLowerCase() === uname && (!row || x.id !== row.id); })) err('ชื่อผู้ใช้ซ้ำ');
+    if (!String(p.name || '').trim()) err('กรุณาใส่ชื่อที่แสดง');
     row = row ? Object.assign({}, row) : { id: uid('U'), createdAt: db.now() };
-    row.name = p.name || uname; row.username = uname;
-    row.role = p.role === 'owner' ? 'owner' : 'staff'; row.active = p.active === 'N' ? 'N' : 'Y';
-    if (p.pin) { if (!/^\d{4,8}$/.test(String(p.pin))) err('PIN ต้องเป็นตัวเลข 4-8 หลัก'); row.pinHash = db.hash(String(p.pin)); }
-    if (!row.pinHash) err('กรุณาตั้ง PIN');
+    if (role === 'staff' && row.role === 'owner' && !p.pin) err('เปลี่ยนเป็นพนักงาน ต้องตั้งรหัส 4 หลักใหม่ด้วย');
+    row.name = String(p.name).trim(); row.username = uname; row.role = role; row.active = p.active === 'N' ? 'N' : 'Y';
+    if (p.pin) {
+      var pin = String(p.pin);
+      if (role === 'staff' && !/^\d{4}$/.test(pin)) err('รหัสพนักงานต้องเป็นตัวเลข 4 หลัก');
+      if (role === 'owner' && !/^\d{4,8}$/.test(pin)) err('รหัสเจ้าของต้องเป็นตัวเลข 4-8 หลัก');
+      if (pinTaken(db, pin, row.id)) err('รหัสนี้มีผู้ใช้อื่นใช้แล้ว กรุณาตั้งรหัสอื่น');
+      row.pinHash = db.hash(pin);
+    }
+    if (!row.pinHash) err('กรุณาตั้งรหัส');
     var owners = users.filter(function (x) { return x.role === 'owner' && x.active !== 'N' && x.id !== row.id; });
     if (!owners.length && (row.role !== 'owner' || row.active === 'N')) err('ต้องมีเจ้าของกิจการอย่างน้อย 1 คน');
     db.upsert('Users', [row]); db.log(u, 'saveUser', uname);
-    return {};
+    return { username: uname };
   }
   function changePin(db, u, oldPin, newPin) {
-    if (!/^\d{4,8}$/.test(String(newPin))) err('PIN ต้องเป็นตัวเลข 4-8 หลัก');
+    if (u.role !== 'owner') err('พนักงานเปลี่ยนรหัสเองไม่ได้ — ให้เจ้าของร้านเปลี่ยนให้');
+    if (!/^\d{4,8}$/.test(String(newPin))) err('รหัสต้องเป็นตัวเลข 4-8 หลัก');
     var me = db.read('Users', {}).filter(function (x) { return x.id === u.id; })[0];
-    if (!me || me.pinHash !== db.hash(String(oldPin))) err('PIN เดิมไม่ถูกต้อง');
+    if (!me || me.pinHash !== db.hash(String(oldPin))) err('รหัสเดิมไม่ถูกต้อง');
+    if (pinTaken(db, newPin, me.id)) err('รหัสนี้มีผู้ใช้อื่นใช้แล้ว กรุณาตั้งรหัสอื่น');
     db.upsert('Users', [{ id: me.id, pinHash: db.hash(String(newPin)) }]);
     return {};
   }
@@ -190,7 +235,7 @@ var Logic = (function () {
     var items = J(rc.items, []);
     var prods = db.read('Products', {}), map = {};
     prods.forEach(function (p) { map[p.sku] = p; });
-    var changed = {}, created = 0, viewCost = can(db, u, 'viewCost');
+    var changed = {}, created = 0, viewCost = true; // บันทึกต้นทุนจากใบเสร็จได้ แม้พนักงานจะดูต้นทุนไม่ได้
     items.forEach(function (it) {
       var p = it.sku ? map[it.sku] : null;
       if (!p && it.createNew && it.name) {
@@ -212,6 +257,16 @@ var Logic = (function () {
     db.upsert('Receipts', [clean('Receipts', rc)]);
     db.log(u, 'applyReceipt', rc.id);
     return { updated: ch.length, created: created };
+  }
+
+  // ปรับจำนวนสต็อก (ใช้สิทธิ์ตรวจนับ ไม่ต้องมีสิทธิ์แก้ไขสินค้า)
+  function adjustStock(db, u, rows) {
+    need(db, u, 'stockCount');
+    var have = {}; db.read('Products', {}).forEach(function (p) { have[p.sku] = 1; });
+    var ch = (rows || []).filter(function (r) { return have[r.sku]; }).map(function (r) { return { sku: String(r.sku), stock: String(r2(n(r.stock))), trackStock: 'Y', updatedAt: db.now(), updatedBy: u.username }; });
+    if (ch.length) db.upsert('Products', ch);
+    db.log(u, 'adjustStock', ch.map(function (c) { return c.sku + '=' + c.stock; }).join(',').slice(0, 280));
+    return { rows: ch };
   }
 
   // ---------- POS orders ----------
@@ -250,33 +305,41 @@ var Logic = (function () {
     if (!orders.length) return { saved: [] };
     var exist = db.read('Orders', { ids: orders.map(function (o) { return o.id; }) });
     var have = {}; exist.forEach(function (o) { have[o.id] = 1; });
-    var now = db.now();
+    var now = db.now(), prods = db.read('Products', {}), pc = {};
+    prods.forEach(function (p) { pc[p.sku] = n(p.cost); });
     var fresh = orders.filter(function (o) { return o.id && !have[o.id]; }).map(function (o) {
       if (payPart(o, 'credit') && !o.customerId) err('ขายเงินเชื่อต้องเลือกลูกค้า (บิล ' + o.id + ')');
+      // ต้นทุนคิดจากฐานข้อมูลเสมอ (เครื่องพนักงานไม่มีข้อมูลต้นทุน)
+      var items = J(o.items, []), cost = 0;
+      items.forEach(function (it) { if (it.sku in pc) it.cost = pc[it.sku]; cost += n(it.qty) * n(it.cost); });
+      o.items = JSON.stringify(items); o.cost = String(r2(cost));
       var c = clean('Orders', o); c.status = c.status || 'sale'; c.syncedAt = now; return c;
     });
     var eff = { products: [], customers: [] };
     if (fresh.length) {
       var needC = fresh.some(function (o) { return o.customerId; });
-      eff = applyOrderEffects(db, fresh, 1, db.read('Products', {}), needC ? db.read('Customers', {}) : [], now, u.username);
+      eff = applyOrderEffects(db, fresh, 1, prods, needC ? db.read('Customers', {}) : [], now, u.username);
       db.append('Orders', fresh);
       db.log(u, 'syncOrders', fresh.length + ' บิล');
     }
     return { saved: orders.map(function (o) { return o.id; }), stock: eff.products, customers: eff.customers };
   }
+  function hideCost(o) { var c = Object.assign({}, o); c.cost = ''; c.items = JSON.stringify(J(o.items, []).map(function (i) { var x = Object.assign({}, i); delete x.cost; return x; })); return c; }
   function ordersRange(db, u, from, to, cashier) {
-    var all = can(db, u, 'reports');
+    var all = strict(db, u, 'reports');
+    // พนักงานที่ไม่มีสิทธิ์ดูยอดย้อนหลัง เห็นได้เฉพาะบิลของตัวเองวันนี้ (ไว้พิมพ์ซ้ำ)
+    if (!all && !strict(db, u, 'ownSales')) { var t = db.now().slice(0, 10); if (from < t) from = t; if (to < t) return []; }
     var rows = db.read('Orders', { from: from, to: to + 'T99' });
     if (!all) rows = rows.filter(function (o) { return o.cashier === u.username; });
     else if (cashier) rows = rows.filter(function (o) { return o.cashier === cashier; });
-    if (!can(db, u, 'viewCost')) rows = rows.map(function (o) { var c = Object.assign({}, o); c.cost = ''; return c; });
+    if (!strict(db, u, 'viewCost')) rows = rows.map(hideCost);
     return rows;
   }
   function getOrder(db, u, id) {
     var o = db.read('Orders', { ids: [id] })[0];
     if (!o) err('ไม่พบใบเสร็จ ' + id);
-    if (!can(db, u, 'reports') && o.cashier !== u.username) err('สิทธิ์ไม่เพียงพอ');
-    return o;
+    if (!strict(db, u, 'reports') && o.cashier !== u.username) err('สิทธิ์ไม่เพียงพอ');
+    return strict(db, u, 'viewCost') ? o : hideCost(o);
   }
   function refund(db, u, id, reason) {
     need(db, u, 'refund');
@@ -303,10 +366,11 @@ var Logic = (function () {
     var rows = db.read('Orders', { from: year + '-01-01', to: year + '-12-31T99' });
     var m = {};
     rows.forEach(function (o) {
-      var k = String(o.date).slice(5, 7); var x = m[k] || (m[k] = { gross: 0, refund: 0, net: 0, count: 0, cost: 0 });
+      var k = String(o.date).slice(5, 7); var x = m[k] || (m[k] = { gross: 0, refund: 0, disc: 0, net: 0, count: 0, cost: 0 });
       var t = n(o.total);
-      if (o.status === 'refund') x.refund += -t; else { x.gross += t; x.count++; }
-      x.net += t; x.cost += n(o.cost);
+      if (o.status === 'refund') { x.refund += -t; x.cost -= Math.abs(n(o.cost)); }
+      else { x.gross += n(o.subtotal) || t; x.disc += n(o.discount); x.count++; x.cost += n(o.cost); }
+      x.net += t;
     });
     return { months: m };
   }
@@ -389,7 +453,9 @@ var Logic = (function () {
 
   // ---------- dispatcher ----------
   function handle(db, u, a, p) {
+    OWNERPIN = p && p.ownerPin || null; PINOK = null;
     switch (a) {
+      case 'checkPin': pinOk(db); if (!PINOK) err('PIN_BAD: กรุณาใส่รหัสเจ้าของร้าน'); return { ok: true };
       case 'list': return { rows: list(db, u, p.table, p.opt) };
       case 'upsert': return { rows: upsert(db, u, p.table, p.rows) };
       case 'remove': return { removed: remove(db, u, p.table, p.ids) };
@@ -397,6 +463,7 @@ var Logic = (function () {
       case 'renameCategory': return renameCategory(db, u, p.from, p.to, p.color);
       case 'applyReceipt': return applyReceipt(db, u, p.receipt);
       case 'syncOrders': return syncOrders(db, u, p.orders);
+      case 'adjustStock': return adjustStock(db, u, p.rows);
       case 'ordersRange': return { rows: ordersRange(db, u, p.from, p.to, p.cashier) };
       case 'getOrder': return { order: getOrder(db, u, p.id) };
       case 'refund': return refund(db, u, p.id, p.reason);
@@ -415,11 +482,11 @@ var Logic = (function () {
       case 'perms': return { perms: perms(db), defs: PERMS };
       case 'bootstrap': {
         var s = {}; list(db, u, 'Settings').forEach(function (r) { s[r.key] = r.value; });
-        return { settings: s, perms: perms(db), defs: PERMS, categories: db.read('Categories', {}), shift: openShift(db, u) };
+        return { settings: s, perms: perms(db), defs: PERMS, categories: db.read('Categories', {}), shift: openShift(db, u), activeUsers: db.read('Users', {}).filter(function (x) { return x.active !== 'N'; }).map(function (x) { return x.id + ':' + x.role; }), now: db.now() };
       }
     }
     err('ไม่รู้จักคำสั่ง: ' + a);
   }
 
-  return { SCHEMA: SCHEMA, PERMS: PERMS, handle: handle, login: login, can: can, perms: perms, n: n, J: J, uid: uid, nextSku: nextSku };
+  return { SCHEMA: SCHEMA, PERMS: PERMS, strict: strict, handle: handle, login: login, can: can, perms: perms, n: n, J: J, uid: uid, nextSku: nextSku };
 })();

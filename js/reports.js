@@ -71,12 +71,13 @@ const RS = { r: 'today', from: todayISO(), to: todayISO(), tab: 'day', staff: ''
 
 /* ---------- สรุปยอดขาย ---------- */
 VIEWS.reports = el => {
-  const all = can('reports'), vc = can('viewCost');
+  if (!seesSales()) { el.innerHTML = vhead('สรุปยอดขาย') + `<div class="card empty">${I(IC.shield, 40)}<p>รายงานยอดขายสำหรับเจ้าของร้าน</p></div>`; return; }
+  const all = canStrict('reports'), vc = canStrict('viewCost');
   el.innerHTML = vhead('สรุปยอดขาย', `<button class="btn ghost sm" id="ex">ส่งออก CSV</button>`) + `
     ${all ? '' : `<div class="alert blue">${I(IC.user, 18)}<div>แสดงเฉพาะยอดขายของคุณ (${esc(S.user.name)})</div></div>`}
     <div id="rp"></div><div id="sf"></div><div id="kpi"><div class="card center"><span class="spin dark"></span></div></div>
     <div class="card"><div class="seg" id="tabs" style="margin-bottom:10px;overflow-x:auto">${[['day', 'ตามวัน'], ['prod', 'ตามสินค้า'], ['cat', 'ตามหมวดหมู่'], ['staff', 'ตามพนักงาน'], ['pay', 'ตามการชำระ']].map(([k, n]) => `<button data-t="${k}" class="${RS.tab === k ? 'on' : ''}" style="white-space:nowrap">${n}</button>`).join('')}</div><div id="tb"></div></div>
-    <div class="row wrap" style="gap:8px"><button class="btn ghost grow" onclick="go('salesreceipts')">${I(IC.receipt, 18)} ใบเสร็จรับเงิน</button>${vc ? `<button class="btn ghost grow" onclick="go('stockvalue')">${I(IC.box, 18)} มูลค่าสต็อก</button>` : ''}${isOwner() ? `<button class="btn ghost grow" onclick="go('tax')">${I(IC.tax, 18)} ภาษี</button>` : ''}</div>`;
+    <div class="row wrap" style="gap:8px"><button class="btn ghost grow" onclick="go('salesreceipts')">${I(IC.receipt, 18)} ใบเสร็จรับเงิน</button>${vc ? `<button class="btn ghost grow" onclick="go('stockvalue')">${I(IC.box, 18)} มูลค่าสต็อก</button>` : ''}${isOwner() ? `<button class="btn ghost grow" onclick="go('sales')">${I(IC.chart, 18)} ยอดขายรายเดือน (ทุกปี)</button><button class="btn ghost grow" onclick="go('tax')">${I(IC.tax, 18)} ภาษี</button>` : ''}</div>`;
   let rows = [], A = null, tableRows = [];
   const draw = () => {
     const R = RS.staff ? rows.filter(o => (o.cashierName || o.cashier) === RS.staff) : rows;
@@ -129,7 +130,9 @@ VIEWS.reports = el => {
 /* ---------- ใบเสร็จรับเงินย้อนหลัง ---------- */
 const RR = { r: 'today', from: todayISO(), to: todayISO(), q: '' };
 VIEWS.salesreceipts = el => {
-  el.innerHTML = vhead('ใบเสร็จรับเงิน', '', 'more') + `<div id="rp"></div>
+  const limited = !seesSales();
+  if (limited) { RR.r = 'today'; RR.from = RR.to = todayISO(); }
+  el.innerHTML = vhead(limited ? 'บิลของฉันวันนี้' : 'ใบเสร็จรับเงิน', '', 'more') + `<div id="rp"></div>
     <div class="grid3" id="sm" style="margin-bottom:10px"></div>
     <div class="search" style="margin-bottom:10px"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาเลขที่ / ลูกค้า / พนักงาน" value="${esc(RR.q)}"><button class="scanbtn" id="sc">${I(IC.scan, 20)}</button></div>
     <div class="list" id="ls"><div class="empty"><span class="spin dark"></span></div></div>`;
@@ -145,7 +148,7 @@ VIEWS.salesreceipts = el => {
   const load = async force => { $('#ls', el).innerHTML = '<div class="empty"><span class="spin dark"></span></div>'; try { rows = await fetchOrders(RR.from, RR.to, force); } catch (e) { rows = LS.get('recentOrders', []).map(o => ({ ...o, _items: Logic.J(o.items, []), _pays: Logic.J(o.payments, []) })); toast(e.message + ' — แสดงบิลล่าสุดในเครื่อง', 1); } draw(); };
   $('#q', el).oninput = e => { RR.q = e.target.value; draw(); };
   $('#sc', el).onclick = () => openScanner(code => { $('#q', el).value = RR.q = code; draw(); const o = rows.find(x => x.id === code); if (o) orderDetail(o, () => load(true)); return 'close'; });
-  rangePicker($('#rp', el), RR, () => load());
+  if (!limited) rangePicker($('#rp', el), RR, () => load());
   load();
 };
 function orderDetail(o, onChange) {
@@ -170,7 +173,11 @@ function orderDetail(o, onChange) {
 /* ---------- การ์ด "วันนี้" บนหน้าหลัก ---------- */
 async function homeToday(el) {
   const t = todayISO();
-  el.innerHTML = `<div class="card" style="background:linear-gradient(135deg,var(--red),#F0384F);color:#fff"><div class="row"><div class="grow"><div class="small" style="opacity:.9">ยอดขายวันนี้${can('reports') ? '' : ' (ของฉัน)'}</div><div class="disp" style="font-size:30px;font-weight:700" id="tn">…</div><div class="small" style="opacity:.9" id="tb"></div></div>
+  if (!seesSales()) {
+    el.innerHTML = `<div class="card row"><div class="grow"><b>${S.shift ? 'กำลังทำงาน' : 'ยังไม่ได้ลงเวลาเข้างาน'}</b>${S.shift ? `<div class="small muted">เข้างานเมื่อ ${esc(S.shift.inAt.slice(11, 16))} น.</div>` : ''}</div><button class="btn ${S.shift ? 'ghost' : 'green'}" id="clk">${I(IC.clock, 18)} ${S.shift ? 'ลงเวลาออก' : 'ลงเวลาเข้า'}</button></div>`;
+    $('#clk', el).onclick = clockToggle; return;
+  }
+  el.innerHTML = `<div class="card" style="background:linear-gradient(135deg,var(--red),#F0384F);color:#fff"><div class="row"><div class="grow"><div class="small" style="opacity:.9">ยอดขายวันนี้${canStrict('reports') ? '' : ' (ของฉัน)'}</div><div class="disp" style="font-size:30px;font-weight:700" id="tn">…</div><div class="small" style="opacity:.9" id="tb"></div></div>
     <button class="btn" id="clk" style="background:#fff;color:var(--red-d);flex-direction:column;gap:0;min-width:96px">${I(IC.clock, 20)}<span class="tiny">${S.shift ? 'ลงเวลาออก' : 'ลงเวลาเข้า'}</span></button></div>
     ${S.shift ? `<div class="tiny" style="margin-top:6px;opacity:.9">เข้างานเมื่อ ${esc(S.shift.inAt.slice(11, 16))} น.</div>` : ''}</div>`;
   $('#clk', el).onclick = clockToggle;
