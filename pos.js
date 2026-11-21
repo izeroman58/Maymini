@@ -4,7 +4,7 @@
 'use strict';
 const PAYNAME = { cash: 'เงินสด', transfer: 'โอน/สแกนจ่าย', welfare: 'บัตรสวัสดิการ', credit: 'เงินเชื่อ' };
 const PAYCOLOR = { cash: '#0B8A3E', transfer: '#1F5FBF', welfare: '#7B3FB8', credit: '#B86E00' };
-const PAYCFG_DEF = { transfer: true, welfare: true, credit: true, promptpay: '', qrImage: '', quick: [20, 50, 100, 500, 1000] };
+const PAYCFG_DEF = { transfer: true, welfare: true, credit: true, promptpay: '', qrImage: '', qrText: '', quick: [20, 50, 100, 500, 1000] };
 const PTSCFG_DEF = { enabled: true, bahtPerPoint: 25, pointValue: 1 };
 const payCfg = () => cfg('payCfg', PAYCFG_DEF);
 const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
@@ -216,10 +216,39 @@ async function qrDataUrl(text, cell = 6) {
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) x.fillRect((c + m) * cell, (r + m) * cell, cell, cell);
   return cv.toDataURL('image/png');
 }
-async function payQR(amount) {
-  const pc = payCfg();
-  if (pc.promptpay) return { img: await qrDataUrl(promptpayPayload(pc.promptpay, amount)), label: 'พร้อมเพย์ ' + pc.promptpay, dynamic: true };
-  if (pc.qrImage) return { img: pc.qrImage, label: 'สแกนจ่าย (ใส่ยอดเอง)', dynamic: false };
+/* QR ร้าน (เช่น แม่มณี/QR ร้านค้าธนาคาร) → ใส่ยอดเงินเข้าไปใน QR (มาตรฐาน Thai QR / EMVCo: tag 54 = ยอด, tag 01 = 12) */
+function emvParse(s) { const out = []; let i = 0; s = String(s || ''); while (i + 4 <= s.length) { const id = s.substr(i, 2), n = parseInt(s.substr(i + 2, 2), 10); if (isNaN(n)) return null; out.push([id, s.substr(i + 4, n)]); i += 4 + n; } return i === s.length ? out : null; }
+function isThaiQR(s) { const t = emvParse(s); return !!(t && t.some(x => x[0] === '00') && t.some(x => x[0] === '63') && crc16(s.slice(0, -4)) === s.slice(-4).toUpperCase()); }
+function amountQR(base, amount) {
+  const t = emvParse(base); if (!t) return null;
+  const m = new Map(t.filter(x => x[0] !== '63').map(x => [x[0], x[1]]));
+  m.set('01', '12'); m.set('54', num(amount).toFixed(2));
+  const f = (id, v) => id + String(v.length).padStart(2, '0') + v;
+  const s = [...m.keys()].sort().map(k => f(k, m.get(k))).join('') + '6304';
+  return s + crc16(s);
+}
+function qrShopName(base) { const t = emvParse(base) || []; const n = (t.find(x => x[0] === '59') || [])[1]; return n || ''; }
+// อ่านข้อความจากรูป QR ของร้าน (ใช้ตัวอ่าน QR ของเบราว์เซอร์ — มีใน Chrome บน Android) แล้วจำไว้ในเครื่อง
+async function decodeQRImage(src) {
+  if (!('BarcodeDetector' in window)) return '';
+  try { const d = new BarcodeDetector({ formats: ['qr_code'] }); const im = await loadImg(src); const r = await d.detect(im); const v = r && r[0] && r[0].rawValue; return v && isThaiQR(v) ? v : ''; } catch (e) { return ''; }
+}
+async function shopQRText() {
+  const pc = payCfg(); if (pc.qrText && isThaiQR(pc.qrText)) return pc.qrText;
+  if (!pc.qrImage) return '';
+  const memo = LS.get('qrTextMemo', {}); const key = pc.qrImage.length + ':' + pc.qrImage.slice(-40);
+  if (memo.k === key) return memo.v || '';
+  const v = await decodeQRImage(pc.qrImage); LS.set('qrTextMemo', { k: key, v }); return v;
+}
+// mode: 'auto' = รวมยอดให้อัตโนมัติ · 'manual' = ลูกค้าใส่ยอดเอง (รูป QR เดิมของร้าน)
+async function payQR(amount, mode) {
+  const pc = payCfg(), base = pc.promptpay ? '' : await shopQRText();
+  const canAuto = !!(pc.promptpay || base), canManual = !!pc.qrImage;
+  mode = mode === 'manual' && canManual ? 'manual' : canAuto ? 'auto' : canManual ? 'manual' : '';
+  const info = { canAuto, canManual, mode };
+  if (mode === 'auto' && pc.promptpay) return { ...info, img: await qrDataUrl(promptpayPayload(pc.promptpay, amount)), label: 'พร้อมเพย์ ' + pc.promptpay + ' · ยอดรวมให้แล้ว', dynamic: true };
+  if (mode === 'auto') { const pl = amountQR(base, amount); if (pl) return { ...info, img: await qrDataUrl(pl), label: (qrShopName(base) || S.settings.shopName || 'สแกนจ่าย') + ' · ยอดรวมให้แล้ว', dynamic: true }; }
+  if (mode === 'manual' || canManual) return { ...info, mode: 'manual', img: pc.qrImage, label: 'สแกนจ่าย (ลูกค้าใส่ยอดเอง)', dynamic: false };
   return null;
 }
 
@@ -659,10 +688,12 @@ const POS = {
     }
     if (P.type === 'transfer') {
       const amt = part();
-      let q = null; try { q = await payQR(amt); } catch (e) { }
+      let q = null; try { q = await payQR(amt, LS.get('qrMode', 'auto')); } catch (e) { }
       const w = $('#qrw', this.el);
-      if (w) w.innerHTML = q ? `<img src="${q.img}" style="width:min(240px,48vh);image-rendering:pixelated"><div class="small">${esc(q.label)} · <b>${baht(amt)}</b></div><div class="tiny muted">แสดงบนจอลูกค้าด้วย</div>` : `<div class="alert amber" style="margin:0 16px">ยังไม่ได้ตั้งค่าพร้อมเพย์/รูป QR — เจ้าของร้านตั้งได้ที่ เพิ่มเติม › การชำระเงิน</div>`;
+      const tog = q && q.canAuto && q.canManual ? `<div class="seg" style="margin:0 auto 8px;max-width:420px"><button data-qm="auto" class="${q.mode === 'auto' ? 'on' : ''}">QR รวมยอดอัตโนมัติ</button><button data-qm="manual" class="${q.mode === 'manual' ? 'on' : ''}">QR ลูกค้าใส่ยอดเอง</button></div>` : '';
+      if (w) w.innerHTML = q ? tog + `<img src="${q.img}" style="width:min(240px,48vh);image-rendering:pixelated"><div class="small">${esc(q.label)} · <b>${baht(amt)}</b></div><div class="tiny muted">แสดงบนจอลูกค้าด้วย</div>` : `<div class="alert amber" style="margin:0 16px">ยังไม่ได้ตั้งค่าพร้อมเพย์/รูป QR — เจ้าของร้านตั้งได้ที่ เพิ่มเติม › การชำระเงิน</div>`;
       this.pushDisplay({ mode: 'pay', qr: q && q.img, qrLabel: q && q.label, amount: amt });
+      $$('[data-qm]', this.el).forEach(b => b.onclick = () => { LS.set('qrMode', b.dataset.qm); this.renderPay(); });
       const tok = $('#tok', this.el); if (tok) tok.onclick = () => addPay('transfer', part());
     } else this.pushDisplay({ mode: 'pay', amount: remain });
     const wok = $('#wok', this.el); if (wok) wok.onclick = () => addPay('welfare', part());
@@ -743,18 +774,30 @@ VIEWS.payset = el => {
      <label class="f"><span>หมายเลขพร้อมเพย์ (เบอร์มือถือ หรือ เลขบัตรประชาชน/เลขผู้เสียภาษี) — สร้าง QR พร้อมยอดเงินอัตโนมัติ</span><input class="in" id="pp" inputmode="numeric" value="${esc(pc.promptpay)}"></label>
      <div class="row" style="gap:12px"><div id="qrp" style="width:120px;height:120px;background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden"></div>
        <div class="small"><div class="muted">หรืออัปโหลดรูป QR ของร้าน (เช่น QR แม่มณี/ร้านค้าธนาคาร) ใช้เมื่อไม่ได้ใส่พร้อมเพย์ — ลูกค้าต้องพิมพ์ยอดเอง</div><div class="row" style="margin-top:6px"><label class="btn ghost sm">อัปโหลดรูป QR<input type="file" accept="image/*" id="qf" class="hidden"></label><button class="btn ghost sm" id="qx">ลบรูป</button></div></div></div></div>
+   <div class="card"><h3>QR รวมยอดอัตโนมัติจาก QR ร้าน</h3>
+     <div class="small muted" style="margin-bottom:6px">ระบบอ่านข้อความในรูป QR ของร้านให้เอง (แท็บเล็ต Android) แล้วสร้าง QR ที่มียอดเงินทุกบิล — ลูกค้าไม่ต้องพิมพ์ยอด · ถ้าเครื่องนี้อ่านรูปไม่ได้ ให้วางข้อความ QR ด้านล่าง (ใช้แอปสแกน QR ในมือถือ คัดลอกข้อความ)</div>
+     <label class="f"><span>ข้อความใน QR ร้าน</span><textarea class="in" id="qt" rows="2" style="font-family:monospace;font-size:12px">${esc(pc.qrText || '')}</textarea></label>
+     <div class="row" style="gap:12px;align-items:center"><div id="qra" style="width:120px;height:120px;background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden"></div><div class="small" id="qrs"></div></div></div>
    <div class="card"><h3>ปุ่มรับเงินลัด (บาท)</h3><input class="in" id="qk" value="${esc((pc.quick || []).join(', '))}"><div class="tiny muted" style="margin-top:4px">ระบบจะเพิ่มยอดปัดขึ้นอัตโนมัติ (เช่น ยอด 65 → 70, 80, 100, 500)</div></div>
    <div class="card"><h3>แต้มสะสม</h3><label class="row" style="margin-bottom:10px"><input type="checkbox" id="pe" ${pt.enabled ? 'checked' : ''}> เปิดใช้แต้มสะสม</label>
      <div class="grid2"><label class="f"><span>ซื้อทุก ๆ (บาท) ได้ 1 แต้ม</span><input class="in" type="number" id="bp" value="${pt.bahtPerPoint}"></label><label class="f"><span>1 แต้ม แลกเป็นส่วนลด (บาท)</span><input class="in" type="number" step="any" id="pv" value="${pt.pointValue}"></label></div></div>
    <button class="btn block green" id="sv">บันทึก</button>`;
-  const prev = async () => { const v = $('#pp', el).value.trim(); $('#qrp', el).innerHTML = v ? `<img src="${await qrDataUrl(promptpayPayload(v, 1), 3)}" style="width:100%">` : qrImg ? `<img src="${qrImg}" style="width:100%">` : '<span class="tiny muted">ไม่มี QR</span>'; };
+  const prevAuto = async () => {
+    const t = $('#qt', el).value.trim(), a = $('#qra', el), st = $('#qrs', el);
+    if (!t) { a.innerHTML = '<span class="tiny muted">ไม่มี</span>'; st.innerHTML = $('#pp', el).value.trim() ? 'ใช้พร้อมเพย์ด้านบนสร้าง QR พร้อมยอดอยู่แล้ว' : 'ยังไม่มีข้อความ QR — อัปโหลดรูป QR ร้าน หรือวางข้อความ'; return; }
+    if (!isThaiQR(t)) { a.innerHTML = '<span class="tiny" style="color:var(--red)">ไม่ถูกต้อง</span>'; st.textContent = 'ข้อความนี้ไม่ใช่ QR รับเงินมาตรฐาน Thai QR'; return; }
+    a.innerHTML = `<img src="${await qrDataUrl(amountQR(t, 1), 3)}" style="width:100%">`;
+    st.innerHTML = `✔️ อ่าน QR ร้านได้${qrShopName(t) ? ' — ' + esc(qrShopName(t)) : ''}<br><b>ตัวอย่าง QR ยอด 1.00 บาท</b> — ลองสแกนด้วยแอปธนาคาร ตรวจว่ายอดขึ้น 1.00 และชื่อร้านถูกต้อง (ไม่ต้องกดโอน)`;
+  };
+  const prev = async () => { prevAuto(); const v = $('#pp', el).value.trim(); $('#qrp', el).innerHTML = v ? `<img src="${await qrDataUrl(promptpayPayload(v, 1), 3)}" style="width:100%">` : qrImg ? `<img src="${qrImg}" style="width:100%">` : '<span class="tiny muted">ไม่มี QR</span>'; };
   $('#pp', el).oninput = () => { clearTimeout(el.t); el.t = setTimeout(prev, 300); };
-  $('#qf', el).onchange = async e => { const f = e.target.files[0]; if (!f) return; const im = await loadImg(URL.createObjectURL(f)); const s = Math.min(600, im.width), cv = document.createElement('canvas'); cv.width = s; cv.height = Math.round(im.height * s / im.width); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); qrImg = cv.toDataURL('image/jpeg', .85); if (qrImg.length > 45000) qrImg = cv.toDataURL('image/jpeg', .6); prev(); };
-  $('#qx', el).onclick = () => { qrImg = ''; prev(); };
+  $('#qf', el).onchange = async e => { const f = e.target.files[0]; if (!f) return; decodeQRImage(URL.createObjectURL(f)).then(v => { if (v) { $('#qt', el).value = v; prevAuto(); toast('อ่านข้อความ QR ร้านได้แล้ว'); } else if (!('BarcodeDetector' in window)) toast('เครื่องนี้อ่าน QR จากรูปไม่ได้ — ทำที่แท็บเล็ต Android หรือวางข้อความ QR เอง', 1); else toast('อ่าน QR จากรูปไม่ได้ — ลองรูปที่ชัดขึ้น หรือวางข้อความ QR เอง', 1); }); const im = await loadImg(URL.createObjectURL(f)); const s = Math.min(600, im.width), cv = document.createElement('canvas'); cv.width = s; cv.height = Math.round(im.height * s / im.width); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); qrImg = cv.toDataURL('image/jpeg', .85); if (qrImg.length > 45000) qrImg = cv.toDataURL('image/jpeg', .6); prev(); };
+  $('#qx', el).onclick = () => { qrImg = ''; $('#qt', el).value = ''; prev(); };
+  $('#qt', el).oninput = () => { clearTimeout(el.t2); el.t2 = setTimeout(prev, 300); };
   $('#sv', el).onclick = async () => {
     try {
       busy(1);
-      await saveSetting('payCfg', { transfer: $('#tr', el).checked, welfare: $('#wf', el).checked, credit: $('#cr', el).checked, promptpay: $('#pp', el).value.replace(/\D/g, ''), qrImage: qrImg, quick: $('#qk', el).value.split(/[,\s]+/).map(Number).filter(Boolean) });
+      await saveSetting('payCfg', { transfer: $('#tr', el).checked, welfare: $('#wf', el).checked, credit: $('#cr', el).checked, promptpay: $('#pp', el).value.replace(/\D/g, ''), qrImage: qrImg, qrText: isThaiQR($('#qt', el).value.trim()) ? $('#qt', el).value.trim() : '', quick: $('#qk', el).value.split(/[,\s]+/).map(Number).filter(Boolean) });
       await saveSetting('pointsCfg', { enabled: $('#pe', el).checked, bahtPerPoint: num($('#bp', el).value) || 25, pointValue: num($('#pv', el).value) || 1 });
       busy(0); toast('บันทึกแล้ว');
     } catch (e) { busy(0); toast(e.message, 1); }
