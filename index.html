@@ -190,14 +190,16 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.18';
+const APP_VER = '2.6.20';
+const SHOP_API = 'https://script.google.com/macros/s/AKfycbxOKJplEHqxF0Jztb0D6ap9RofGyeZFhLB3ovLVEfBD87LMHET00XexsLSI8EEMp4ml5g/exec';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem('mm_' + k); } catch (e) { } }
 };
 const S = {
-  apiUrl: LS.get('apiUrl', ''), token: LS.get('token', ''), user: LS.get('user', null),
+  // เว็บของร้าน (github.io) เชื่อมฐานข้อมูลร้านให้อัตโนมัติ — เครื่องใหม่ไม่ต้องตั้งค่า และไม่หลุดไปโหมดทดลอง
+  apiUrl: LS.get('apiUrl', '') || (/github\.io$/.test(location.hostname) ? SHOP_API : ''), token: LS.get('token', ''), user: LS.get('user', null),
   products: LS.get('products', []), settings: LS.get('settings', {}), receipts: [], licenses: [], sales: [],
   view: 'home', online: navigator.onLine,
   device: LS.get('device', null), perms: LS.get('perms', {}), defs: {}, categories: LS.get('categories', []), shift: null
@@ -753,15 +755,20 @@ async function openScanner(onCode, opts = {}) {
   const video = $('video', el), st = $('[data-st]', el), inp = $('input', el);
   let stream = null, stop = false, last = '', lastAt = 0, reader = null, timer = null;
   const close = () => { stop = true; clearTimeout(timer); try { reader && reader.reset(); } catch (e) { } stream && stream.getTracks().forEach(t => t.stop()); el.remove(); opts.onClose && opts.onClose(); };
-  const hit = code => {
+  // นับ 1 ครั้งต่อการสแกน 1 ครั้ง: บาร์โค้ดเดิมจะนับซ้ำได้เมื่อเลื่อนออกจากกล้องแล้วสแกนใหม่ (ไม่เห็นเกิน 0.7 วิ) — ถือค้างไว้ไม่นับเพิ่ม
+  let seenAt = 0;
+  const hit = (code, manual) => {
     code = String(code).trim(); if (!code) return;
-    if (code === last && Date.now() - lastAt < 1800) return; last = code; lastAt = Date.now(); beep();
+    const now = Date.now();
+    if (!manual && code === last && now - seenAt < 700) { seenAt = now; return; }
+    last = code; lastAt = seenAt = now; beep();
+    try { const fr = $('.frame', el); fr.style.borderColor = '#4ade80'; fr.style.boxShadow = '0 0 0 9999px #00000066, 0 0 0 6px #4ade80'; setTimeout(() => { fr.style.borderColor = ''; fr.style.boxShadow = ''; }, 250); navigator.vibrate && navigator.vibrate(30); } catch (e) { }
     const r = onCode(code, { showLast: html => { const b = $('.last', el); b.innerHTML = html; b.classList.remove('hidden'); } });
     if (!opts.continuous || r === 'close') close();
   };
   $('[data-x]', el).onclick = close;
-  $('[data-ok]', el).onclick = () => { hit(inp.value); inp.value = ''; };
-  inp.onkeydown = e => { if (e.key === 'Enter') { hit(inp.value); inp.value = ''; } };
+  $('[data-ok]', el).onclick = () => { hit(inp.value, true); inp.value = ''; };
+  inp.onkeydown = e => { if (e.key === 'Enter') { hit(inp.value, true); inp.value = ''; } };
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
     video.srcObject = stream; await video.play();
@@ -1990,6 +1997,7 @@ async function selfHeal(miss) {
 async function boot() {
   const miss = missingFiles(); if (miss.length) return selfHeal(miss);
   sessionStorage.removeItem('mm_heal');
+  if (!S.apiUrl && !document.getElementById('demobar')) document.body.insertAdjacentHTML('afterbegin', '<div id="demobar" style="position:fixed;left:0;right:0;bottom:0;z-index:70;background:#B45309;color:#fff;text-align:center;font-size:13px;padding:4px 8px;pointer-events:none">โหมดทดลอง — เครื่องนี้ยังไม่ได้เชื่อมฐานข้อมูลร้าน (ข้อมูลไม่ใช่ของจริง)</div>');
   const h0 = (location.hash || '').slice(1);
   if (/^display/.test(h0) && VIEWS.display) return VIEWS.display(app, h0);
   if (!S.user || !S.token) return renderLogin();
@@ -2023,20 +2031,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.18"></script>
-<script src="logic.js?v=2.6.18"></script>
-<script src="cache.js?v=2.6.18"></script>
-<script src="offline.js?v=2.6.18"></script>
-<script src="scanner.js?v=2.6.18"></script>
-<script src="printer.js?v=2.6.18"></script>
-<script src="pos.js?v=2.6.18"></script>
-<script src="display.js?v=2.6.18"></script>
-<script src="reports.js?v=2.6.18"></script>
-<script src="inventory.js?v=2.6.18"></script>
-<script src="people.js?v=2.6.18"></script>
-<script src="quality.js?v=2.6.18"></script>
-<script src="services.js?v=2.6.18"></script>
-<script src="owner.js?v=2.6.18"></script>
+<script src="qr.js?v=2.6.20"></script>
+<script src="logic.js?v=2.6.20"></script>
+<script src="cache.js?v=2.6.20"></script>
+<script src="offline.js?v=2.6.20"></script>
+<script src="scanner.js?v=2.6.20"></script>
+<script src="printer.js?v=2.6.20"></script>
+<script src="pos.js?v=2.6.20"></script>
+<script src="display.js?v=2.6.20"></script>
+<script src="reports.js?v=2.6.20"></script>
+<script src="inventory.js?v=2.6.20"></script>
+<script src="people.js?v=2.6.20"></script>
+<script src="quality.js?v=2.6.20"></script>
+<script src="services.js?v=2.6.20"></script>
+<script src="owner.js?v=2.6.20"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
