@@ -190,7 +190,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.13';
+const APP_VER = '2.6.14';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -261,9 +261,9 @@ const IC = {
 };
 
 /* ---------- UI helpers ---------- */
-function toast(msg, err) {
+function toast(msg, err, ms) {
   const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
-  document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4200 : 2400);
+  document.body.appendChild(t); setTimeout(() => t.remove(), ms || (err ? 4200 : 2400));
 }
 let busyEl = null;
 function busy(on, msg) {
@@ -410,6 +410,7 @@ async function apiRaw(action, payload, tokenOverride) {
     if (/^AUTH:/.test(j.error)) {
       // ระหว่างเข้าระบบแบบเร็ว โทเคนเดิมอาจหมดอายุ → รอการยืนยันเบื้องหลังได้โทเคนใหม่แล้วลองอีกครั้ง
       if (S.loginP && !tokenOverride && action !== 'login') { const ok = await S.loginP.then(() => true, () => false); if (ok) return apiRaw(action, payload, S.token); }
+      if (tokenOverride) throw new Error(j.error.replace('AUTH: ', ''));
       logout(true); throw new Error(j.error.replace('AUTH: ', ''));
     }
     throw new Error(j.error || 'เกิดข้อผิดพลาด');
@@ -972,11 +973,23 @@ const Clock = {
       this.setLocal(u.id, action === 'clockIn' ? sh : null); S.shift = action === 'clockIn' ? sh : null; return sh;
     }
   },
+  // ลงเวลาเข้างานทันทีในเครื่อง แล้วส่งขึ้นระบบเบื้องหลัง (ไม่ต้องรอเน็ต)
+  inFast() {
+    const at = nowLocal(), u = S.user, sh = { inAt: at, outAt: '', name: u.name, username: u.username };
+    this.setLocal(u.id, sh); S.shift = sh;
+    const box = LS.get('clockbox', []); box.push({ action: 'clockIn', at, token: S.token, uid: u.id }); LS.set('clockbox', box);
+    setTimeout(() => this.flush().catch(() => { }), 50); return sh;
+  },
   async flush() {
-    const box = LS.get('clockbox', []); if (!box.length || !S.apiUrl) return;
-    const left = [];
-    for (const ev of box) { try { await apiRaw(ev.action, { deviceId: S.device.id, at: ev.at }, ev.token); } catch (e) { if (e.offline) left.push(ev); } }
-    LS.set('clockbox', left);
+    if (this.busy) return; const box = LS.get('clockbox', []); if (!box.length) return;
+    this.busy = true; const left = [];
+    try {
+      if (S.loginP) await S.loginP.catch(() => { });
+      for (const ev of box) {
+        const tk = S.user && ev.uid === S.user.id ? S.token : ev.token;
+        try { await apiRaw(ev.action, { deviceId: S.device.id, at: ev.at }, tk); } catch (e) { if (e.offline) left.push(ev); }
+      }
+    } finally { LS.set('clockbox', left.concat(LS.get('clockbox', []).slice(box.length))); this.busy = false; }
   }
 };
 function clockDialog(mode) {
@@ -1018,10 +1031,10 @@ function renderLogin(mode) {
     <div style="position:fixed;top:calc(8px + var(--safe-t));right:8px;color:var(--ink2)">${FS.btn()}</div>
     <div class="brand"><div class="mk"><small>ร้าน</small>เมย์</div><div class="mm">Mini Mart</div><div class="muted small" style="margin-top:6px">${esc(S.device.name || '')}</div></div>
     <div class="card" style="width:100%;max-width:360px">
-      <div class="center disp" style="font-size:18px;margin-top:4px">${mode === 'clock' ? '🕘 ลงเวลาทำงาน — ใส่รหัส 4 หลัก' : 'ใส่รหัส 4 หลัก'}</div>
+      <div class="center disp" style="font-size:18px;margin-top:4px">${mode === 'clock' ? 'ใส่รหัสเพื่อลงเวลาเข้างาน' : 'ใส่รหัส 4 หลัก'}</div>
       <div class="dots">${'<i></i>'.repeat(4)}</div>
       <div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-del style="font-size:20px">⌫</button></div>
-      <div class="center" style="margin-top:12px"><button class="btn ${mode === 'clock' ? '' : 'ghost'} sm" id="clk" style="min-height:44px;padding:8px 18px">${mode === 'clock' ? '← กลับไปเข้าใช้งาน' : '🕘 ลงเวลาเข้า/ออกงาน'}</button></div>
+      <div class="center" style="margin-top:12px"><button class="btn ${mode === 'clock' ? 'green' : 'ghost'}" id="clk" style="min-height:52px;padding:8px 22px;font-size:16px">${mode === 'clock' ? '✔️ ลงเวลาเข้างาน — ใส่รหัสได้เลย' : '🕘 ลงเวลาเข้างาน'}</button></div>
       <div class="center tiny muted" style="margin-top:10px">${!S.apiUrl ? 'โหมดทดลอง · เจ้าของ 1234 · พนักงาน 1111' : navigator.onLine === false ? '<span class="tag amber">ออฟไลน์ — เข้าได้เฉพาะผู้ที่เคยเข้าเครื่องนี้</span>' : ''}</div>
       ${S.apiUrl ? '' : `<div class="center" style="margin-top:6px"><button class="btn ghost sm" id="cfg">${I(IC.gear, 16)} ตั้งค่าการเชื่อมต่อ (ครั้งแรก)</button></div>`}
     </div>
@@ -1059,14 +1072,12 @@ function renderLogin(mode) {
       }
       busy(0);
       if (r.user.role !== 'owner') {
-        // สถานะลงเวลา: ใช้ข้อมูลที่มี (จากเซิร์ฟเวอร์ตอนเข้าระบบ หรือในเครื่อง) ถ้าไม่มีเลย ถามเซิร์ฟเวอร์ไม่เกิน 1.5 วิ
-        if ('shift' in r) { S.shift = r.shift; Clock.setLocal(r.user.id, r.shift); }
-        else {
-          S.shift = Clock.get(r.user.id);
-          if (!S.shift && S.apiUrl) { const ms = await Promise.race([apiRaw('myShift', {}).catch(() => null), new Promise(z => setTimeout(() => z(null), 1500))]); if (ms) { S.shift = ms.shift; Clock.setLocal(r.user.id, ms.shift); } }
+        // ไม่มีหน้าถาม — เข้าหน้าขายทันที · ถ้ากดปุ่มลงเวลา (สีเขียว) ไว้ก่อนใส่รหัส = ลงเวลาเข้างานทันที (ส่งขึ้นระบบเบื้องหลัง)
+        if ('shift' in r) { S.shift = r.shift; Clock.setLocal(r.user.id, r.shift); } else S.shift = Clock.get(r.user.id);
+        if (mode === 'clock') {
+          if (S.shift) toast(`ลงเวลาเข้างานไว้แล้ว ${hhmm(S.shift.inAt)} น.${S.shift.inAt.slice(0, 10) !== todayISO() ? ' (' + thDate(S.shift.inAt.slice(0, 10)) + ' — ยังไม่ได้ลงเวลาออก)' : ''}`, 0, 4000);
+          else { const sh = Clock.inFast(); toast(`✔️ ลงเวลาเข้างานแล้ว ${hhmm(sh.inAt)} น.`, 0, 4000); }
         }
-        const res = await clockDialog(mode);
-        if (mode === 'clock' || res === 'out') { S.token = ''; S.user = null; LS.del('token'); LS.del('user'); renderLogin(); sending = false; return; }
       } else if (mode === 'clock') toast('เจ้าของร้านไม่ต้องลงเวลา');
       await boot();
       if (r.mustChangePin) { toast('กรุณาเปลี่ยนรหัสเริ่มต้น 1234'); changePinDlg(); }
@@ -2012,20 +2023,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.13"></script>
-<script src="logic.js?v=2.6.13"></script>
-<script src="cache.js?v=2.6.13"></script>
-<script src="offline.js?v=2.6.13"></script>
-<script src="scanner.js?v=2.6.13"></script>
-<script src="printer.js?v=2.6.13"></script>
-<script src="pos.js?v=2.6.13"></script>
-<script src="display.js?v=2.6.13"></script>
-<script src="reports.js?v=2.6.13"></script>
-<script src="inventory.js?v=2.6.13"></script>
-<script src="people.js?v=2.6.13"></script>
-<script src="quality.js?v=2.6.13"></script>
-<script src="services.js?v=2.6.13"></script>
-<script src="owner.js?v=2.6.13"></script>
+<script src="qr.js?v=2.6.14"></script>
+<script src="logic.js?v=2.6.14"></script>
+<script src="cache.js?v=2.6.14"></script>
+<script src="offline.js?v=2.6.14"></script>
+<script src="scanner.js?v=2.6.14"></script>
+<script src="printer.js?v=2.6.14"></script>
+<script src="pos.js?v=2.6.14"></script>
+<script src="display.js?v=2.6.14"></script>
+<script src="reports.js?v=2.6.14"></script>
+<script src="inventory.js?v=2.6.14"></script>
+<script src="people.js?v=2.6.14"></script>
+<script src="quality.js?v=2.6.14"></script>
+<script src="services.js?v=2.6.14"></script>
+<script src="owner.js?v=2.6.14"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
