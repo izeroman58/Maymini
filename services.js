@@ -12,8 +12,15 @@ const SVC_DEF = {
 };
 const svcCfg = () => cfg('svcCfg', SVC_DEF);
 function tierFee(tiers, amt) {
-  for (const [a, b, f] of tiers) if (amt >= a && amt <= b) return f;
-  return null; // เกินตาราง → ให้กำหนดเอง
+  const T = (tiers || []).slice().sort((x, y) => x[0] - y[0]);
+  for (let i = 0; i < T.length; i++) { const [a, b, f] = T[i], up = Math.min(i < T.length - 1 ? T[i + 1][0] : Infinity, b + 1); if (amt >= a && amt < up) return f; }
+  return null; // นอกช่วงที่ตั้งไว้ → ให้กำหนดเอง
+}
+// ตรวจช่วงยอดที่ซ้อนกัน/เว้นช่วง เพื่อเตือนก่อนบันทึก
+function tierIssues(tiers, name) {
+  const T = tiers.slice().sort((x, y) => x[0] - y[0]), out = [];
+  T.forEach((t, i) => { if (t[1] < t[0]) out.push(`${name}: ช่วง ${money(t[0], 0)}–${money(t[1], 0)} "ถึง" น้อยกว่า "ตั้งแต่"`); if (i) { const p = T[i - 1]; if (t[0] <= p[1]) out.push(`${name}: ช่วง ${money(p[0], 0)}–${money(p[1], 0)} ซ้อนกับ ${money(t[0], 0)}–${money(t[1], 0)}`); else if (t[0] > p[1] + 1) out.push(`${name}: ยอด ${money(p[1] + 1, 0)}–${money(t[0] - 1, 0)} ยังไม่มีค่าบริการ`); } });
+  return out;
 }
 const SVC = {
   out: { key: 'out', name: 'โอนออก', desc: 'ลูกค้าให้เงินสด → ร้านโอนเข้าบัญชีปลายทาง', icon: '⬆️', color: '#1E88E5' },
@@ -101,6 +108,8 @@ VIEWS.svcset = el => {
   bind();
   const read = id => $$('#' + id + ' tr', el).slice(1).map(tr => $$('input', tr).map(i => num(i.value))).filter(t => t[1] > 0).sort((a, b) => a[0] - b[0]);
   $('#sv', el).onclick = async () => {
+    const iss = tierIssues(read('to'), 'โอนออก').concat(tierIssues(read('ti'), 'โอนเข้า'));
+    if (iss.length && !(await confirmDlg('ตรวจพบ:<br>• ' + iss.join('<br>• ') + '<br><br>บันทึกต่อหรือไม่? (ยอดที่ไม่มีค่าบริการ พนักงานต้องกำหนดเองตอนขาย)', 'บันทึกต่อ'))) return;
     const o = { transferOut: read('to'), transferIn: read('ti'), topupFee: num($('#tf', el).value), topupMode: $('#tm', el).value, topupStep: num($('#ts', el).value) || 100, billFee: num($('#bf', el).value), networks: $('#nw', el).value.split(',').map(x => x.trim()).filter(Boolean), billTypes: $('#bt', el).value.split(',').map(x => x.trim()).filter(Boolean) };
     try { busy(1); await saveSetting('svcCfg', o); busy(0); toast('บันทึกค่าบริการแล้ว'); } catch (e) { busy(0); toast(e.message, 1); }
   };

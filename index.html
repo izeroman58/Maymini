@@ -190,7 +190,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.8';
+const APP_VER = '2.6.10';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -893,7 +893,7 @@ function shell() {
     <div class="logo"><small>ร้าน</small><b>เมย์</b><i>Mini Mart</i></div>
     <div class="sp"></div>
     <div class="who"><div><span class="net ${S.online ? '' : 'off'}"></span>${esc(u.name)}</div><span class="chip-role">${u.role === 'owner' ? 'เจ้าของกิจการ' : 'พนักงาน'}${S.apiUrl ? '' : ' · โหมดทดลอง'}</span></div>
-    ${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="Switch user / Lock">${I(IC.switchu, 22)}</button>
+    ${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button>
   </header>
   <main id="view"></main>
   <nav class="nav">
@@ -1101,8 +1101,8 @@ async function switchUser() {
   if (sh) {
     const now = nowLocal(), dur = durTxt(tms(now) - tms(sh.inAt));
     const choice = await new Promise(res => {
-      const ov = sheet('สลับผู้ใช้', `<div class="center"><div class="disp" style="font-size:20px">${esc(u.name)}</div><div style="margin:8px 0">เข้างาน <b>${hhmm(sh.inAt)}</b> → ตอนนี้ <b>${hhmm(now)}</b> น.</div><div style="font-size:19px">ทำงานมาแล้ว <b>${dur}</b></div><div class="small muted" style="margin-top:6px">จะลงชื่อออกงานด้วยไหม?</div></div>`,
-        `<div style="display:flex;flex-direction:column;gap:8px;width:100%"><button class="btn green" data-a="out" style="min-height:58px;font-size:18px">✔️ ลงเวลาออกงาน แล้วออก</button><button class="btn ghost" data-a="sw" style="min-height:52px">⇄ สลับผู้ใช้ (ยังไม่ออกงาน)</button><button class="btn ghost" data-a="x" style="min-height:48px;color:var(--red)">❌ ยกเลิก</button></div>`, { onClose: () => res('x') });
+      const ov = sheet('ออกจากระบบ', `<div class="center"><div class="disp" style="font-size:20px">${esc(u.name)}</div><div style="margin:8px 0">เข้างาน <b>${hhmm(sh.inAt)}</b> → ตอนนี้ <b>${hhmm(now)}</b> น.</div><div style="font-size:19px">ทำงานมาแล้ว <b>${dur}</b></div><div class="small muted" style="margin-top:6px">จะลงชื่อออกงานด้วยไหม?</div></div>`,
+        `<div style="display:flex;flex-direction:column;gap:8px;width:100%"><button class="btn green" data-a="out" style="min-height:58px;font-size:18px">✔️ ลงเวลาออกงาน แล้วออก</button><button class="btn ghost" data-a="sw" style="min-height:52px">ออกจากระบบ (ยังไม่ลงเวลาออกงาน)</button><button class="btn ghost" data-a="x" style="min-height:48px;color:var(--red)">❌ ยกเลิก</button></div>`, { onClose: () => res('x') });
       $$('[data-a]', ov).forEach(b => b.onclick = () => { ov.remove(); res(b.dataset.a); });
     });
     if (choice === 'x') return;
@@ -1527,6 +1527,7 @@ VIEWS.more = el => {
     ['io', IC.io, 'นำเข้า / ส่งออกไฟล์', 'Excel / CSV รูปแบบเดียวกับไฟล์ตัวอย่าง', own],
     ['scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 'USB / Bluetooth / Serial · ทดสอบและตั้งค่า', 1],
     ['printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 'Bluetooth / USB · ออกแบบใบเสร็จ', 1],
+    ['svcset', IC.sale, 'ค่าบริการพิเศษ (โอนเงิน / เติมเงิน / ชำระบิล)', 'ตั้งช่วงยอดโอนและค่าบริการแต่ละช่วง · ค่าเติมเงิน · ค่าชำระบิล', own],
     ['payset', IC.sale, 'การชำระเงิน & แต้ม', 'พร้อมเพย์ QR บัตรสวัสดิการ เงินเชื่อ แต้มสะสม', own],
     ['displayset', IC.monitor, 'จอแสดงผลฝั่งลูกค้า', 'เปิดจอที่ 2 / จับคู่แท็บเล็ต', 1],
     ['devices', IC.wifi, 'อุปกรณ์ POS', 'มือถือ แท็บเล็ต iPad คอมพิวเตอร์', own],
@@ -1963,20 +1964,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.8"></script>
-<script src="logic.js?v=2.6.8"></script>
-<script src="cache.js?v=2.6.8"></script>
-<script src="offline.js?v=2.6.8"></script>
-<script src="scanner.js?v=2.6.8"></script>
-<script src="printer.js?v=2.6.8"></script>
-<script src="pos.js?v=2.6.8"></script>
-<script src="display.js?v=2.6.8"></script>
-<script src="reports.js?v=2.6.8"></script>
-<script src="inventory.js?v=2.6.8"></script>
-<script src="people.js?v=2.6.8"></script>
-<script src="quality.js?v=2.6.8"></script>
-<script src="services.js?v=2.6.8"></script>
-<script src="owner.js?v=2.6.8"></script>
+<script src="qr.js?v=2.6.10"></script>
+<script src="logic.js?v=2.6.10"></script>
+<script src="cache.js?v=2.6.10"></script>
+<script src="offline.js?v=2.6.10"></script>
+<script src="scanner.js?v=2.6.10"></script>
+<script src="printer.js?v=2.6.10"></script>
+<script src="pos.js?v=2.6.10"></script>
+<script src="display.js?v=2.6.10"></script>
+<script src="reports.js?v=2.6.10"></script>
+<script src="inventory.js?v=2.6.10"></script>
+<script src="people.js?v=2.6.10"></script>
+<script src="quality.js?v=2.6.10"></script>
+<script src="services.js?v=2.6.10"></script>
+<script src="owner.js?v=2.6.10"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

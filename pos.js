@@ -15,7 +15,7 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .pos{display:flex;height:100vh;height:100dvh;background:#ECEFF1;overflow:hidden}
 .pos-l{flex:1;display:flex;flex-direction:column;min-width:0}
 .pos-r{width:380px;background:#fff;display:flex;flex-direction:column;border-left:1px solid #DDD;min-height:0}
-.pbar{background:var(--red);color:#fff;display:flex;align-items:center;gap:4px;padding:calc(6px + var(--safe-t)) 8px 6px;min-height:56px}
+.pbar{position:relative;background:var(--red);color:#fff;display:flex;align-items:center;gap:4px;padding:calc(6px + var(--safe-t)) 8px 6px;min-height:56px}
 .pbar .ttl{flex:1;font-family:var(--fh);font-size:19px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:4px}
 .pbar .iconbtn{color:#fff}
 .pbar .badge{background:#fff;color:var(--red);border-radius:99px;font-size:11px;padding:1px 7px;font-weight:700}
@@ -45,10 +45,11 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .who2{display:flex;align-items:center;gap:8px;background:#fff;color:var(--red-d,#9b0019);border-radius:99px;padding:5px 14px 5px 6px;margin:0 4px;white-space:nowrap;font-family:var(--fh);font-size:16px;font-weight:700;box-shadow:0 1px 3px #0003}
 .who2 .ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff}
 .who2 b{max-width:180px;overflow:hidden;text-overflow:ellipsis}
-.pclock{margin:0 6px;padding:2px 14px;border-radius:12px;background:#0003;color:#fff;font-family:var(--fh);font-size:30px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
+.pbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.pside{min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden}.pside.r{justify-content:flex-end}.pside .iconbtn{flex:none}.who2{min-width:0;flex-shrink:1}.who2 b{min-width:0}
+.pclock{flex:none;margin:0 6px;padding:2px 14px;border-radius:12px;background:#0003;color:#fff;font-family:var(--fh);font-size:30px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
 .pclock small{font-size:15px;font-weight:600;opacity:.85;margin-left:4px}
 @media (max-width:700px){.who2{font-size:14px;padding:4px 10px 4px 5px;gap:6px}.who2 b{max-width:90px}.who2 .ic{width:22px;height:22px}.pclock{font-size:24px;padding:2px 10px}}
-@media (max-width:520px){.who2 .ic{display:none}.who2{padding:4px 9px;margin:0 2px}.who2 b{max-width:70px}.pclock{font-size:20px;padding:1px 7px;margin:0 2px}.pclock small{display:none}}
+@media (max-width:520px){.pbar #pcam,.pbar .fsb,.pbar [data-fs]{display:none}.pside.l .ttl{display:none}.who2 .ic{display:none}.who2{padding:4px 9px;margin:0 2px}.who2 b{max-width:70px}.pclock{font-size:20px;padding:1px 7px;margin:0 2px}.pclock small{display:none}}
 .pop{position:fixed;z-index:60;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);min-width:240px;max-width:min(320px,92vw);overflow:hidden;animation:fi .12s}
 .pop button{display:flex;width:100%;align-items:center;gap:12px;border:0;background:#fff;padding:0 18px;min-height:56px;font-size:17px;text-align:left;cursor:pointer;border-bottom:1px solid #F0F0F0}
 .pop button:last-child{border-bottom:0}.pop button:active{background:#F2F2F2}
@@ -301,10 +302,11 @@ const POS = {
   mount(el) {
     this.el = el;
     el.innerHTML = `<div class="pos" id="pos">
-      <div class="pos-l"><div class="pbar"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button>${isKiosk() ? '' : `<button class="iconbtn" onclick="go('home')" title="Back to management">${I(IC.home, 22)}</button>`}<div class="ttl" id="pt"></div><span class="netpill"></span>
-        <div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 16)}</span><b>${esc(S.user.name)}</b></div><div class="pclock" id="pclk" title="เวลา กรุงเทพฯ"></div>
+      <div class="pos-l"><div class="pbar"><div class="pside l"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button>${isKiosk() ? '' : `<button class="iconbtn" onclick="go('home')" title="Back to management">${I(IC.home, 22)}</button>`}<div class="ttl" id="pt"></div><span class="netpill"></span></div>
+        <div class="pclock" id="pclk" title="เวลา กรุงเทพฯ"></div>
+        <div class="pside r"><div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 16)}</span><b>${esc(S.user.name)}</b></div>
         <button class="iconbtn" id="psvc" title="Services">${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
-        <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="Switch user">${I(IC.switchu, 22)}</button></div>
+        <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button></div></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
         <div class="cartbar" id="cbar"></div></div>
       <div class="pos-r" id="pr"></div></div>`;
@@ -364,12 +366,12 @@ const POS = {
       const catGrid = isCat && !this.cat, fill = (isPage || (catGrid && this.catSlots(L).length <= L.cols * L.rows)) && !narrow;
       const editBar = this.edit && (isPage || catGrid);
       $('#pmain', this.el).innerHTML = `<div class="pgrid ${fill ? 'fill' : ''}" style="grid-template-columns:repeat(${cols},1fr);${fill ? `grid-template-rows:repeat(${L.rows},1fr)` : 'grid-auto-rows:minmax(88px,auto)'}">${html}</div>` +
-        (editBar && isPage ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">โหมดแก้ไขหน้าขาย — แตะช่องเพื่อแก้</b><button class="btn ghost sm" id="pgn">ชื่อหน้า</button><button class="btn ghost sm" id="pga">+ หน้าใหม่</button>${L.pages.length > 1 ? '<button class="btn ghost sm" id="pgd">ลบหน้า</button>' : ''}<button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '')
+        (editBar && isPage ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">โหมดแก้ไขหน้าขาย — แตะช่องเพื่อแก้</b><button class="btn ghost sm" id="pgn">ชื่อหน้า</button><button class="btn ghost sm" id="pga">+ หน้าใหม่</button><button class="btn ghost sm" id="pgv">+ ปุ่มบริการ</button>${L.pages.length > 1 ? '<button class="btn ghost sm" id="pgd">ลบหน้า</button>' : ''}<button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '')
         + (editBar && catGrid ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">${this.mv != null ? '👉 แตะช่องปลายทางเพื่อย้าย/สลับ' : 'แก้ตำแหน่งหมวดหมู่ — แตะหมวดแล้วแตะช่องปลายทาง · แตะช่องว่างเพื่อเพิ่ม'}</b><button class="btn ghost sm" id="cgr">เรียงอัตโนมัติ</button><button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '') + this.tabsHTML(tabs);
       const ed1 = $('#ed1', this.el); if (ed1) ed1.onclick = async () => { if (await gate('editProducts')) { this.edit = true; this.render(); } };
       $$('[data-i]', this.el).forEach(b => {
         const i = +b.dataset.i; let pressT;
-        b.onclick = () => { if (this.edit) return this.editTile(i); const t = L.pages[this.tab].tiles[i]; if (!t) return; if (t.t === 'c') { this.tab = L.pages.length; this.cat = t.ref; LS.set('posTab', this.tab); this.render(); } else this.add(IDX.bySku[t.ref]); };
+        b.onclick = () => { if (this.edit) return this.editTile(i); const t = L.pages[this.tab].tiles[i]; if (!t) return; if (t.t === 's') return svcDialog(t.ref); if (t.t === 'c') { this.tab = L.pages.length; this.cat = t.ref; LS.set('posTab', this.tab); this.render(); } else this.add(IDX.bySku[t.ref]); };
         if (can('editProducts')) { b.addEventListener('pointerdown', () => pressT = setTimeout(async () => { if (!(await gate('editProducts'))) return; this.edit = true; this.render(); navigator.vibrate && navigator.vibrate(30); }, 700)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(pressT))); }
       });
       $$('[data-cat]', this.el).forEach(b => b.onclick = () => { this.cat = b.dataset.cat; this.render(); });
@@ -393,6 +395,7 @@ const POS = {
         const cgr = $('#cgr', this.el); if (cgr) cgr.onclick = async () => { if (!(await confirmDlg('เรียงหมวดหมู่ใหม่ตามลำดับเดิมของระบบ (ล้างตำแหน่งที่จัดไว้)?', 'เรียงใหม่'))) return; L.catTiles = []; save(); };
         if (catGrid) { $('#pgs', this.el).onclick = () => this.gridSizeDlg(L, save); }
         if (isPage) $('#pgn', this.el).onclick = () => { const ov = sheet('ชื่อหน้า', `<input class="in" id="nm" value="${esc(L.pages[this.tab].name)}">`, '<button class="btn block" id="ok">บันทึก</button>'); $('#ok', ov).onclick = () => { L.pages[this.tab].name = $('#nm', ov).value.trim() || 'หน้า'; ov.remove(); save(); }; };
+        const pgv = $('#pgv', this.el); if (pgv) pgv.onclick = () => { const pg = L.pages[this.tab], n = L.cols * L.rows, have = new Set(pg.tiles.filter(x => x && x.t === 's').map(x => x.ref)); let added = 0; Object.keys(SVC).forEach(k => { if (have.has(k)) return; for (let i = 0; i < n; i++) if (!pg.tiles[i]) { pg.tiles[i] = { t: 's', ref: k, shape: 'square' }; added++; return; } }); if (!added) return toast(have.size >= 4 ? 'มีปุ่มบริการครบแล้ว' : 'หน้านี้ไม่มีช่องว่าง — เพิ่มหน้าใหม่หรือล้างบางช่องก่อน', 1); save(); toast('เพิ่มปุ่มบริการ ' + added + ' ปุ่มแล้ว'); };
         if (isPage) $('#pga', this.el).onclick = () => { L.pages.push({ name: 'หน้า ' + (L.pages.length + 1), tiles: [] }); this.tab = L.pages.length - 1; save(); };
         const d = $('#pgd', this.el); if (d) d.onclick = async () => { if (await confirmDlg('ลบหน้านี้?', 'ลบ', true)) { L.pages.splice(this.tab, 1); this.tab = 0; save(); } };
         if (isPage) $('#pgs', this.el).onclick = () => this.gridSizeDlg(L, save);
@@ -434,6 +437,7 @@ const POS = {
     const ed = this.edit ? ' edit' : '';
     if (!t) return `<button class="tile empty${ed}" data-i="${i}">${this.edit ? `<span style="color:#999;font-size:28px">+</span>` : ''}</button>`;
     const shape = t.shape === 'circle' ? ' circle' : '';
+    if (t.t === 's') { const sv = SVC[t.ref]; if (!sv) return `<button class="tile empty${ed}" data-i="${i}"></button>`; return `<button class="tile${shape}${ed}" data-i="${i}" style="background:${t.color || sv.color};flex-direction:column;gap:4px"><span style="font-size:1.7em;line-height:1">${sv.icon}</span><span>${esc(t.label || sv.name)}</span></button>`; }
     if (t.t === 'c') return `<button class="tile${shape}${ed}" data-i="${i}" style="background:${t.color || catColor(t.ref)}"><span class="stack">${I('<rect x="8" y="8" width="12" height="12" rx="1"/><path d="M4 16V5a1 1 0 0 1 1-1h11"/>', 18)}</span>${esc(t.label || t.ref)}</button>`;
     const p = IDX.bySku[t.ref]; if (!p) return `<button class="tile empty${ed}" data-i="${i}"><span class="tiny muted">ไม่พบสินค้า</span></button>`;
     const img = t.noImg ? '' : Img.get(p.sku);
@@ -442,7 +446,7 @@ const POS = {
   },
   editTile(i) {
     const L = this.layout(), pg = L.pages[this.tab], t = { t: 'p', shape: 'square', ...(pg.tiles[i] || {}) };
-    const ov = sheet('แก้ไขปุ่มลัด', `<div class="seg" id="tt"><button data-t="p">สินค้า</button><button data-t="c">หมวดหมู่</button></div>
+    const ov = sheet('แก้ไขปุ่มลัด', `<div class="seg" id="tt"><button data-t="p">สินค้า</button><button data-t="c">หมวดหมู่</button><button data-t="s">บริการ</button></div>
       <div id="refw" style="margin-top:10px"></div>
       <label class="f" style="margin-top:10px"><span>ชื่อบนปุ่ม (เว้นว่าง = ใช้ชื่อสินค้า)</span><input class="in" id="lb" value="${esc(t.label || '')}"></label>
       <div class="small muted" style="margin-bottom:6px">สี (กรณีไม่มีรูป)</div><div class="row wrap" id="sw">${TILE_COLORS.map(c => `<span class="swatch ${t.color === c ? 'on' : ''}" data-c="${c}" style="background:${c}"></span>`).join('')}<span class="swatch ${!t.color ? 'on' : ''}" data-c="" title="ตามหมวด" style="background:conic-gradient(#43A047,#1E88E5,#E53935,#43A047)"></span></div>
@@ -451,6 +455,7 @@ const POS = {
       `<button class="btn ghost grow" id="clr" style="color:var(--red)">ล้างช่องนี้</button><button class="btn grow" id="ok">บันทึก</button>`);
     const seg = (id, key, attr) => { const f = () => $$(`#${id} button`, ov).forEach(b => b.classList.toggle('on', b.dataset[attr] === t[key])); $$(`#${id} button`, ov).forEach(b => b.onclick = () => { t[key] = b.dataset[attr]; f(); if (key === 't') { t.ref = ''; refw(); } }); f(); };
     const refw = () => {
+      if (t.t === 's') { $('#refw', ov).innerHTML = `<div class="grid2">${Object.values(SVC).map(s => `<button class="btn ${t.ref === s.key ? '' : 'ghost'}" data-sv="${s.key}" style="${t.ref === s.key ? `background:${s.color}` : ''};min-height:52px">${s.icon} ${s.name}</button>`).join('')}</div>`; $$('[data-sv]', ov).forEach(b => b.onclick = () => { t.ref = b.dataset.sv; refw(); }); $('#nir', ov).style.display = 'none'; return; }
       if (t.t === 'c') { $('#refw', ov).innerHTML = `<select class="in" id="cs">${S.categories.map(c => `<option ${c.name === t.ref ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>`; t.ref = t.ref || (S.categories[0] || {}).name; $('#cs', ov).onchange = e => t.ref = e.target.value; $('#nir', ov).style.display = 'none'; return; }
       $('#nir', ov).style.display = '';
       const p = IDX.bySku[t.ref];
@@ -460,7 +465,7 @@ const POS = {
     seg('tt', 't', 't'); seg('sh', 'shape', 's'); refw();
     $$('#sw .swatch', ov).forEach(s => s.onclick = () => { t.color = s.dataset.c; $$('#sw .swatch', ov).forEach(x => x.classList.toggle('on', x === s)); });
     const save = () => { ov.remove(); this.saveLayout(L); };
-    $('#ok', ov).onclick = () => { if (!t.ref) return toast('กรุณาเลือก' + (t.t === 'c' ? 'หมวดหมู่' : 'สินค้า'), 1); t.label = $('#lb', ov).value.trim(); t.noImg = $('#ni', ov).checked; if (!t.color) delete t.color; pg.tiles[i] = t; save(); };
+    $('#ok', ov).onclick = () => { if (!t.ref) return toast('กรุณาเลือก' + (t.t === 'c' ? 'หมวดหมู่' : t.t === 's' ? 'บริการ' : 'สินค้า'), 1); t.label = $('#lb', ov).value.trim(); t.noImg = $('#ni', ov).checked; if (!t.color) delete t.color; pg.tiles[i] = t; save(); };
     $('#clr', ov).onclick = () => { pg.tiles[i] = null; save(); };
   },
   renderTicket() {
@@ -554,7 +559,7 @@ const POS = {
       can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)' + (canStrict('editProducts') ? '' : ' 🔒'), IC.edit, async () => { if (!this.edit && !(await gate('editProducts'))) return; this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }],
       ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)],
       Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }],
-      ['สลับผู้ใช้ / ออกจากระบบ', IC.switchu, () => switchUser()]
+      ['ออกจากระบบ', IC.logout, () => switchUser()]
     ].filter(Boolean);
     popMenu($('#pm', this.el), acts.map(a => [a[0], a[2], a[1]]), 'left');
   },
