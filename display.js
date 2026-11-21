@@ -15,7 +15,7 @@ const Display = {
   last: null, t: null, dc: null, pc: null, offerId: '', sigT: null,
   push(state) {
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
-    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
+    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
     this.last = state;
     try { this.bc && this.bc.postMessage(state); } catch (e) { }
     const direct = this.send(state);
@@ -58,6 +58,7 @@ window.Display = Display;
 if (Display.bc) Display.bc.onmessage = e => { if (e.data && e.data.hello && Display.last && S.view === 'pos') Display.bc.postMessage(Display.last); };
 document.addEventListener('mm:booted', () => Display.listen());
 
+const dispLogoHTML = (m, img, shop) => m === 'image' && img ? `<img src="${img}" alt="" style="height:clamp(26px,7vmin,60px);width:auto;max-width:60vw;object-fit:contain;display:block">` : m === 'name' ? `<b>${esc(shop || 'ร้านเมย์ มินิมาร์ท')}</b>` : '<span style="font-family:var(--flogo);font-style:italic;display:inline-flex;align-items:baseline;gap:.25em;line-height:1"><small style="font-size:.55em;font-weight:700;font-style:normal">ร้าน</small><b style="font-size:1.45em;font-weight:800;letter-spacing:-1px">เมย์</b><i style="font-size:.7em;font-weight:600">Mini Mart</i></span>';
 const bkk = () => new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
 const LB = v => `<span class="cu">฿</span>${money(v, num(v) % 1 ? 2 : 0)}`;
 
@@ -68,7 +69,12 @@ VIEWS.display = (root, hash) => {
    .dsp{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;font-family:var(--fh);color:#111;overflow:hidden}
    .dsp .cu{opacity:.38;font-weight:400;margin-right:.08em}
    .dsp .hd{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--red);color:#fff;font-size:clamp(14px,3.2vmin,26px);flex:none}
-   .dsp .hd .sh{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+   .dsp .hd .sh{flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap;overflow:hidden}
+   .dsp .hd .sh img{height:clamp(26px,7vmin,60px);width:auto;max-width:60vw;object-fit:contain;display:block}
+   .dsp .lgo{font-family:var(--flogo);font-style:italic;display:inline-flex;align-items:baseline;gap:.25em;line-height:1}
+   .dsp .lgo small{font-size:.55em;font-weight:700;font-style:normal}
+   .dsp .lgo b{font-size:1.45em;font-weight:800;letter-spacing:-1px}
+   .dsp .lgo i{font-size:.7em;font-weight:600}
    .dsp .hd .ck{font-weight:800;font-variant-numeric:tabular-nums;font-size:clamp(20px,6vmin,48px);line-height:1}
    .dsp [hidden]{display:none!important}
    .dsp .bd{flex:1;display:flex;min-height:0}
@@ -81,12 +87,13 @@ VIEWS.display = (root, hash) => {
    .dsp .rp .co{font-size:clamp(14px,4vmin,32px)}
    .dsp .rp .qrl{font-size:clamp(13px,3.4vmin,26px);opacity:.95}
    .dsp .rp.hasqr .rv{font-size:clamp(28px,10vmin,110px)}
-   .dsp .gr{display:grid;grid-template-columns:minmax(0,max-content) max-content;column-gap:2.5ch;row-gap:.12em;align-items:baseline;justify-content:start;line-height:1.22;font-weight:600}
+   .dsp .gr{display:grid;grid-template-columns:minmax(0,max-content) max-content;column-gap:0;row-gap:0;padding-left:.6ch;align-items:baseline;justify-content:start;line-height:1.22;font-weight:600}
    .dsp .gr.m{grid-template-columns:max-content max-content}
-   .dsp .gr>.n{display:flex;align-items:baseline;gap:.45ch;min-width:0}
+   .dsp .gr>.n{display:flex;align-items:baseline;gap:.45ch;min-width:0;padding:.06em 2.5ch .06em 0;border-bottom:1px solid #00000012}
+   .dsp .gr>.n>s{text-decoration:none;color:#bbb;font-weight:400;flex:none;margin-right:.15ch}
    .dsp .gr>.n>b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
    .dsp .gr>.n>i{font-style:normal;color:#777;font-weight:400;font-size:.8em;white-space:nowrap;flex:none}
-   .dsp .gr>.a{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+   .dsp .gr>.a{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;padding:.06em 0;border-bottom:1px solid #00000012}
    .dsp .gr>.more{grid-column:1/-1;color:#888;font-size:.72em;font-weight:400;border-bottom:1px dashed #ddd;padding-bottom:.15em;margin-bottom:.1em}
    .dsp .gr>.ln{grid-column:1/-1;height:1px;background:#eee}
    .dsp .tot{flex:none;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:1.2vmin 3vmin}
@@ -103,10 +110,13 @@ VIEWS.display = (root, hash) => {
    .dsp .huge{font-size:clamp(48px,20vmin,200px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
    .dsp .pill{background:#fff;color:var(--red);border-radius:99px;padding:.3em .9em;font-weight:700}
    .dsp .co{background:#FFF7E0;color:#8a5a00;border-radius:1.5vmin;padding:.3em .7em;font-weight:700}
-   .fsb{position:fixed;left:8px;bottom:40px;opacity:.25;border:0;background:#0002;border-radius:10px;padding:8px 12px;z-index:5}
+   .dfs{flex:none;border:0;background:#ffffff26;color:#fff;border-radius:10px;width:clamp(34px,7vmin,54px);height:clamp(34px,7vmin,54px);display:flex;align-items:center;justify-content:center;margin-left:4px;cursor:pointer}
+   .dfs svg{width:60%;height:60%}
+   .dsp .rp .rlg{color:#fff;font-size:clamp(22px,6.5vmin,64px);margin-bottom:1vmin;max-width:100%;display:flex;justify-content:center}
+   .dsp .rp .rlg img{height:clamp(40px,14vmin,140px)!important;max-width:100%!important}
    .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:#bbb;margin-right:.3em;vertical-align:middle}.dot.on{background:#4ade80}
    @media (orientation:portrait){.dsp .bd{flex-direction:column}.dsp .lst{flex:1}.dsp .rp{flex:none;padding:1.5vmin 3vmin}.dsp .qr img{width:min(56vw,34vh)}}
-  </style><div class="dsp" id="d"><div class="hd"><span class="sh" id="sh"></span><span class="ck" id="ck"></span></div><div class="bd" id="bd"></div><div class="tot" id="tt" hidden></div><div class="ft"><span id="cnt"><span class="dot" id="lk"></span></span><span class="cs" id="cs"></span></div></div><button class="fsb" id="fs">⛶</button>`;
+  </style><div class="dsp" id="d"><div class="hd"><span class="sh" id="sh"></span><span class="ck" id="ck"></span><button class="dfs" id="fs" title="ย่อ/ขยายเต็มจอ"></button></div><div class="bd" id="bd"></div><div class="tot" id="tt" hidden></div><div class="ft"><span id="cnt"><span class="dot" id="lk"></span></span><span class="cs" id="cs"></span></div></div>`;
   const bd = $('#bd', root), tt = $('#tt', root);
   const tick = () => { const c = $('#ck', root); if (!c) return clearInterval(tk); c.textContent = bkk() + ' น.'; };
   const tk = setInterval(tick, 5000); tick();
@@ -120,7 +130,7 @@ VIEWS.display = (root, hash) => {
       const shown = items.slice(skip), old = items.slice(0, skip);
       grid.style.fontSize = f + 'px';
       grid.innerHTML = (old.length ? `<div class="more">+ ${old.length} รายการก่อนหน้า · ${LB(old.reduce((a, x) => a + num(x.a), 0))}</div>` : '') +
-        shown.map(it => { const q = it.w === 'Y' ? num(it.q).toFixed(3).replace(/\.?0+$/, '') + ' กก.' : (num(it.q) !== 1 ? '×' + num(it.q) : ''); return `<div class="n"><b>${esc(it.n)}</b>${q ? `<i>${q}</i>` : ''}</div><div class="a">${LB(it.a)}</div>`; }).join('');
+        shown.map(it => { const q = it.w === 'Y' ? num(it.q).toFixed(3).replace(/\.?0+$/, '') + ' กก.' : (num(it.q) !== 1 ? '×' + num(it.q) : ''); return `<div class="n"><s>-</s><b>${esc(it.n)}</b>${q ? `<i>${q}</i>` : ''}</div><div class="a">${LB(it.a)}</div>`; }).join('');
     };
     const fitsH = () => grid.scrollHeight <= H;
     const fitsW = () => { grid.classList.add('m'); const ok = grid.scrollWidth <= W; grid.classList.remove('m'); return ok; };
@@ -140,7 +150,8 @@ VIEWS.display = (root, hash) => {
   const fitOne = el => { if (!el) return; const W = el.parentElement.clientWidth * .92; let f = parseFloat(getComputedStyle(el).fontSize); el.style.fontSize = ''; f = parseFloat(getComputedStyle(el).fontSize); while (el.scrollWidth > W && f > 18) { f -= 2; el.style.fontSize = f + 'px'; } };
   const draw = s => {
     cur = s;
-    $('#sh', root).textContent = (s && s.shop) || S.settings.shopName || 'ร้านเมย์ มินิมาร์ท';
+    const lg = (s && s.logo) || '', lm = (s && s.logoMode) || 'mark';
+    $('#sh', root).innerHTML = dispLogoHTML(lm, lg, (s && s.shop) || S.settings.shopName);
     $('#cs', root).textContent = s && s.cashier ? 'พนักงาน: ' + s.cashier : '';
     const cnt = $('#cnt', root); cnt.innerHTML = `<span class="dot ${Display.rx && Display.rx.readyState === 'open' ? 'on' : ''}" id="lk"></span>` + (s && s.mode !== 'idle' && s.mode !== 'done' && s.count ? `${s.count} รายการ` : '');
     if (!s || s.mode === 'idle' || !s.mode) {
@@ -156,7 +167,7 @@ VIEWS.display = (root, hash) => {
     const amt = s.mode === 'pay' && s.amount != null ? s.amount : s.total;
     // ฝั่งขวา 1/3 สีแดง: ยอดรวม · QR ชำระเงิน · ส่วนลด · สมาชิก · เงินสดที่ลูกค้าได้รับ (แนวตั้ง: อยู่ด้านล่าง)
     const qr = s.mode === 'pay' && s.qr ? `<div class="qr"><img src="${s.qr}"></div><div class="qrl">สแกนจ่าย${s.qrLabel ? ' · ' + esc(s.qrLabel) : ''}</div>` : '';
-    bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}</div>`;
+    bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr || `<div class="rlg">${dispLogoHTML(s.logoMode || 'mark', s.logo || '', s.shop || S.settings.shopName)}</div>`}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}</div>`;
     tt.hidden = true;
     const items = s.items || [];
     // จำนวนที่ถูกตัดตั้งแต่ฝั่ง POS (ส่งมาแค่ 60 ล่าสุด)
@@ -211,7 +222,16 @@ VIEWS.display = (root, hash) => {
     };
     poll();
   }
-  $('#fs', root).onclick = async () => { try { await document.documentElement.requestFullscreen(); } catch (e) { } try { await navigator.wakeLock.request('screen'); } catch (e) { } };
+  // เต็มจอ: ปุ่มย่อ/ขยาย · เปิดเต็มจอเองอัตโนมัติ (เบราว์เซอร์ยอมให้เต็มจอเมื่อมีการแตะ/คลิกครั้งแรก) · จำว่าผู้ใช้ปิดเองหรือไม่
+  const fsb = $('#fs', root), isFS = () => !!document.fullscreenElement;
+  const paintFS = () => { fsb.innerHTML = I(isFS() ? IC.shrink : IC.expand, 22); };
+  const goFS = async () => { try { if (!isFS() && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (e) { } try { navigator.wakeLock && await navigator.wakeLock.request('screen'); } catch (e) { } paintFS(); };
+  fsb.onclick = async e => { e.stopPropagation(); if (isFS()) { LS.set('dispFS', false); try { await document.exitFullscreen(); } catch (x) { } } else { LS.set('dispFS', true); await goFS(); } paintFS(); };
+  document.addEventListener('fullscreenchange', paintFS);
+  const autoFS = () => { if (LS.get('dispFS', true) && !isFS() && location.hash.indexOf('#display') === 0) goFS(); };
+  ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, autoFS, true));
+  autoFS(); paintFS();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { } } });
   try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { }
 };
 
@@ -226,11 +246,27 @@ VIEWS.displayset = el => {
        <div class="row" style="margin-top:10px"><button class="btn ghost grow" id="cp">คัดลอกลิงก์</button><button class="btn ghost grow" id="off" style="color:var(--red)">ยกเลิกการจับคู่</button></div>`
       : `<button class="btn block" id="pair" ${S.apiUrl ? '' : 'disabled'}>สร้างรหัสจับคู่จอลูกค้า</button>`}
    </div>
-   ${isOwner() ? `<div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
-  $('#op', el).onclick = () => { const w = window.open(base + '#display', 'mmdisplay', 'popup,width=1024,height=640'); if (!w) toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต pop-up ก่อน', 1); };
+   ${isOwner() ? `<div class="card" id="lgw"><h3>โลโก้แถบบนของจอลูกค้า</h3>
+     <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="mark" ${(dc.logoMode || 'mark') === 'mark' ? 'checked' : ''}> โลโก้ร้าน "ร้าน เมย์ Mini Mart" (ค่าเริ่มต้น)</label>
+     <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="image" ${dc.logoMode === 'image' ? 'checked' : ''}> รูปโลโก้ของร้าน (แนวนอน · พื้นโปร่งใสจะสวยที่สุด)</label>
+     <label class="row" style="margin-bottom:8px"><input type="radio" name="lgm" value="name" ${dc.logoMode === 'name' ? 'checked' : ''}> ชื่อร้านแบบตัวอักษร</label>
+     <div id="lgup" style="margin-bottom:8px"><label class="btn ghost sm">อัปโหลดรูปโลโก้<input type="file" accept="image/*" id="lgf" hidden></label></div>
+     <div id="lgp"></div><div class="tiny muted" style="margin-top:6px">กดบันทึกด้านล่าง แล้วจอลูกค้าจะเปลี่ยนตอนขายบิลถัดไป</div></div><div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
+  $('#op', el).onclick = async () => {
+    // ถ้ามีจอที่สอง: เปิดหน้าต่างจอลูกค้าเต็มพื้นที่จอนั้นเลย (Chrome จะถามสิทธิ์ "จัดการหน้าต่าง" ครั้งแรก)
+    try { if ('getScreenDetails' in window) { const sd = await window.getScreenDetails(); const ext = sd.screens.find(x => x !== sd.currentScreen) || null; if (ext) { const w2 = window.open(base + '#display', 'mmdisplay', `popup,left=${ext.availLeft},top=${ext.availTop},width=${ext.availWidth},height=${ext.availHeight}`); if (w2) { toast('เปิดจอลูกค้าบนจอที่สองแล้ว — คลิกที่จอลูกค้า 1 ครั้งเพื่อเต็มจอ'); return; } } } } catch (e) { }
+    const w = window.open(base + '#display', 'mmdisplay', 'popup,width=1024,height=640'); if (!w) toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต pop-up ก่อน', 1); };
   const pair = $('#pair', el); if (pair) pair.onclick = () => { LS.set('dispCode', String(Math.floor(100000 + Math.random() * 900000))); Display.listen(); go('displayset'); };
   const off = $('#off', el); if (off) off.onclick = () => { LS.del('dispCode'); go('displayset'); };
   const cp = $('#cp', el); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(base + '#display-' + code); toast('คัดลอกแล้ว'); } catch (e) { toast('คัดลอกไม่ได้', 1); } };
   if (code) qrDataUrl(base + '#display-' + code, 4).then(src => { const q = $('#qr', el); if (q) q.innerHTML = `<img src="${src}" style="width:100%">`; }).catch(() => { });
-  const sv = $('#sv', el); if (sv) sv.onclick = async () => { try { busy(1); await saveSetting('displayCfg', { welcome: $('#wc', el).value, promo: $('#pm', el).value }); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
+  let lgImg = dc.logo || '';
+  const lw = $('#lgw', el);
+  if (lw) {
+    const pv = () => { const m = $('[name=lgm]:checked', el).value; $('#lgp', el).innerHTML = `<div style="background:var(--red);color:#fff;border-radius:10px;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;font-size:22px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${dispLogoHTML(m, lgImg, S.settings.shopName)}</span><b style="font-size:28px">12:00 น.</b></div>`; $('#lgup', el).style.display = m === 'image' ? '' : 'none'; };
+    $$('[name=lgm]', el).forEach(r => r.onchange = pv);
+    $('#lgf', el).onchange = async e => { const f = e.target.files[0]; if (!f) return; const im = await loadImg(URL.createObjectURL(f)); const h = Math.min(120, im.height), w = Math.round(im.width * h / im.height), cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(im, 0, 0, w, h); lgImg = cv.toDataURL('image/png'); if (lgImg.length > 60000) lgImg = cv.toDataURL('image/webp', .85); pv(); };
+    pv();
+  }
+  const sv = $('#sv', el); if (sv) sv.onclick = async () => { try { busy(1); await saveSetting('displayCfg', { welcome: $('#wc', el).value, promo: $('#pm', el).value, logoMode: ($('[name=lgm]:checked', el) || {}).value || 'mark', logo: lgImg }); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
 };
