@@ -30,6 +30,7 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .tile .pr{position:absolute;top:4px;right:6px;font-size:11px;background:rgba(0,0,0,.35);border-radius:6px;padding:0 5px}
 .tile .stack{position:absolute;top:6px;right:8px;opacity:.85}
 .tile.edit{outline:2px dashed #FFB300;outline-offset:-3px}
+.tile.drop{outline:4px dashed #111;outline-offset:-6px;filter:brightness(1.1)}
 .tile.mv{outline:4px solid #111;outline-offset:-4px;transform:scale(.94);box-shadow:0 0 0 4px #FFB300}
 .ptabs{display:flex;background:#fff;border-top:1px solid #DDD;padding-bottom:var(--safe-b)}
 .ptabs button{flex:1;border:0;background:none;padding:12px 4px;font-family:var(--fh);font-size:16px;color:#777;border-top:3px solid transparent;cursor:pointer;white-space:nowrap}
@@ -369,18 +370,11 @@ const POS = {
         (editBar && isPage ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">โหมดแก้ไขหน้าขาย — แตะช่องเพื่อแก้</b><button class="btn ghost sm" id="pgn">ชื่อหน้า</button><button class="btn ghost sm" id="pga">+ หน้าใหม่</button><button class="btn ghost sm" id="pgv">+ ปุ่มบริการ</button>${L.pages.length > 1 ? '<button class="btn ghost sm" id="pgd">ลบหน้า</button>' : ''}<button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '')
         + (editBar && catGrid ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">${this.mv != null ? '👉 แตะช่องปลายทางเพื่อย้าย/สลับ' : 'แก้ตำแหน่งหมวดหมู่ — แตะหมวดแล้วแตะช่องปลายทาง · แตะช่องว่างเพื่อเพิ่ม'}</b><button class="btn ghost sm" id="cgr">เรียงอัตโนมัติ</button><button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '') + this.tabsHTML(tabs);
       const ed1 = $('#ed1', this.el); if (ed1) ed1.onclick = () => { this.edit = true; this.render(); };
-      if (this.pm && ((this.pm.k === 'p' && isPage) || (this.pm.k === 'c' && catGrid))) {
-        const el0 = $(`[data-${this.pm.k === 'p' ? 'i' : 'ci'}="${this.pm.i}"]`, this.el); el0 && el0.classList.add('mv');
-        $('#pmain', this.el).insertAdjacentHTML('beforeend', `<div class="row" style="padding:8px 10px;background:#FFF3CD;gap:8px;font-weight:600"><span class="grow">👉 แตะช่องปลายทางเพื่อย้าย/สลับปุ่ม</span><button class="btn ghost sm" id="pmx">ยกเลิก</button></div>`);
-        $('#pmx', this.el).onclick = () => { this.pm = null; this.render(); };
-      } else if (this.pm) this.pm = null;
       $$('[data-i]', this.el).forEach(b => {
         const i = +b.dataset.i; let pressT;
         b.onclick = () => {
           if (this.held) { this.held = false; return; }
-          if (this.pm && this.pm.k === 'p') { const T = L.pages[this.tab].tiles, j = this.pm.i; this.pm = null; if (j !== i) { [T[i], T[j]] = [T[j], T[i]]; return this.saveLayout(L); } return this.render(); }
           if (this.edit) return this.editTile(i); const t = L.pages[this.tab].tiles[i]; if (!t) return; if (t.t === 's') return svcDialog(t.ref); if (t.t === 'c') { this.tab = L.pages.length; this.cat = t.ref; LS.set('posTab', this.tab); this.render(); } else this.add(IDX.bySku[t.ref]); };
-        this.longPress(b, () => { if (!L.pages[this.tab].tiles[i]) return; this.pm = { k: 'p', i }; this.render(); });
       });
       $$('[data-cat]', this.el).forEach(b => b.onclick = () => { this.cat = b.dataset.cat; this.render(); });
       $$('[data-ci]', this.el).forEach(b => {
@@ -388,15 +382,17 @@ const POS = {
         b.onclick = () => {
           const slots = this.catSlots(L);
           if (this.held) { this.held = false; return; }
-          if (this.pm && this.pm.k === 'c') { const j = this.pm.i; this.pm = null; if (j !== i) { [slots[i], slots[j]] = [slots[j], slots[i]]; L.catTiles = slots; return saveL(); } return this.render(); }
           if (!this.edit) { if (slots[i]) { this.cat = slots[i]; this.render(); } return; }
           if (this.mv != null) { const j = this.mv; this.mv = null; if (j !== i) { [slots[i], slots[j]] = [slots[j], slots[i]]; L.catTiles = slots; return saveL(); } return this.render(); }
           if (slots[i]) { this.mv = i; return this.render(); }
           this.pickCat(L, i);
         };
-        if (!this.edit) this.longPress(b, () => { if (!this.catSlots(L)[i]) return; this.pm = { k: 'c', i }; this.render(); });
       });
       const saveL = () => this.saveLayout(L);
+      // กดค้างแล้วลากไปวางบนช่องอื่น = ย้าย/สลับตำแหน่ง (พนักงานทำได้ ไม่ต้องใช้รหัส)
+      const grid = $('.pgrid', this.el);
+      if (grid && isPage) this.dragGrid(grid, 'i', (a, b) => { const T = L.pages[this.tab].tiles; if (!T[a]) return; [T[a], T[b]] = [T[b], T[a]]; this.saveLayout(L); });
+      else if (grid && catGrid) this.dragGrid(grid, 'ci', (a, b) => { const s = this.catSlots(L); if (!s[a]) return; [s[a], s[b]] = [s[b], s[a]]; L.catTiles = s; this.saveLayout(L); });
       $$('[data-back]', this.el).forEach(b => b.onclick = () => { this.cat = null; this.render(); });
       $$('[data-sku]', this.el).forEach(b => b.onclick = () => this.add(IDX.bySku[b.dataset.sku]));
       if (this.edit) {
@@ -411,15 +407,49 @@ const POS = {
         if (isPage) $('#pgs', this.el).onclick = () => this.gridSizeDlg(L, save);
       }
     }
-    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { this.tab = +b.dataset.tab; this.cat = null; this.mv = null; this.pm = null; LS.set('posTab', this.tab); this.render(); });
+    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { this.tab = +b.dataset.tab; this.cat = null; this.mv = null; LS.set('posTab', this.tab); this.render(); });
   },
   // ตำแหน่งหมวดหมู่ในแท็บ "หมวดหมู่" (จัดวางเองได้เหมือนหน้าขายบ่อย) — หมวดใหม่จะเติมช่องว่างแรกให้อัตโนมัติ
   // กดค้าง 3 วินาที = หยิบปุ่มขึ้นมาย้าย (พนักงานทำได้ ไม่ต้องใช้รหัส) แล้วแตะช่องปลายทางเพื่อย้าย/สลับ
-  longPress(b, fn) {
-    let t = null; const stop = () => clearTimeout(t);
-    b.addEventListener('pointerdown', () => { this.held = false; stop(); t = setTimeout(() => { this.held = true; try { navigator.vibrate && navigator.vibrate(40); } catch (e) { } fn(); }, 3000); });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop));
-    b.addEventListener('contextmenu', e => e.preventDefault());
+  // ลากวาง: กดค้าง HOLD มิลลิวินาที (ขยับนิ้วก่อนเวลา = เลื่อนจอปกติ) → ปุ่มลอยตามนิ้ว → ปล่อยบนช่องไหน สลับกับช่องนั้น
+  dragGrid(grid, attr, swap) {
+    const HOLD = 800, sel = `[data-${attr}]`;
+    let st = null;
+    const end = drop => {
+      if (!st) return; clearTimeout(st.t);
+      if (st.on) {
+        const tg = st.over; st.ghost.remove(); st.el.style.opacity = ''; $$('.drop', grid).forEach(x => x.classList.remove('drop'));
+        this.held = true; setTimeout(() => this.held = false, 350);
+        if (drop && tg && tg !== st.el) swap(+st.el.dataset[attr === 'i' ? 'i' : 'ci'], +tg.dataset[attr === 'i' ? 'i' : 'ci']);
+      }
+      st = null;
+    };
+    grid.addEventListener('pointerdown', e => {
+      const el = e.target.closest(sel); if (!el || !grid.contains(el)) return;
+      if (el.classList.contains('empty')) return;
+      st = { el, x: e.clientX, y: e.clientY, id: e.pointerId, on: false };
+      st.t = setTimeout(() => {
+        if (!st) return; st.on = true;
+        const r = el.getBoundingClientRect(), g = el.cloneNode(true);
+        g.style.cssText += `;position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;margin:0;z-index:80;pointer-events:none;opacity:.9;transform:scale(1.06);box-shadow:0 10px 30px #0005;transition:none`;
+        document.body.append(g); st.ghost = g; st.dx = st.x - r.left; st.dy = st.y - r.top; el.style.opacity = '.35';
+        try { el.setPointerCapture(st.id); } catch (x) { }
+        try { navigator.vibrate && navigator.vibrate(35); } catch (x) { }
+      }, HOLD);
+    });
+    grid.addEventListener('pointermove', e => {
+      if (!st || e.pointerId !== st.id) return;
+      if (!st.on) { if (Math.abs(e.clientX - st.x) + Math.abs(e.clientY - st.y) > 12) { clearTimeout(st.t); st = null; } return; }
+      st.ghost.style.left = (e.clientX - st.dx) + 'px'; st.ghost.style.top = (e.clientY - st.dy) + 'px';
+      const t = (document.elementFromPoint(e.clientX, e.clientY) || {}).closest ? document.elementFromPoint(e.clientX, e.clientY).closest(sel) : null;
+      const tg = t && grid.contains(t) ? t : null;
+      if (tg !== st.over) { st.over && st.over.classList.remove('drop'); tg && tg !== st.el && tg.classList.add('drop'); st.over = tg; }
+    });
+    grid.addEventListener('pointerup', () => end(true));
+    grid.addEventListener('pointercancel', () => end(false));
+    // ระหว่างลาก ห้ามจอเลื่อน
+    grid.addEventListener('touchmove', e => { if (st && st.on) e.preventDefault(); }, { passive: false });
+    grid.addEventListener('contextmenu', e => e.preventDefault());
   },
   // บันทึกผังหน้าขาย: แสดงผลทันที แล้วส่งขึ้นเซิร์ฟเวอร์เบื้องหลัง
   saveLayout(L) {
