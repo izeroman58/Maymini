@@ -241,8 +241,11 @@ async function shopQRText() {
   const v = await decodeQRImage(pc.qrImage); LS.set('qrTextMemo', { k: key, v }); return v;
 }
 // mode: 'auto' = รวมยอดให้อัตโนมัติ · 'manual' = ลูกค้าใส่ยอดเอง (รูป QR เดิมของร้าน)
+// พร้อมเพย์ที่ถูกต้อง: เบอร์มือถือ 10 หลัก · เลขบัตร/ผู้เสียภาษี 13 หลัก · e-Wallet 15 หลัก
+const ppOK = id => /^(\d{10}|\d{13}|\d{15})$/.test(String(id || ''));
 async function payQR(amount, mode) {
-  const pc = payCfg(), base = pc.promptpay ? '' : await shopQRText();
+  const pc = { ...payCfg() }; if (!ppOK(pc.promptpay)) pc.promptpay = '';
+  const base = pc.promptpay ? '' : await shopQRText();
   const canAuto = !!(pc.promptpay || base), canManual = !!pc.qrImage;
   mode = mode === 'manual' && canManual ? 'manual' : canAuto ? 'auto' : canManual ? 'manual' : '';
   const info = { canAuto, canManual, mode };
@@ -789,12 +792,20 @@ VIEWS.payset = el => {
     a.innerHTML = `<img src="${await qrDataUrl(amountQR(t, 1), 3)}" style="width:100%">`;
     st.innerHTML = `✔️ อ่าน QR ร้านได้${qrShopName(t) ? ' — ' + esc(qrShopName(t)) : ''}<br><b>ตัวอย่าง QR ยอด 1.00 บาท</b> — ลองสแกนด้วยแอปธนาคาร ตรวจว่ายอดขึ้น 1.00 และชื่อร้านถูกต้อง (ไม่ต้องกดโอน)`;
   };
-  const prev = async () => { prevAuto(); const v = $('#pp', el).value.trim(); $('#qrp', el).innerHTML = v ? `<img src="${await qrDataUrl(promptpayPayload(v, 1), 3)}" style="width:100%">` : qrImg ? `<img src="${qrImg}" style="width:100%">` : '<span class="tiny muted">ไม่มี QR</span>'; };
-  $('#pp', el).oninput = () => { clearTimeout(el.t); el.t = setTimeout(prev, 300); };
+  const prev = async () => { prevAuto(); const v = $('#pp', el).value.replace(/\D/g, ''); $('#qrp', el).innerHTML = v && !ppOK(v) ? '<span class="tiny" style="color:var(--red);padding:6px;text-align:center">พร้อมเพย์ต้อง 10/13/15 หลัก</span>' : v ? `<img src="${await qrDataUrl(promptpayPayload(v, 1), 3)}" style="width:100%">` : qrImg ? `<img src="${qrImg}" style="width:100%">` : '<span class="tiny muted">ไม่มี QR</span>'; };
+  $('#pp', el).oninput = () => {
+    const v = $('#pp', el).value.trim();
+    // วางข้อความ QR ร้านผิดช่อง → ย้ายไปช่อง "ข้อความใน QR ร้าน" ให้เอง
+    if (/^000201/.test(v) && isThaiQR(v)) { $('#qt', el).value = v; $('#pp', el).value = ''; toast('นี่คือข้อความ QR ร้าน — ย้ายไปช่อง "ข้อความใน QR ร้าน" ให้แล้ว'); }
+    clearTimeout(el.t); el.t = setTimeout(prev, 300);
+  };
+  if (pc.promptpay && !ppOK(pc.promptpay)) { $('#pp', el).value = ''; toast('หมายเลขพร้อมเพย์ที่บันทึกไว้ไม่ถูกต้อง (ต้องเป็น 10, 13 หรือ 15 หลัก) — ล้างให้แล้ว กรุณากดบันทึก', 1, 6000); }
   $('#qf', el).onchange = async e => { const f = e.target.files[0]; if (!f) return; decodeQRImage(URL.createObjectURL(f)).then(v => { if (v) { $('#qt', el).value = v; prevAuto(); toast('อ่านข้อความ QR ร้านได้แล้ว'); } else if (!('BarcodeDetector' in window)) toast('เครื่องนี้อ่าน QR จากรูปไม่ได้ — ทำที่แท็บเล็ต Android หรือวางข้อความ QR เอง', 1); else toast('อ่าน QR จากรูปไม่ได้ — ลองรูปที่ชัดขึ้น หรือวางข้อความ QR เอง', 1); }); const im = await loadImg(URL.createObjectURL(f)); const s = Math.min(600, im.width), cv = document.createElement('canvas'); cv.width = s; cv.height = Math.round(im.height * s / im.width); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); qrImg = cv.toDataURL('image/jpeg', .85); if (qrImg.length > 45000) qrImg = cv.toDataURL('image/jpeg', .6); prev(); };
   $('#qx', el).onclick = () => { qrImg = ''; $('#qt', el).value = ''; prev(); };
   $('#qt', el).oninput = () => { clearTimeout(el.t2); el.t2 = setTimeout(prev, 300); };
   $('#sv', el).onclick = async () => {
+    const ppv = $('#pp', el).value.replace(/\D/g, '');
+    if (ppv && !ppOK(ppv)) return toast('หมายเลขพร้อมเพย์ต้องเป็นเบอร์มือถือ 10 หลัก, เลขบัตร/ผู้เสียภาษี 13 หลัก หรือ e-Wallet 15 หลัก', 1, 6000);
     try {
       busy(1);
       await saveSetting('payCfg', { transfer: $('#tr', el).checked, welfare: $('#wf', el).checked, credit: $('#cr', el).checked, promptpay: $('#pp', el).value.replace(/\D/g, ''), qrImage: qrImg, qrText: isThaiQR($('#qt', el).value.trim()) ? $('#qt', el).value.trim() : '', quick: $('#qk', el).value.split(/[,\s]+/).map(Number).filter(Boolean) });
