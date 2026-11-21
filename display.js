@@ -15,13 +15,14 @@ const Display = {
   last: null, t: null, dc: null, pc: null, offerId: '', sigT: null,
   push(state) {
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
-    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
+    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: (S.settings && S.settings.brandLogo) || '', cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
     this.last = state;
     try { this.bc && this.bc.postMessage(state); } catch (e) { }
     const direct = this.send(state);
     const code = LS.get('dispCode', '');
     // สำรองผ่านเซิร์ฟเวอร์: ถ้าเชื่อมตรงอยู่ ส่งช้าๆ ไว้กันพลาด (ใช้ตอนจอเพิ่งเปิดใหม่)
-    if (code && S.apiUrl) { clearTimeout(this.t); this.t = setTimeout(() => api('displayPush', { code, state: this.last }).catch(() => { }), direct ? 2500 : (state.mode === 'cart' ? 150 : 0)); }
+    // ส่งผ่าน Google ทุกครั้งด้วย (เร็ว ~150 มิลลิวิ) กันกรณีเชื่อมตรงค้าง/ขาด เช่น จอลูกค้าเพิ่งโหลดใหม่หรือใช้เน็ตมือถือ · จอลูกค้าตัดข้อมูลซ้ำ/เก่าทิ้งเอง
+    if (code && S.apiUrl) { clearTimeout(this.t); this.t = setTimeout(() => api('displayPush', { code, state: this.last }).catch(() => { }), state.mode === 'cart' ? 150 : 0); }
   },
   send(state) { try { if (this.dc && this.dc.readyState === 'open') { this.dc.send(JSON.stringify(state)); return true; } } catch (e) { } return false; },
   // ฝั่ง POS: คอยรับคำขอเชื่อมตรงจากจอลูกค้า แล้วตอบกลับ
@@ -30,9 +31,10 @@ const Display = {
     const code = LS.get('dispCode', '');
     if (!code || !S.apiUrl || !('RTCPeerConnection' in window) || !S.user) return;
     const tick = async () => {
-      if (this.dc && this.dc.readyState === 'open') return (this.sigT = setTimeout(tick, 8000));
+      const open = this.dc && this.dc.readyState === 'open';
       try {
         const off = await sig(code, 'offer');
+        // จอลูกค้าขอเชื่อมใหม่ (เช่น เพิ่งรีเฟรช) → ตอบรับทันทีแม้ช่องเดิมยังดูเหมือนเปิดอยู่
         if (off && off.id && off.id !== this.offerId && Date.now() - off.t < 120000) {
           this.offerId = off.id;
           try { this.pc && this.pc.close(); } catch (e) { }
@@ -49,7 +51,7 @@ const Display = {
           await sig(code, 'answer', { id: off.id, sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : { type: 'answer', sdp: pc.localDescription.sdp } });
         }
       } catch (e) { }
-      this.sigT = setTimeout(tick, document.hidden ? 8000 : 2500);
+      this.sigT = setTimeout(tick, document.hidden ? 8000 : open ? 5000 : 2500);
     };
     tick();
   }
@@ -158,7 +160,7 @@ VIEWS.display = (root, hash) => {
     const cnt = $('#cnt', root); cnt.innerHTML = `<span class="dot ${Display.rx && Display.rx.readyState === 'open' ? 'on' : ''}" id="lk"></span>` + (s && s.mode !== 'idle' && s.mode !== 'done' && s.count ? `${s.count} รายการ` : '');
     if (!s || s.mode === 'idle' || !s.mode) {
       tt.hidden = true;
-      bd.innerHTML = `<div class="cen"><div style="font-size:4vmin;color:var(--red-d)">ร้าน</div><div class="mk">เมย์</div><div style="font-size:5vmin;font-style:italic;color:var(--red)">Mini Mart</div><div style="font-size:6vmin;margin-top:1vmin">${esc((s && s.welcome) || 'ยินดีต้อนรับ')}</div>${s && s.promo ? `<div style="font-size:4.5vmin;background:var(--green);color:#fff;border-radius:2vmin;padding:1vmin 3vmin">${esc(s.promo)}</div>` : ''}</div>`;
+      bd.innerHTML = `<div class="cen"><img src="${(s && s.brandC) || 'logo.png'}" alt="ร้านเมย์ Mini Mart" style="width:auto;height:min(46vh,60vw);max-width:80vw;object-fit:contain"><div style="font-size:6vmin;margin-top:1vmin">${esc((s && s.welcome) || 'ยินดีต้อนรับ')}</div>${s && s.promo ? `<div style="font-size:4.5vmin;background:var(--green);color:#fff;border-radius:2vmin;padding:1vmin 3vmin">${esc(s.promo)}</div>` : ''}</div>`;
       return;
     }
     if (s.mode === 'done') {
@@ -220,7 +222,7 @@ VIEWS.display = (root, hash) => {
         const r = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'displayPull', payload: { code, v } }) }).then(x => x.json());
         if (r && r.ok && !r.same && r.v) { v = r.v; accept(r.state); }
       } catch (e) { }
-      setTimeout(poll, document.hidden ? 5000 : direct ? 6000 : 1000);
+      setTimeout(poll, document.hidden ? 5000 : direct ? 3000 : 700);
     };
     poll();
   }
