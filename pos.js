@@ -42,8 +42,8 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .ttot{padding:10px 14px;border-top:1px solid #E0E0E0}
 .ttot .kv{border:0;padding:3px 0}
 .payb{margin:0 14px calc(14px + var(--safe-b));min-height:72px;font-size:21px;border-radius:8px;background:#7CB342}
-.who2{display:flex;align-items:center;gap:8px;background:#fff;color:var(--red-d,#9b0019);border-radius:99px;padding:5px 14px 5px 6px;margin:0 4px;white-space:nowrap;font-family:var(--fh);font-size:16px;font-weight:700;box-shadow:0 1px 3px #0003}
-.who2 .ic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff}
+.who2{display:flex;align-items:center;gap:6px;background:transparent;color:#fff;padding:5px 8px;margin:0 4px;white-space:nowrap;font-family:var(--fh);font-size:16px;font-weight:700}
+.who2 .ic{display:inline-flex;align-items:center;justify-content:center;color:#fff}
 .who2 b{max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .pbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.pside{min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden}.pside.r{justify-content:flex-end}.pside .iconbtn{flex:none}.who2{min-width:0;flex-shrink:1}.who2 b{min-width:0}
 .pclock{flex:none;margin:0 6px;padding:2px 14px;border-radius:12px;background:#0003;color:#fff;font-family:var(--fh);font-size:30px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
@@ -304,7 +304,7 @@ const POS = {
     el.innerHTML = `<div class="pos" id="pos">
       <div class="pos-l"><div class="pbar"><div class="pside l"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button>${isKiosk() ? '' : `<button class="iconbtn" onclick="go('home')" title="Back to management">${I(IC.home, 22)}</button>`}<div class="ttl" id="pt"></div><span class="netpill"></span></div>
         <div class="pclock" id="pclk" title="เวลา กรุงเทพฯ"></div>
-        <div class="pside r"><div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 16)}</span><b>${esc(S.user.name)}</b></div>
+        <div class="pside r"><div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 20)}</span><b>${esc(S.user.name)}</b></div>
         <button class="iconbtn" id="psvc" title="Services">${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
         <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button></div></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
@@ -368,23 +368,33 @@ const POS = {
       $('#pmain', this.el).innerHTML = `<div class="pgrid ${fill ? 'fill' : ''}" style="grid-template-columns:repeat(${cols},1fr);${fill ? `grid-template-rows:repeat(${L.rows},1fr)` : 'grid-auto-rows:minmax(88px,auto)'}">${html}</div>` +
         (editBar && isPage ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">โหมดแก้ไขหน้าขาย — แตะช่องเพื่อแก้</b><button class="btn ghost sm" id="pgn">ชื่อหน้า</button><button class="btn ghost sm" id="pga">+ หน้าใหม่</button><button class="btn ghost sm" id="pgv">+ ปุ่มบริการ</button>${L.pages.length > 1 ? '<button class="btn ghost sm" id="pgd">ลบหน้า</button>' : ''}<button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '')
         + (editBar && catGrid ? `<div class="row wrap" style="padding:6px 8px;background:#FFF8E1;gap:6px"><b class="small grow">${this.mv != null ? '👉 แตะช่องปลายทางเพื่อย้าย/สลับ' : 'แก้ตำแหน่งหมวดหมู่ — แตะหมวดแล้วแตะช่องปลายทาง · แตะช่องว่างเพื่อเพิ่ม'}</b><button class="btn ghost sm" id="cgr">เรียงอัตโนมัติ</button><button class="btn ghost sm" id="pgs">ตาราง ${L.cols}×${L.rows}</button><button class="btn sm green" id="pge">เสร็จ</button></div>` : '') + this.tabsHTML(tabs);
-      const ed1 = $('#ed1', this.el); if (ed1) ed1.onclick = async () => { if (await gate('editProducts')) { this.edit = true; this.render(); } };
+      const ed1 = $('#ed1', this.el); if (ed1) ed1.onclick = () => { this.edit = true; this.render(); };
+      if (this.pm && ((this.pm.k === 'p' && isPage) || (this.pm.k === 'c' && catGrid))) {
+        const el0 = $(`[data-${this.pm.k === 'p' ? 'i' : 'ci'}="${this.pm.i}"]`, this.el); el0 && el0.classList.add('mv');
+        $('#pmain', this.el).insertAdjacentHTML('beforeend', `<div class="row" style="padding:8px 10px;background:#FFF3CD;gap:8px;font-weight:600"><span class="grow">👉 แตะช่องปลายทางเพื่อย้าย/สลับปุ่ม</span><button class="btn ghost sm" id="pmx">ยกเลิก</button></div>`);
+        $('#pmx', this.el).onclick = () => { this.pm = null; this.render(); };
+      } else if (this.pm) this.pm = null;
       $$('[data-i]', this.el).forEach(b => {
         const i = +b.dataset.i; let pressT;
-        b.onclick = () => { if (this.edit) return this.editTile(i); const t = L.pages[this.tab].tiles[i]; if (!t) return; if (t.t === 's') return svcDialog(t.ref); if (t.t === 'c') { this.tab = L.pages.length; this.cat = t.ref; LS.set('posTab', this.tab); this.render(); } else this.add(IDX.bySku[t.ref]); };
-        if (can('editProducts')) { b.addEventListener('pointerdown', () => pressT = setTimeout(async () => { if (!(await gate('editProducts'))) return; this.edit = true; this.render(); navigator.vibrate && navigator.vibrate(30); }, 700)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(pressT))); }
+        b.onclick = () => {
+          if (this.held) { this.held = false; return; }
+          if (this.pm && this.pm.k === 'p') { const T = L.pages[this.tab].tiles, j = this.pm.i; this.pm = null; if (j !== i) { [T[i], T[j]] = [T[j], T[i]]; return this.saveLayout(L); } return this.render(); }
+          if (this.edit) return this.editTile(i); const t = L.pages[this.tab].tiles[i]; if (!t) return; if (t.t === 's') return svcDialog(t.ref); if (t.t === 'c') { this.tab = L.pages.length; this.cat = t.ref; LS.set('posTab', this.tab); this.render(); } else this.add(IDX.bySku[t.ref]); };
+        this.longPress(b, () => { if (!L.pages[this.tab].tiles[i]) return; this.pm = { k: 'p', i }; this.render(); });
       });
       $$('[data-cat]', this.el).forEach(b => b.onclick = () => { this.cat = b.dataset.cat; this.render(); });
       $$('[data-ci]', this.el).forEach(b => {
         const i = +b.dataset.ci; let pressT;
         b.onclick = () => {
           const slots = this.catSlots(L);
+          if (this.held) { this.held = false; return; }
+          if (this.pm && this.pm.k === 'c') { const j = this.pm.i; this.pm = null; if (j !== i) { [slots[i], slots[j]] = [slots[j], slots[i]]; L.catTiles = slots; return saveL(); } return this.render(); }
           if (!this.edit) { if (slots[i]) { this.cat = slots[i]; this.render(); } return; }
           if (this.mv != null) { const j = this.mv; this.mv = null; if (j !== i) { [slots[i], slots[j]] = [slots[j], slots[i]]; L.catTiles = slots; return saveL(); } return this.render(); }
           if (slots[i]) { this.mv = i; return this.render(); }
           this.pickCat(L, i);
         };
-        if (can('editProducts')) { b.addEventListener('pointerdown', () => pressT = setTimeout(async () => { if (this.edit || !(await gate('editProducts'))) return; this.edit = true; this.mv = null; this.render(); navigator.vibrate && navigator.vibrate(30); }, 700)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(pressT))); }
+        if (!this.edit) this.longPress(b, () => { if (!this.catSlots(L)[i]) return; this.pm = { k: 'c', i }; this.render(); });
       });
       const saveL = () => this.saveLayout(L);
       $$('[data-back]', this.el).forEach(b => b.onclick = () => { this.cat = null; this.render(); });
@@ -401,9 +411,16 @@ const POS = {
         if (isPage) $('#pgs', this.el).onclick = () => this.gridSizeDlg(L, save);
       }
     }
-    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { this.tab = +b.dataset.tab; this.cat = null; this.mv = null; LS.set('posTab', this.tab); this.render(); });
+    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { this.tab = +b.dataset.tab; this.cat = null; this.mv = null; this.pm = null; LS.set('posTab', this.tab); this.render(); });
   },
   // ตำแหน่งหมวดหมู่ในแท็บ "หมวดหมู่" (จัดวางเองได้เหมือนหน้าขายบ่อย) — หมวดใหม่จะเติมช่องว่างแรกให้อัตโนมัติ
+  // กดค้าง 3 วินาที = หยิบปุ่มขึ้นมาย้าย (พนักงานทำได้ ไม่ต้องใช้รหัส) แล้วแตะช่องปลายทางเพื่อย้าย/สลับ
+  longPress(b, fn) {
+    let t = null; const stop = () => clearTimeout(t);
+    b.addEventListener('pointerdown', () => { this.held = false; stop(); t = setTimeout(() => { this.held = true; try { navigator.vibrate && navigator.vibrate(40); } catch (e) { } fn(); }, 3000); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop));
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  },
   // บันทึกผังหน้าขาย: แสดงผลทันที แล้วส่งขึ้นเซิร์ฟเวอร์เบื้องหลัง
   saveLayout(L) {
     S.settings.posLayout = JSON.stringify(L); LS.set('settings', S.settings); this.render();
@@ -556,7 +573,7 @@ const POS = {
       ['บริการ โอนเงิน/เติมเงิน/จ่ายบิล', IC.sale, () => svcMenu()],
       ['จอแสดงผลฝั่งลูกค้า', IC.monitor, () => go('displayset')],
       ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
-      can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)' + (canStrict('editProducts') ? '' : ' 🔒'), IC.edit, async () => { if (!this.edit && !(await gate('editProducts'))) return; this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }, 'editLayout'],
+      [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)', IC.edit, async () => { this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }, 'editLayout'],
       ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)],
       Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }],
       ['ออกจากระบบ', IC.logout, () => switchUser()]

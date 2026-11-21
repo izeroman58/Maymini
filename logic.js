@@ -85,7 +85,9 @@ var Logic = (function () {
   function clean(t, r) { var c = {}; SCHEMA[t].cols.forEach(function (k) { if (k in r && r[k] != null) c[k] = typeof r[k] === 'object' ? JSON.stringify(r[k]) : String(r[k]); }); return c; }
   function upsert(db, u, t, rows) {
     var sc = SCHEMA[t]; if (!sc) err('ไม่พบตาราง');
-    need(db, u, sc.write);
+    // พนักงานจัดผังปุ่มหน้าขาย (posLayout) ได้เองโดยไม่ต้องใช้รหัสเจ้าของ — ตั้งค่าอื่นยังต้องเป็นเจ้าของ
+    var layoutOnly = t === 'Settings' && rows && rows.length && rows.every(function (r) { return r && r.key === 'posLayout'; });
+    if (!layoutOnly) need(db, u, sc.write);
     rows = (rows || []).map(function (r) {
       var c = clean(t, r);
       if (!c[sc.key]) err('ไม่มีค่า ' + sc.key);
@@ -143,7 +145,7 @@ var Logic = (function () {
     var info = { id: user.id, name: user.name, username: user.username, role: user.role };
     var device = registerDevice(db, info, dev || {});
     db.log(info, 'login', device ? device.name : '');
-    return { user: info, device: device, mustChangePin: user.role === 'owner' && user.pinHash === db.hash('1234') };
+    return { user: info, device: device, shift: user.role === 'owner' ? null : openShift(db, info), mustChangePin: user.role === 'owner' && user.pinHash === db.hash('1234') };
   }
   function pinTaken(db, pin, exceptId) {
     var h = db.hash(String(pin));

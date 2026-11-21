@@ -43,13 +43,11 @@ const OfflineAuth = {
   async checkOwnerPin(pin) { try { const v = await this.derive(pin, 'owner-approve'); return (this.store._owner || []).includes(v); } catch (e) { return false; } },
   async login(pin, username) {
     const o = this.store, now = Date.now();
-    for (const id of Object.keys(o)) {
-      if (id[0] === '_') continue; const e = o[id];
-      if (now - e.at > this.MAX_DAYS * 864e5) continue;
-      if (username && String(e.user.username).toLowerCase() !== username) continue;
-      if (await this.derive(pin, id) === e.v) return { user: e.user, token: e.token, device: null, offline: true };
-    }
-    return null;
+    // ตรวจทุกคนพร้อมกัน (เร็วกว่าทีละคน)
+    const ids = Object.keys(o).filter(id => id[0] !== '_' && now - o[id].at <= this.MAX_DAYS * 864e5 && (!username || String(o[id].user.username).toLowerCase() === username));
+    const vs = await Promise.all(ids.map(id => this.derive(pin, id).catch(() => '')));
+    const k = vs.findIndex((v, i) => v && v === o[ids[i]].v);
+    return k < 0 ? null : { user: o[ids[k]].user, token: o[ids[k]].token, device: null, offline: true };
   },
   // ผู้ใช้ที่ถูกปิด/ลบ หรือเปลี่ยนสิทธิ์ → ลบออกจากเครื่อง (ทำทุกครั้งที่ออนไลน์)
   prune(active) {

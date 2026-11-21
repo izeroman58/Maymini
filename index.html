@@ -190,7 +190,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.11';
+const APP_VER = '2.6.12';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
@@ -407,7 +407,11 @@ async function apiRaw(action, payload, tokenOverride) {
   Net.set(true);
   let j; try { j = await res.json(); } catch (e) { const er = new Error('เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (ตรวจ URL / การ Deploy)'); er.offline = true; throw er; }
   if (!j.ok) {
-    if (/^AUTH:/.test(j.error)) { logout(true); throw new Error(j.error.replace('AUTH: ', '')); }
+    if (/^AUTH:/.test(j.error)) {
+      // ระหว่างเข้าระบบแบบเร็ว โทเคนเดิมอาจหมดอายุ → รอการยืนยันเบื้องหลังได้โทเคนใหม่แล้วลองอีกครั้ง
+      if (S.loginP && !tokenOverride && action !== 'login') { const ok = await S.loginP.then(() => true, () => false); if (ok) return apiRaw(action, payload, S.token); }
+      logout(true); throw new Error(j.error.replace('AUTH: ', ''));
+    }
     throw new Error(j.error || 'เกิดข้อผิดพลาด');
   }
   return j;
@@ -1027,24 +1031,40 @@ function renderLogin(mode) {
   const submit = async () => {
     if (sending || pin.length < 4) return;
     sending = true; busy(1, 'กำลังเข้าสู่ระบบ...');
+    const dev = { id: S.device.id, type: devType(), ua: navigator.userAgent, name: S.device.name || '' };
     try {
-      let r;
-      try { r = await api('login', { username: '', pin, device: { id: S.device.id, type: devType(), ua: navigator.userAgent, name: S.device.name || '' } }); }
-      catch (e) {
-        if (!e.offline || !S.apiUrl) throw e;
-        busy(1, 'ออฟไลน์ — กำลังตรวจรหัสในเครื่อง...');
-        r = await OfflineAuth.login(pin, '');
-        if (!r) throw new Error('ไม่มีอินเทอร์เน็ต และรหัสนี้ยังไม่เคยเข้าระบบในเครื่องนี้ (ต้องเข้าแบบออนไลน์ 1 ครั้งก่อน)');
-        toast('เข้าระบบแบบออฟไลน์ — ขายได้ตามปกติ บิลจะส่งขึ้นระบบเมื่อมีเน็ต');
+      let r = null, fast = false;
+      // เร็ว: ถ้ารหัสนี้เคยเข้าเครื่องนี้แล้ว ตรวจในเครื่องทันที แล้วยืนยันกับเซิร์ฟเวอร์เบื้องหลัง
+      if (S.apiUrl) { const loc = await OfflineAuth.login(pin, ''); if (loc && loc.token) { r = loc; fast = true; } }
+      if (!r) {
+        try { r = await api('login', { username: '', pin, device: dev }); }
+        catch (e) {
+          if (!e.offline || !S.apiUrl) throw e;
+          throw new Error('ไม่มีอินเทอร์เน็ต และรหัสนี้ยังไม่เคยเข้าระบบในเครื่องนี้ (ต้องเข้าแบบออนไลน์ 1 ครั้งก่อน)');
+        }
+        OfflineAuth.remember(r.user, pin, r.token);
       }
-      if (!r.offline) OfflineAuth.remember(r.user, pin, r.token);
       S.token = r.token; S.user = r.user; LS.set('token', r.token); LS.set('user', r.user);
       if (r.device) { S.device = { ...S.device, ...r.device }; LS.set('device', S.device); }
+      if (fast) {
+        const uid = r.user.id, p0 = pin;
+        S.loginP = apiRaw('login', { username: '', pin: p0, device: dev });
+        S.loginP.then(x => {
+          OfflineAuth.remember(x.user, p0, x.token);
+          if (S.user && S.user.id === uid) { S.token = x.token; S.user = { ...S.user, ...x.user }; LS.set('token', x.token); LS.set('user', S.user); if (x.device) { S.device = { ...S.device, ...x.device }; LS.set('device', S.device); } if ('shift' in x && x.user.role !== 'owner') { Clock.setLocal(uid, x.shift); if (S.shift === undefined || !S.shift) S.shift = x.shift; } }
+        }).catch(e => {
+          if (e.offline) return;
+          if (/รหัส|ปิด|ไม่พบ/.test(e.message)) { OfflineAuth.forget(uid); if (S.user && S.user.id === uid) { toast('รหัสนี้ถูกเปลี่ยนหรือปิดใช้งานแล้ว — กรุณาเข้าใหม่', 1); logout(); } }
+        });
+      }
       busy(0);
       if (r.user.role !== 'owner') {
-        // สถานะการลงเวลา (ออนไลน์ถามเซิร์ฟเวอร์ ออฟไลน์ใช้ข้อมูลในเครื่อง)
-        S.shift = Clock.get(r.user.id);
-        if (!r.offline) { const ms = await apiRaw('myShift', {}).catch(() => null); if (ms) { S.shift = ms.shift; Clock.setLocal(r.user.id, ms.shift); } }
+        // สถานะลงเวลา: ใช้ข้อมูลที่มี (จากเซิร์ฟเวอร์ตอนเข้าระบบ หรือในเครื่อง) ถ้าไม่มีเลย ถามเซิร์ฟเวอร์ไม่เกิน 1.5 วิ
+        if ('shift' in r) { S.shift = r.shift; Clock.setLocal(r.user.id, r.shift); }
+        else {
+          S.shift = Clock.get(r.user.id);
+          if (!S.shift && S.apiUrl) { const ms = await Promise.race([apiRaw('myShift', {}).catch(() => null), new Promise(z => setTimeout(() => z(null), 1500))]); if (ms) { S.shift = ms.shift; Clock.setLocal(r.user.id, ms.shift); } }
+        }
         const res = await clockDialog(mode);
         if (mode === 'clock' || res === 'out') { S.token = ''; S.user = null; LS.del('token'); LS.del('user'); renderLogin(); sending = false; return; }
       } else if (mode === 'clock') toast('เจ้าของร้านไม่ต้องลงเวลา');
@@ -1134,7 +1154,7 @@ async function switchUser() {
       $$('[data-a]', ov).forEach(b => b.onclick = () => { ov.remove(); res(b.dataset.a); });
     });
     if (choice === 'x') return;
-    if (choice === 'out') { try { await Clock.act('clockOut'); await ackDlg('✔️ ลงเวลาออกงานแล้ว', `${esc(u.name)}<div>เข้า ${hhmm(sh.inAt)} → ออก ${hhmm(now)} น.</div><div style="font-size:20px">รวม <b>${dur}</b></div>`); } catch (e) { toast(e.message, 1); return; } }
+    if (choice === 'out') { try { await Clock.act('clockOut'); toast(`ลงเวลาออกงานแล้ว · รวม ${dur}`); } catch (e) { toast(e.message, 1); return; } }
   }
   if (n) toast(`บิลรอส่ง ${n} บิล จะส่งอัตโนมัติเมื่อมีคนเข้าระบบ`);
   logout();
@@ -1992,20 +2012,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.11"></script>
-<script src="logic.js?v=2.6.11"></script>
-<script src="cache.js?v=2.6.11"></script>
-<script src="offline.js?v=2.6.11"></script>
-<script src="scanner.js?v=2.6.11"></script>
-<script src="printer.js?v=2.6.11"></script>
-<script src="pos.js?v=2.6.11"></script>
-<script src="display.js?v=2.6.11"></script>
-<script src="reports.js?v=2.6.11"></script>
-<script src="inventory.js?v=2.6.11"></script>
-<script src="people.js?v=2.6.11"></script>
-<script src="quality.js?v=2.6.11"></script>
-<script src="services.js?v=2.6.11"></script>
-<script src="owner.js?v=2.6.11"></script>
+<script src="qr.js?v=2.6.12"></script>
+<script src="logic.js?v=2.6.12"></script>
+<script src="cache.js?v=2.6.12"></script>
+<script src="offline.js?v=2.6.12"></script>
+<script src="scanner.js?v=2.6.12"></script>
+<script src="printer.js?v=2.6.12"></script>
+<script src="pos.js?v=2.6.12"></script>
+<script src="display.js?v=2.6.12"></script>
+<script src="reports.js?v=2.6.12"></script>
+<script src="inventory.js?v=2.6.12"></script>
+<script src="people.js?v=2.6.12"></script>
+<script src="quality.js?v=2.6.12"></script>
+<script src="services.js?v=2.6.12"></script>
+<script src="owner.js?v=2.6.12"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
