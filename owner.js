@@ -236,6 +236,38 @@ VIEWS.settings = el => {
   _settingsView(el);
   if (!isOwner()) return;
   const c = document.createElement('div'); c.className = 'card';
-  c.innerHTML = `<h3>การแสดงผล</h3><button class="btn ghost block" onclick="fontDlg()">ฟอนต์และขนาดตัวอักษร</button><button class="btn ghost block" style="margin-top:8px" onclick="vatDlg()">สถานะ VAT</button><button class="btn ghost block" style="margin-top:8px" onclick="go('svcset')">ค่าบริการ โอนเงิน/เติมเงิน/จ่ายบิล</button>`;
+  c.innerHTML = `<h3>การแสดงผล</h3><button class="btn ghost block" onclick="brandDlg()">โลโก้ร้าน (หน้าใส่ PIN · แถบบน · จอลูกค้า · ไอคอนแท็บ)</button><button class="btn ghost block" style="margin-top:8px" onclick="fontDlg()">ฟอนต์และขนาดตัวอักษร</button><button class="btn ghost block" style="margin-top:8px" onclick="vatDlg()">สถานะ VAT</button><button class="btn ghost block" style="margin-top:8px" onclick="go('svcset')">ค่าบริการ โอนเงิน/เติมเงิน/จ่ายบิล</button>`;
   el.insertBefore(c, el.children[2] || null);
 };
+
+/* ---------- โลโก้ร้าน (เจ้าของเปลี่ยนเองได้) ---------- */
+async function brandFile(f) { return shrinkLogo(await loadImg(URL.createObjectURL(f))); }
+// เก็บในช่อง Google Sheet ได้ไม่เกิน ~50,000 ตัวอักษร → ย่อ/บีบอัดจนพอดี
+function shrinkLogo(im) {
+  for (const W of [520, 440, 360, 300, 240]) {
+    const s = Math.min(1, W / im.width, (W * .77) / im.height), c = document.createElement('canvas');
+    c.width = Math.round(im.width * s); c.height = Math.round(im.height * s); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    let d = c.toDataURL('image/png'); if (d.length < 45000) return d;
+    for (const q of [.92, .85, .75]) { d = c.toDataURL('image/webp', q); if (d.startsWith('data:image/webp') && d.length < 45000) return d; }
+  }
+  throw new Error('รูปโลโก้ใหญ่เกินไป');
+}
+async function toWhite(src) { // ทำโลโก้สีขาว (ใช้บนพื้นแดง) จากโลโก้พื้นโปร่งใส
+  const im = await loadImg(src), c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+  const D = x.getImageData(0, 0, c.width, c.height), a = D.data; for (let i = 0; i < a.length; i += 4) { a[i] = a[i + 1] = a[i + 2] = 255; } x.putImageData(D, 0, 0); return shrinkLogo(await loadImg(c.toDataURL('image/png')));
+}
+function brandDlg() {
+  let col = S.settings.brandLogo || '', wh = S.settings.brandLogoW || '';
+  const ov = sheet('โลโก้ร้าน', `<div class="small muted" style="margin-bottom:8px">ใช้ไฟล์ PNG พื้นโปร่งใสจะสวยที่สุด (JPG ได้ แต่จะเห็นพื้นสี่เหลี่ยม) · ระบบย่อขนาดให้อัตโนมัติ</div>
+    <div class="grid2"><div><div class="small" style="font-weight:600">1. โลโก้สี — ใช้บนพื้นขาว (หน้าใส่ PIN)</div><div id="pc" style="height:140px;background:#fff;border-radius:12px;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;margin:6px 0"></div><label class="btn ghost sm">อัปโหลด<input type="file" accept="image/png,image/jpeg,image/webp" id="fc" hidden></label></div>
+    <div><div class="small" style="font-weight:600">2. โลโก้สีขาว — ใช้บนพื้นแดง (แถบบน · จอลูกค้า · ไอคอนแท็บ)</div><div id="pw" style="height:140px;background:var(--red);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:6px 0"></div><label class="btn ghost sm">อัปโหลด<input type="file" accept="image/png,image/jpeg,image/webp" id="fw" hidden></label> <button class="btn ghost sm" id="mkw">ทำจากโลโก้สี</button></div></div>
+    <div class="tiny muted" style="margin-top:8px">ไอคอนบนหน้าจอมือถือ/แท็บเล็ต (shortcut) เป็นไฟล์ในเว็บ — ถ้าต้องการเปลี่ยนไอคอนนั้นด้วย แจ้งผู้ดูแลระบบให้ทำไฟล์ไอคอนใหม่ แล้วลบ shortcut เดิมและเพิ่มใหม่</div>`,
+    `<button class="btn ghost" id="rs">ใช้โลโก้เริ่มต้น</button><button class="btn grow" id="ok">บันทึก</button>`);
+  const pv = () => { $('#pc', ov).innerHTML = `<img src="${col || 'logo.png'}" style="max-height:120px;max-width:90%;object-fit:contain">`; $('#pw', ov).innerHTML = `<img src="${wh || 'logo-white.png'}" style="max-height:120px;max-width:90%;object-fit:contain">`; };
+  $('#fc', ov).onchange = async e => { const f = e.target.files[0]; if (f) { try { col = await brandFile(f); pv(); } catch (x) { toast(x.message, 1); } } };
+  $('#fw', ov).onchange = async e => { const f = e.target.files[0]; if (f) { try { wh = await brandFile(f); pv(); } catch (x) { toast(x.message, 1); } } };
+  $('#mkw', ov).onclick = async () => { wh = await toWhite(col || 'logo.png'); pv(); };
+  $('#rs', ov).onclick = () => { col = ''; wh = ''; pv(); };
+  $('#ok', ov).onclick = async () => { try { busy(1); await saveSetting('brandLogo', col); await saveSetting('brandLogoW', wh); busy(0); ov.remove(); toast('บันทึกโลโก้แล้ว'); Brand.favicon(); go(S.view, S.viewArg); } catch (e) { busy(0); toast(e.message, 1); } };
+  pv();
+}

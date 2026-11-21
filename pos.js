@@ -50,6 +50,7 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .pclock{flex:none;margin:0 6px;padding:2px 14px;border-radius:12px;background:#0003;color:#fff;font-family:var(--fh);font-size:30px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:.5px;white-space:nowrap}
 .pclock small{font-size:15px;font-weight:600;opacity:.85;margin-left:4px}
 @media (max-width:700px){.who2{font-size:14px;padding:4px 10px 4px 5px;gap:6px}.who2 b{max-width:90px}.who2 .ic{width:22px;height:22px}.pclock{font-size:24px;padding:2px 10px}}
+@media (max-width:520px),(max-height:480px){.pclock{display:none!important}}
 @media (max-width:520px){.pbar{grid-template-columns:auto 1fr auto!important}.pbar #psvc,.pbar .fsb,.pbar [data-fs]{display:none}.pbar .iconbtn{width:40px;min-width:40px}.pbar #pcam{background:#ffffff26;border-radius:10px}.pside.l .ttl{display:none}.who2 .ic{display:none}.who2{padding:4px 9px;margin:0 2px}.who2 b{max-width:70px}.pclock{font-size:20px;padding:1px 7px;margin:0 2px}.pclock small{display:none}}
 .pop{position:fixed;z-index:60;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);min-width:240px;max-width:min(320px,92vw);overflow:hidden;animation:fi .12s}
 .pop button{display:flex;width:100%;align-items:center;gap:12px;border:0;background:#fff;padding:0 18px;min-height:56px;font-size:17px;text-align:left;cursor:pointer;border-bottom:1px solid #F0F0F0}
@@ -94,14 +95,30 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 })();
 
 /* ---------- รูปสินค้า ---------- */
+Promise.resolve().then(() => { window.Img = Img; Img.load(); });
+document.addEventListener('mm:images', () => { clearTimeout(Img.rt); Img.rt = setTimeout(() => { if (S.view === 'pos' && window.POS && POS.el) POS.render(); else if (S.view === 'products' && !$('.ov')) go('products'); }, 300); });
+// รูปสินค้าเก็บใน IndexedDB (เก็บได้หลายสิบ MB) — localStorage เต็มเร็วเมื่อมีรูปหลายร้อยรูป ทำให้รูปหายหลังเปิดใหม่
 const Img = {
-  map: LS.get('images', {}),
+  map: {}, ready: null,
   get(sku) { return this.map[sku] || ''; },
+  load() {
+    if (this.ready) return this.ready;
+    return this.ready = (async () => {
+      const c = window.Cache ? await Cache.get('images') : null;
+      if (c && c.v) this.map = c.v.map || {}; else { this.map = LS.get('images', {}); LS.del('imagesAt'); }
+      LS.del('images'); // ย้ายออกจาก localStorage แล้ว
+      if (Object.keys(this.map).length) document.dispatchEvent(new Event('mm:images'));
+    })();
+  },
+  persist() { if (window.Cache) Cache.set('images', { map: this.map, at: this.at || '' }); },
   async sync() {
+    await this.load();
     try {
-      const r = await api('imagesSince', { since: LS.get('imagesAt', '') });
-      if (r.rows.length) { r.rows.forEach(x => { if (x.data) this.map[x.sku] = x.data; else delete this.map[x.sku]; }); LS.set('images', this.map); }
-      LS.set('imagesAt', r.now || '');
+      const c = window.Cache ? await Cache.get('images') : null, since = (c && c.v && c.v.at) || '';
+      const r = await api('imagesSince', { since });
+      if (r.rows.length) r.rows.forEach(x => { if (x.data) this.map[x.sku] = x.data; else delete this.map[x.sku]; });
+      this.at = r.now || since; this.persist();
+      if (r.rows.length) document.dispatchEvent(new Event('mm:images'));
     } catch (e) { }
   },
   async shrink(file, size = 240) {
@@ -112,8 +129,8 @@ const Img = {
     while (d.length > 30000 && q > .35) { q -= .1; d = cv.toDataURL('image/jpeg', q); }
     return d;
   },
-  async save(sku, data) { await api('upsert', { table: 'Images', rows: [{ sku, data }] }); this.map[sku] = data; LS.set('images', this.map); },
-  async remove(sku) { await api('remove', { table: 'Images', ids: [sku] }); delete this.map[sku]; LS.set('images', this.map); }
+  async save(sku, data) { await api('upsert', { table: 'Images', rows: [{ sku, data }] }); this.map[sku] = data; this.persist(); },
+  async remove(sku) { await api('remove', { table: 'Images', ids: [sku] }); delete this.map[sku]; this.persist(); }
 };
 
 /* ---------- คิวส่งบิลขึ้นเซิร์ฟเวอร์ (ขายได้แม้เน็ตหลุด) ---------- */
@@ -268,15 +285,22 @@ function keypad(title, init, cb, opt = {}) {
 }
 
 /* ---------- ขอสิทธิ์ชั่วคราวด้วยรหัสเจ้าของ (สำหรับการกระทำที่ทำในเครื่อง เช่น แก้ราคา ส่วนลด ลบรายการ) ---------- */
+// เจ้าของร้านใส่รหัสครั้งเดียวตอนเข้าใช้ฟังก์ชัน (เช่น นับสต็อก) แล้วใช้งานต่อได้จนออกจากหน้านั้น
+async function ownerGate(reason, scope) {
+  if (!S.user || S.user.role === 'owner' || Elev.ok) return true;
+  const pin = await ownerPinDlg(reason); if (!pin) return false;
+  try { busy(1, 'กำลังตรวจรหัส...'); await apiRaw('checkPin', { ownerPin: pin }); busy(0); Elev.set(pin, scope); OfflineAuth.rememberOwnerPin(pin); return true; }
+  catch (e) { busy(0); if (e.offline && await OfflineAuth.checkOwnerPin(pin)) { Elev.set(pin, scope); toast('อนุมัติแบบออฟไลน์'); return true; } toast(String(e.message).replace(/^PIN_\w+:\s*/, ''), 1); return false; }
+}
 async function gate(perm) {
   if (canStrict(perm) || Elev.ok) return true;
   if (S.perms[perm] !== 'pin') { toast('ไม่มีสิทธิ์: ' + ((S.defs[perm] || [])[0] || perm), 1); return false; }
   const pin = await ownerPinDlg((S.defs[perm] || [])[0] || '');
   if (!pin) return false;
-  try { busy(1, 'กำลังตรวจรหัส...'); await apiRaw('checkPin', { ownerPin: pin }); busy(0); Elev.set(pin); OfflineAuth.rememberOwnerPin(pin); return true; }
+  try { busy(1, 'กำลังตรวจรหัส...'); await apiRaw('checkPin', { ownerPin: pin }); busy(0); Elev.set(pin, perm === 'editProducts' && ELEV_AREA.includes(S.view) ? 'products' : ''); OfflineAuth.rememberOwnerPin(pin); return true; }
   catch (e) {
     busy(0);
-    if (e.offline && await OfflineAuth.checkOwnerPin(pin)) { Elev.set(pin); toast('อนุมัติแบบออฟไลน์'); return true; }
+    if (e.offline && await OfflineAuth.checkOwnerPin(pin)) { Elev.set(pin, perm === 'editProducts' && ELEV_AREA.includes(S.view) ? 'products' : ''); toast('อนุมัติแบบออฟไลน์'); return true; }
     toast(e.offline ? 'ออฟไลน์: เครื่องนี้ยังไม่เคยบันทึกรหัสเจ้าของ (ให้เจ้าของเข้าระบบ/อนุมัติแบบออนไลน์ในเครื่องนี้ 1 ครั้ง)' : e.message.replace(/^PIN_\w+:\s*/, ''), 1); return false;
   }
 }
@@ -390,7 +414,7 @@ const POS = {
       $('#pmain', this.el).innerHTML = `<div style="padding:8px"><input class="in" id="aq" placeholder="ค้นหาชื่อ / บาร์โค้ด" value="${esc(this.aq || '')}"></div><div class="list" id="al" style="margin:0 8px 8px;overflow:auto;flex:1"></div>` + this.tabsHTML(tabs);
       const drawAll = () => {
         const res = searchProducts(this.aq || '').filter(p => p.available !== 'N').slice(0, 150);
-        $('#al', this.el).innerHTML = res.map(p => `<div class="item" data-sku="${esc(p.sku)}" style="padding:10px 12px">${Img.get(p.sku) ? `<img src="${Img.get(p.sku)}" style="width:40px;height:40px;border-radius:8px;object-fit:cover">` : `<div class="av" style="background:${catColor(p.category)};color:#fff">${esc(Array.from(p.name)[0] || '')}</div>`}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}${p.trackStock === 'Y' ? ' · คงเหลือ ' + num(p.stock) : ''}</div></div><div class="price" style="font-size:16px">${num(p.price) ? baht(p.price) : 'ตัวแปร'}</div></div>`).join('') || '<div class="empty">ไม่พบสินค้า</div>';
+        $('#al', this.el).innerHTML = res.map(p => `<div class="item" data-sku="${esc(p.sku)}" style="padding:10px 12px">${pthumb(p, 40)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}${p.trackStock === 'Y' ? ' · คงเหลือ ' + num(p.stock) : ''}</div></div><div class="price" style="font-size:16px">${num(p.price) ? baht(p.price) : 'ตัวแปร'}</div></div>`).join('') || '<div class="empty">ไม่พบสินค้า</div>';
         $$('#al [data-sku]', this.el).forEach(r => r.onclick = () => this.add(IDX.bySku[r.dataset.sku]));
       };
       $('#aq', this.el).oninput = e => { this.aq = e.target.value; drawAll(); };
@@ -539,7 +563,7 @@ const POS = {
       $('#nir', ov).style.display = '';
       const p = IDX.bySku[t.ref];
       $('#refw', ov).innerHTML = `<div class="row"><div class="grow small">${p ? `<b>${esc(p.name)}</b> · ${baht(p.price)}` : '<span class="muted">ยังไม่เลือกสินค้า</span>'}</div><button class="btn sm" id="pk">เลือกสินค้า</button></div>`;
-      $('#pk', ov).onclick = () => { let q = ''; const o2 = sheet('เลือกสินค้า', `<input class="in" id="q" placeholder="ค้นหา..."><div class="list" id="l" style="margin-top:8px;max-height:58vh;overflow-y:auto"></div>`); const dr = () => { const R = searchProducts(q); $('#l', o2).innerHTML = R.length ? R.slice(0, 80).map(p => `<div class="item" data-s="${esc(p.sku)}"><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.category || '')}${p.barcode ? ' · ' + esc(p.barcode) : ''}</div></div><div class="price" style="font-size:16px;white-space:nowrap">${baht(p.price)}</div></div>`).join('') + (R.length > 80 ? `<div class="item small muted center">พิมพ์ค้นหาเพื่อดูเพิ่ม (พบ ${R.length.toLocaleString()} รายการ)</div>` : '') : `<div class="empty small">${S.products.length ? 'ไม่พบสินค้าที่ค้นหา' : 'เครื่องนี้ยังไม่มีรายการสินค้า' + (S.apiUrl ? ' — กำลังโหลด…' : ' (โหมดทดลอง ยังไม่ได้เชื่อมฐานข้อมูลร้าน)')}</div>`; $$('[data-s]', o2).forEach(x => x.onclick = () => { t.ref = x.dataset.s; o2.remove(); refw(); }); }; $('#q', o2).oninput = e => { q = e.target.value; dr(); }; dr(); setTimeout(() => $('#q', o2).focus(), 100); };
+      $('#pk', ov).onclick = () => { let q = ''; const o2 = sheet('เลือกสินค้า', `<input class="in" id="q" placeholder="ค้นหา..."><div class="list" id="l" style="margin-top:8px;max-height:58vh;overflow-y:auto"></div>`); const dr = () => { const R = searchProducts(q); $('#l', o2).innerHTML = R.length ? R.slice(0, 80).map(p => `<div class="item" data-s="${esc(p.sku)}">${pthumb(p, 44)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.category || '')}${p.barcode ? ' · ' + esc(p.barcode) : ''}</div></div><div class="price" style="font-size:16px;white-space:nowrap">${baht(p.price)}</div></div>`).join('') + (R.length > 80 ? `<div class="item small muted center">พิมพ์ค้นหาเพื่อดูเพิ่ม (พบ ${R.length.toLocaleString()} รายการ)</div>` : '') : `<div class="empty small">${S.products.length ? 'ไม่พบสินค้าที่ค้นหา' : 'เครื่องนี้ยังไม่มีรายการสินค้า' + (S.apiUrl ? ' — กำลังโหลด…' : ' (โหมดทดลอง ยังไม่ได้เชื่อมฐานข้อมูลร้าน)')}</div>`; $$('[data-s]', o2).forEach(x => x.onclick = () => { t.ref = x.dataset.s; o2.remove(); refw(); }); }; $('#q', o2).oninput = e => { q = e.target.value; dr(); }; dr(); setTimeout(() => $('#q', o2).focus(), 100); };
     };
     seg('tt', 't', 't'); seg('sh', 'shape', 's'); refw();
     $$('#sw .swatch', ov).forEach(s => s.onclick = () => { t.color = s.dataset.c; $$('#sw .swatch', ov).forEach(x => x.classList.toggle('on', x === s)); });
@@ -616,7 +640,7 @@ const POS = {
   search() {
     let q = '';
     const ov = sheet('ค้นหาสินค้า', `<input class="in" id="q" placeholder="ชื่อ / บาร์โค้ด / รหัส" inputmode="search"><div class="list" id="l" style="margin-top:8px"></div>`);
-    const dr = () => { $('#l', ov).innerHTML = (q ? searchProducts(q) : []).filter(p => p.available !== 'N').slice(0, 60).map(p => `<div class="item" data-s="${esc(p.sku)}"><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}${p.trackStock === 'Y' ? ' · คงเหลือ ' + num(p.stock) : ''}</div></div><div class="price" style="font-size:16px">${num(p.price) ? baht(p.price) : 'ตัวแปร'}</div></div>`).join(''); $$('[data-s]', ov).forEach(x => x.onclick = () => { this.add(IDX.bySku[x.dataset.s]); toast('เพิ่ม ' + IDX.bySku[x.dataset.s].name); }); };
+    const dr = () => { $('#l', ov).innerHTML = (q ? searchProducts(q) : []).filter(p => p.available !== 'N').slice(0, 60).map(p => `<div class="item" data-s="${esc(p.sku)}">${pthumb(p, 44)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}${p.trackStock === 'Y' ? ' · คงเหลือ ' + num(p.stock) : ''}</div></div><div class="price" style="font-size:16px">${num(p.price) ? baht(p.price) : 'ตัวแปร'}</div></div>`).join(''); $$('[data-s]', ov).forEach(x => x.onclick = () => { this.add(IDX.bySku[x.dataset.s]); toast('เพิ่ม ' + IDX.bySku[x.dataset.s].name); }); };
     $('#q', ov).oninput = e => { q = e.target.value; dr(); };
     $('#q', ov).onkeydown = e => { if (e.key === 'Enter' && q) { if (this.scan(q)) { $('#q', ov).value = q = ''; dr(); } } };
     setTimeout(() => $('#q', ov).focus(), 100);
@@ -628,7 +652,7 @@ const POS = {
       ['ใบเสร็จรับเงิน' + (seesSales() ? '' : ' (วันนี้)'), IC.receipt, () => go('salesreceipts')],
       ['เช็คราคา / สแกน', IC.scan, () => go('scan')],
       ['เครื่องยิงบาร์โค้ด (ทดสอบ/ตั้งค่า)', IC.scan, () => go('scannerset')],
-      k && ['สินค้า' + (canStrict('editProducts') ? '' : ' (แก้ไขต้องใช้รหัส)'), IC.box, () => go('products')],
+      k && ['สินค้า', IC.box, () => go('products')],
       k && can('stockCount') && ['ตรวจนับสต็อก', IC.count, () => go('stockcount')],
       k && can('customers') && ['ฐานลูกค้า', IC.user, () => go('customers')],
       k && ['พิมพ์ฉลาก/บาร์โค้ด', IC.tag, () => go('labels')],

@@ -15,7 +15,7 @@ const Display = {
   last: null, t: null, dc: null, pc: null, offerId: '', sigT: null,
   push(state) {
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
-    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
+    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
     this.last = state;
     try { this.bc && this.bc.postMessage(state); } catch (e) { }
     const direct = this.send(state);
@@ -58,7 +58,7 @@ window.Display = Display;
 if (Display.bc) Display.bc.onmessage = e => { if (e.data && e.data.hello && Display.last && S.view === 'pos') Display.bc.postMessage(Display.last); };
 document.addEventListener('mm:booted', () => Display.listen());
 
-const dispLogoHTML = (m, img, shop) => m === 'image' && img ? `<img src="${img}" alt="" style="height:clamp(26px,7vmin,60px);width:auto;max-width:60vw;object-fit:contain;display:block">` : m === 'name' ? `<b>${esc(shop || 'ร้านเมย์ มินิมาร์ท')}</b>` : '<span style="font-family:var(--flogo);font-style:italic;display:inline-flex;align-items:baseline;gap:.25em;line-height:1"><small style="font-size:.55em;font-weight:700;font-style:normal">ร้าน</small><b style="font-size:1.45em;font-weight:800;letter-spacing:-1px">เมย์</b><i style="font-size:.7em;font-weight:600">Mini Mart</i></span>';
+const dispLogoHTML = (m, img, shop, brandW, big) => m === 'image' && img ? `<img src="${img}" alt="" style="height:${big ? 'clamp(60px,22vmin,200px)' : 'clamp(26px,7vmin,60px)'};width:auto;max-width:${big ? '92%' : '60vw'};object-fit:contain;display:block">` : m === 'name' ? `<b>${esc(shop || 'ร้านเมย์ มินิมาร์ท')}</b>` : `<img src="${brandW || 'logo-white.png'}" alt="ร้านเมย์ Mini Mart" style="height:${big ? 'clamp(60px,22vmin,200px)' : 'clamp(28px,7.5vmin,64px)'};width:auto;max-width:${big ? '92%' : '60vw'};object-fit:contain;display:block">`;
 const bkk = () => new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
 const LB = v => `<span class="cu">฿</span>${money(v, num(v) % 1 ? 2 : 0)}`;
 
@@ -112,8 +112,10 @@ VIEWS.display = (root, hash) => {
    .dsp .co{background:#FFF7E0;color:#8a5a00;border-radius:1.5vmin;padding:.3em .7em;font-weight:700}
    .dfs{flex:none;border:0;background:#ffffff26;color:#fff;border-radius:10px;width:clamp(34px,7vmin,54px);height:clamp(34px,7vmin,54px);display:flex;align-items:center;justify-content:center;margin-left:4px;cursor:pointer}
    .dfs svg{width:60%;height:60%}
-   .dsp .rp .rlg{color:#fff;font-size:clamp(22px,6.5vmin,64px);margin-bottom:1vmin;max-width:100%;display:flex;justify-content:center}
-   .dsp .rp .rlg img{height:clamp(40px,14vmin,140px)!important;max-width:100%!important}
+   .dsp .rp:not(.hasqr){justify-content:flex-start;gap:0}
+   .dsp .rp .rlg{flex:1 1 0;min-height:0;width:100%;color:#fff;font-size:clamp(22px,6.5vmin,64px);display:flex;align-items:center;justify-content:center}
+   .dsp .rp:not(.hasqr)::after{content:'';flex:.35 1 0}
+   .dsp .rp .rlg img{max-height:100%!important;max-width:92%!important}
    .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:#bbb;margin-right:.3em;vertical-align:middle}.dot.on{background:#4ade80}
    @media (orientation:portrait){.dsp .bd{flex-direction:column}.dsp .lst{flex:1}.dsp .rp{flex:none;padding:1.5vmin 3vmin}.dsp .qr img{width:min(56vw,34vh)}}
   </style><div class="dsp" id="d"><div class="hd"><span class="sh" id="sh"></span><span class="ck" id="ck"></span><button class="dfs" id="fs" title="ย่อ/ขยายเต็มจอ"></button></div><div class="bd" id="bd"></div><div class="tot" id="tt" hidden></div><div class="ft"><span id="cnt"><span class="dot" id="lk"></span></span><span class="cs" id="cs"></span></div></div>`;
@@ -151,7 +153,7 @@ VIEWS.display = (root, hash) => {
   const draw = s => {
     cur = s;
     const lg = (s && s.logo) || '', lm = (s && s.logoMode) || 'mark';
-    $('#sh', root).innerHTML = dispLogoHTML(lm, lg, (s && s.shop) || S.settings.shopName);
+    $('#sh', root).innerHTML = dispLogoHTML(lm, lg, (s && s.shop) || S.settings.shopName, s && s.brandW);
     $('#cs', root).textContent = s && s.cashier ? 'พนักงาน: ' + s.cashier : '';
     const cnt = $('#cnt', root); cnt.innerHTML = `<span class="dot ${Display.rx && Display.rx.readyState === 'open' ? 'on' : ''}" id="lk"></span>` + (s && s.mode !== 'idle' && s.mode !== 'done' && s.count ? `${s.count} รายการ` : '');
     if (!s || s.mode === 'idle' || !s.mode) {
@@ -167,7 +169,7 @@ VIEWS.display = (root, hash) => {
     const amt = s.mode === 'pay' && s.amount != null ? s.amount : s.total;
     // ฝั่งขวา 1/3 สีแดง: ยอดรวม · QR ชำระเงิน · ส่วนลด · สมาชิก · เงินสดที่ลูกค้าได้รับ (แนวตั้ง: อยู่ด้านล่าง)
     const qr = s.mode === 'pay' && s.qr ? `<div class="qr"><img src="${s.qr}"></div><div class="qrl">สแกนจ่าย${s.qrLabel ? ' · ' + esc(s.qrLabel) : ''}</div>` : '';
-    bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr || `<div class="rlg">${dispLogoHTML(s.logoMode || 'mark', s.logo || '', s.shop || S.settings.shopName)}</div>`}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}</div>`;
+    bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr || `<div class="rlg">${dispLogoHTML(s.logoMode || 'mark', s.logo || '', s.shop || S.settings.shopName, s.brandW, true)}</div>`}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}</div>`;
     tt.hidden = true;
     const items = s.items || [];
     // จำนวนที่ถูกตัดตั้งแต่ฝั่ง POS (ส่งมาแค่ 60 ล่าสุด)
@@ -247,7 +249,7 @@ VIEWS.displayset = el => {
       : `<button class="btn block" id="pair" ${S.apiUrl ? '' : 'disabled'}>สร้างรหัสจับคู่จอลูกค้า</button>`}
    </div>
    ${isOwner() ? `<div class="card" id="lgw"><h3>โลโก้แถบบนของจอลูกค้า</h3>
-     <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="mark" ${(dc.logoMode || 'mark') === 'mark' ? 'checked' : ''}> โลโก้ร้าน "ร้าน เมย์ Mini Mart" (ค่าเริ่มต้น)</label>
+     <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="mark" ${(dc.logoMode || 'mark') === 'mark' ? 'checked' : ''}> โลโก้ร้าน (ตั้งที่ ตั้งค่า › โลโก้ร้าน) — ค่าเริ่มต้น</label>
      <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="image" ${dc.logoMode === 'image' ? 'checked' : ''}> รูปโลโก้ของร้าน (แนวนอน · พื้นโปร่งใสจะสวยที่สุด)</label>
      <label class="row" style="margin-bottom:8px"><input type="radio" name="lgm" value="name" ${dc.logoMode === 'name' ? 'checked' : ''}> ชื่อร้านแบบตัวอักษร</label>
      <div id="lgup" style="margin-bottom:8px"><label class="btn ghost sm">อัปโหลดรูปโลโก้<input type="file" accept="image/*" id="lgf" hidden></label></div>
@@ -263,7 +265,7 @@ VIEWS.displayset = el => {
   let lgImg = dc.logo || '';
   const lw = $('#lgw', el);
   if (lw) {
-    const pv = () => { const m = $('[name=lgm]:checked', el).value; $('#lgp', el).innerHTML = `<div style="background:var(--red);color:#fff;border-radius:10px;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;font-size:22px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${dispLogoHTML(m, lgImg, S.settings.shopName)}</span><b style="font-size:28px">12:00 น.</b></div>`; $('#lgup', el).style.display = m === 'image' ? '' : 'none'; };
+    const pv = () => { const m = $('[name=lgm]:checked', el).value; $('#lgp', el).innerHTML = `<div style="background:var(--red);color:#fff;border-radius:10px;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;font-size:22px"><span style="display:flex;align-items:center;min-width:0;overflow:hidden">${dispLogoHTML(m, lgImg, S.settings.shopName, Brand.custom() ? Brand.white() : '')}</span><b style="font-size:28px">12:00 น.</b></div>`; $('#lgup', el).style.display = m === 'image' ? '' : 'none'; };
     $$('[name=lgm]', el).forEach(r => r.onchange = pv);
     $('#lgf', el).onchange = async e => { const f = e.target.files[0]; if (!f) return; const im = await loadImg(URL.createObjectURL(f)); const h = Math.min(120, im.height), w = Math.round(im.width * h / im.height), cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(im, 0, 0, w, h); lgImg = cv.toDataURL('image/png'); if (lgImg.length > 60000) lgImg = cv.toDataURL('image/webp', .85); pv(); };
     pv();

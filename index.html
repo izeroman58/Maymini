@@ -8,10 +8,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ร้านเมย์">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png" id="favi">
 <meta name="mobile-web-app-capable" content="yes">
-<title>May MiniMart — ระบบจัดการร้านเมย์</title>
+<title>ร้านเมย์ Mini Mart</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,500;0,600;0,700;0,800;1,600;1,800&family=Roboto:wght@400;500;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai+Looped:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700;800&family=Kanit:wght@400;500;600&family=Bai+Jamjuree:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -146,6 +146,7 @@ body.kiosk main{padding-bottom:calc(24px + var(--safe-b))}
 .pinpad{display:grid;grid-template-columns:repeat(3,72px);gap:12px;justify-content:center;margin-top:14px}
 .pinpad button{height:60px;border-radius:18px;border:0;background:#fff;box-shadow:var(--sh);font-family:var(--fh);font-size:22px;font-weight:600;cursor:pointer}
 .pinpad button:active{background:var(--red-l)}
+@media (max-width:520px),(max-height:480px){.vclk{display:none}}
 .dots{display:flex;gap:12px;justify-content:center;margin:12px 0 4px}
 .dots i{width:14px;height:14px;border-radius:50%;background:#E3DADB}
 .dots i.on{background:var(--red)}
@@ -190,7 +191,23 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.20';
+const APP_VER = '2.6.22';
+/* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
+const Brand = {
+  color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
+  white() { return (window.S && S.settings && S.settings.brandLogoW) || 'logo-white.png'; }, // พื้นแดง
+  custom() { return !!(window.S && S.settings && S.settings.brandLogoW); },
+  async favicon() {
+    try {
+      const src = this.white(); if (!this.custom()) { $('#favi').href = 'favicon.png'; return; }
+      const im = await loadImg(src), c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+      x.fillStyle = '#D6001C'; x.beginPath(); x.roundRect ? x.roundRect(0, 0, 64, 64, 14) : x.rect(0, 0, 64, 64); x.fill();
+      const s = Math.min(54 / im.width, 54 / im.height), w = im.width * s, h = im.height * s; x.drawImage(im, (64 - w) / 2, (64 - h) / 2, w, h);
+      $('#favi').href = c.toDataURL('image/png');
+    } catch (e) { }
+  }
+};
+document.addEventListener('mm:settings', () => Brand.favicon());
 const SHOP_API = 'https://script.google.com/macros/s/AKfycbxOKJplEHqxF0Jztb0D6ap9RofGyeZFhLB3ovLVEfBD87LMHET00XexsLSI8EEMp4ml5g/exec';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -358,25 +375,33 @@ async function compressImage(file, max = 1800, q = .82) {
    ========================================================= */
 /* รหัสเจ้าของร้าน: ถ้าเซิร์ฟเวอร์ตอบ PIN_REQUIRED จะเปิดแป้นให้เจ้าของกดรหัส แล้วส่งคำสั่งเดิมซ้ำ
    รหัสที่ถูกต้องใช้ต่อได้ 3 นาที (หรือจนกดล็อก) */
+/* สิทธิ์เจ้าของชั่วคราว: ใส่รหัสเจ้าของครั้งเดียวตอนเข้าแก้ไขสินค้า แล้วแก้ได้หลายรายการต่อเนื่อง
+   หมดเมื่อ: ออกจากหน้าจัดการสินค้า · ออกจากระบบ · แตะป้ายเพื่อล็อก · ไม่มีการใช้งาน 10 นาที (งานอื่นที่ใช้รหัส: 3 นาที) */
+const ELEV_AREA = ['products', 'scan', 'labels', 'categories'];
+const ELEV_AREAS = { products: ELEV_AREA, stock: ['stockcount'] };
 const Elev = {
-  pin: null, until: 0,
+  pin: null, until: 0, scope: '',
   get ok() { return this.pin && Date.now() < this.until; },
-  clear() { this.pin = null; this.until = 0; const b = $('#elev'); b && b.remove(); },
-  set(pin) {
-    this.pin = pin; this.until = Date.now() + 180e3;
+  clear() { this.pin = null; this.until = 0; this.scope = ''; clearInterval(this.t); const b = $('#elev'); b && b.remove(); },
+  touch() { if (this.scope && this.ok) this.until = Date.now() + 600e3; },
+  set(pin, scope) {
+    this.pin = pin; this.scope = scope || ''; this.until = Date.now() + (this.scope ? 600e3 : 180e3);
     let b = $('#elev'); if (!b) { b = document.createElement('div'); b.id = 'elev'; b.className = 'outbox'; b.style.cssText = 'background:#7B3FB8;top:calc(92px + var(--safe-t));cursor:pointer'; b.onclick = () => { this.clear(); toast('ล็อกสิทธิ์เจ้าของแล้ว'); }; document.body.appendChild(b); }
-    clearInterval(this.t); this.t = setInterval(() => { if (!this.ok) { this.clear(); clearInterval(this.t); } else b.textContent = '🔓 สิทธิ์เจ้าของ ' + Math.ceil((this.until - Date.now()) / 1000) + ' วิ · แตะเพื่อล็อก'; }, 1000);
+    const paint = () => { if (!this.ok) { this.clear(); return; } b.textContent = this.scope ? (this.scope === 'stock' ? '🔓 โหมดนับสต็อก (เจ้าของอนุมัติ) · แตะเพื่อล็อก' : '🔓 โหมดแก้ไขสินค้า (เจ้าของอนุมัติ) · แตะเพื่อล็อก') : '🔓 สิทธิ์เจ้าของ ' + Math.ceil((this.until - Date.now()) / 1000) + ' วิ · แตะเพื่อล็อก'; };
+    clearInterval(this.t); this.t = setInterval(paint, 1000); paint();
   }
 };
+document.addEventListener('pointerdown', () => Elev.touch(), true);
 function ownerPinDlg(reason) {
   return new Promise(res => {
     let pin = '';
-    const ov = sheet('ต้องใช้รหัสเจ้าของร้าน', `<div class="center small muted" style="margin-bottom:4px">${esc(reason || '')}</div><div class="dots">${'<i></i>'.repeat(6)}</div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:#7B3FB8;color:#fff;font-size:15px">ยืนยัน</button></div>`, '', { onClose: () => res(null) });
+    const ov = sheet('ต้องใช้รหัสเจ้าของร้าน', `<div class="center small muted" style="margin-bottom:4px">${esc(reason || '')}</div><div class="dots">${'<i></i>'.repeat(4)}</div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:#7B3FB8;color:#fff;font-size:15px">ยืนยัน</button></div>`, '', { onClose: () => res(null) });
     const dots = () => $$('.dots i', ov).forEach((d, i) => d.classList.toggle('on', i < pin.length));
     const ok = () => { if (pin.length < 4) return; ov.remove(); res(pin); };
-    $$('[data-n]', ov).forEach(b => b.onclick = () => { if (pin.length < 8) pin += b.dataset.n; dots(); });
+    const add = d => { if (pin.length >= 4) return; pin += d; dots(); if (pin.length === 4) setTimeout(ok, 120); };
+    $$('[data-n]', ov).forEach(b => b.onclick = () => add(b.dataset.n));
     $('[data-c]', ov).onclick = () => { pin = ''; dots(); }; $('[data-ok]', ov).onclick = ok;
-    ov.tabIndex = 0; ov.focus(); ov.addEventListener('keydown', e => { if (/^\d$/.test(e.key) && pin.length < 8) { pin += e.key; dots(); } else if (e.key === 'Backspace') { pin = pin.slice(0, -1); dots(); } else if (e.key === 'Enter') ok(); });
+    ov.tabIndex = 0; ov.focus(); ov.addEventListener('keydown', e => { if (/^\d$/.test(e.key)) add(e.key); else if (e.key === 'Backspace') { pin = pin.slice(0, -1); dots(); } else if (e.key === 'Enter') ok(); });
   });
 }
 async function api(action, payload = {}, _retry) {
@@ -390,7 +415,7 @@ async function api(action, payload = {}, _retry) {
       if (!pin) throw new Error('ยกเลิก — ต้องใช้รหัสเจ้าของร้าน');
       if (was) busy(1, was);
       const r = await api(action, { ...payload, ownerPin: pin }, true);
-      Elev.set(pin); return r;
+      Elev.set(pin, ELEV_AREA.includes(S.view) ? 'products' : ''); return r;
     }
     e.message = e.message.replace(/^PIN_\w+:\s*/, ''); throw e;
   }
@@ -497,6 +522,12 @@ function findByCode(code) {
   if (/^20\d{11}$/.test(code)) { const item = code.slice(2, 7), price = Number(code.slice(7, 12)) / 100; const p = S.products.find(x => String(x.sku).padStart(5, '0').slice(-5) === item); if (p) return { p, price }; }
   if (IDX.bySku[code]) return { p: IDX.bySku[code] };
   return null;
+}
+/* รูปสินค้าเล็กในรายการ (ไม่มีรูป = ตัวอักษรแรกบนสีหมวด) */
+function pthumb(p, sz = 44) {
+  const src = typeof Img !== 'undefined' && p ? Img.get(p.sku) : '';
+  return src ? `<img src="${src}" alt="" loading="lazy" style="width:${sz}px;height:${sz}px;border-radius:10px;object-fit:cover;flex:none;background:#fff">`
+    : `<div class="av" style="width:${sz}px;height:${sz}px;flex:none;background:${catColor(p && p.category)};color:#fff">${esc(Array.from((p && p.name) || '?')[0] || '?')}</div>`;
 }
 function searchProducts(q, f = {}) {
   const toks = String(q || '').toLowerCase().split(/\s+/).map(norm).filter(Boolean);
@@ -930,7 +961,7 @@ function shell() {
   const u = S.user;
   app.innerHTML = `
   <header class="top">
-    <div class="logo"><small>ร้าน</small><b>เมย์</b><i>Mini Mart</i></div>
+    <div class="logo"><img src="${Brand.white()}" alt="ร้านเมย์ Mini Mart" style="height:40px;width:auto;display:block"></div>
     <div class="sp"></div>
     <div class="who"><div><span class="net ${S.online ? '' : 'off'}"></span>${esc(u.name)}</div><span class="chip-role">${u.role === 'owner' ? 'เจ้าของกิจการ' : 'พนักงาน'}${S.apiUrl ? '' : ' · โหมดทดลอง'}</span></div>
     ${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button>
@@ -948,6 +979,7 @@ function shell() {
 const VIEWS = {};
 function go(v, arg) {
   if (isKiosk() && !KIOSK_OK.includes(v)) v = 'pos';
+  if (Elev.scope && !(ELEV_AREAS[Elev.scope] || []).includes(v)) Elev.clear();
   if (!isKiosk() && v === 'reports' && !seesSales() && S.user && S.user.role !== 'owner') v = 'home';
   if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
@@ -1036,16 +1068,16 @@ function renderLogin(mode) {
   let pin = '', vtap = 0;
   app.innerHTML = `<div class="login">
     <div style="position:fixed;top:calc(8px + var(--safe-t));right:8px;color:var(--ink2)">${FS.btn()}</div>
-    <div class="brand"><div class="mk"><small>ร้าน</small>เมย์</div><div class="mm">Mini Mart</div><div class="muted small" style="margin-top:6px">${esc(S.device.name || '')}</div></div>
+    <div class="brand"><img src="${Brand.color()}" alt="ร้านเมย์ Mini Mart" style="display:block;margin:0 auto;width:min(240px,60vw);height:auto;max-height:24vh;object-fit:contain"><div class="muted small" style="margin-top:6px">${esc(S.device.name || '')}</div></div>
     <div class="card" style="width:100%;max-width:360px">
-      <div class="center disp" style="font-size:18px;margin-top:4px">${mode === 'clock' ? 'ใส่รหัสเพื่อลงเวลาเข้างาน' : 'ใส่รหัส 4 หลัก'}</div>
+      <div class="center disp" style="font-size:18px;margin-top:4px">${mode === 'clock' ? 'ใส่ PIN เพื่อลงเวลาเข้างาน' : 'PIN'}</div>
       <div class="dots">${'<i></i>'.repeat(4)}</div>
       <div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-del style="font-size:20px">⌫</button></div>
       <div class="center" style="margin-top:12px"><button class="btn ${mode === 'clock' ? 'green' : 'ghost'}" id="clk" style="min-height:52px;padding:8px 22px;font-size:16px">${mode === 'clock' ? '✔️ ลงเวลาเข้างาน — ใส่รหัสได้เลย' : '🕘 ลงเวลาเข้างาน'}</button></div>
       <div class="center tiny muted" style="margin-top:10px">${!S.apiUrl ? 'โหมดทดลอง · เจ้าของ 1234 · พนักงาน 1111' : navigator.onLine === false ? '<span class="tag amber">ออฟไลน์ — เข้าได้เฉพาะผู้ที่เคยเข้าเครื่องนี้</span>' : ''}</div>
       ${S.apiUrl ? '' : `<div class="center" style="margin-top:6px"><button class="btn ghost sm" id="cfg">${I(IC.gear, 16)} ตั้งค่าการเชื่อมต่อ (ครั้งแรก)</button></div>`}
     </div>
-    <div class="tiny muted" id="ver" style="margin-top:14px;padding:6px 14px">v${APP_VER} · ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} น.</div></div>`;
+    <div class="tiny muted" id="ver" style="margin-top:14px;padding:6px 14px">v${APP_VER}<span class="vclk"> · ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} น.</span></div></div>`;
   const dots = () => $$('.dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
   let sending = false;
   const submit = async () => {
@@ -1107,7 +1139,7 @@ function renderLogin(mode) {
     if (!ok && !S.apiUrl) ok = true;
     ok ? connectDlg() : toast('รหัสเจ้าของไม่ถูกต้อง', 1);
   };
-  const tk = setInterval(() => { const v = $('#ver'); if (!v) return clearInterval(tk); v.textContent = `v${APP_VER} · ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} น.`; }, 20000);
+  const tk = setInterval(() => { const v = $('#ver'); if (!v) return clearInterval(tk); v.innerHTML = `v${APP_VER}<span class="vclk"> · ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} น.</span>`; }, 20000);
 }
 function connectDlg() {
   const ov = sheet('เชื่อมต่อฐานข้อมูล Google', `
@@ -1120,7 +1152,7 @@ function connectDlg() {
   $('#sv', ov).onclick = async () => { if (!(await test())) return; const nu = $('#au', ov).value.trim(); if (nu !== S.apiUrl && window.Cache) await Cache.clear().catch(() => { }); S.apiUrl = nu; LS.set('apiUrl', S.apiUrl); LS.del('token'); LS.del('products'); S.products = []; S.token = ''; ov.remove(); renderLogin(); };
 }
 function changePinDlg() {
-  const ov = sheet('เปลี่ยน PIN', `<label class="f"><span>PIN เดิม</span><input class="in" id="p0" type="password" inputmode="numeric"></label><label class="f"><span>PIN ใหม่ (4 หลัก)</span><input class="in" id="p1" type="password" inputmode="numeric"></label><label class="f"><span>ยืนยัน PIN ใหม่</span><input class="in" id="p2" type="password" inputmode="numeric"></label>`, `<button class="btn block" id="ok">บันทึก</button>`);
+  const ov = sheet('เปลี่ยน PIN', `<label class="f"><span>PIN เดิม</span><input class="in" id="p0" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*"></label><label class="f"><span>PIN ใหม่ (4 หลัก)</span><input class="in" id="p1" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*"></label><label class="f"><span>ยืนยัน PIN ใหม่</span><input class="in" id="p2" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*"></label>`, `<button class="btn block" id="ok">บันทึก</button>`);
   $('#ok', ov).onclick = async () => {
     const a = $('#p0', ov).value, b = $('#p1', ov).value, c = $('#p2', ov).value;
     if (!/^\d{4}$/.test(b)) return toast('PIN ต้องเป็นตัวเลข 4 หลัก', 1); if (b !== c) return toast('PIN ใหม่ไม่ตรงกัน', 1);
@@ -1200,7 +1232,7 @@ VIEWS.products = async (el, flag) => {
     $('#cnt', el).textContent = `พบ ${res.length.toLocaleString()} รายการ`;
     $('#pl', el).innerHTML = res.length ? res.slice(0, PF.limit).map(p => {
       const low = p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0);
-      return `<div class="item" data-sku="${esc(p.sku)}"><div class="av">${esc(Array.from(p.name || '?')[0])}</div><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.sku)} · ${p.barcode ? esc(p.barcode) : '<span class="tag amber">ไม่มีบาร์โค้ด</span>'}${p.trackStock === 'Y' ? ` · <span class="tag ${low ? 'red' : 'gray'}">คงเหลือ ${num(p.stock)}</span>` : ''}${can('viewCost') && num(p.cost) ? ` · ทุน ${money(p.cost)}` : ''}</div></div><div class="price">${baht(p.price)}</div></div>`;
+      return `<div class="item" data-sku="${esc(p.sku)}">${pthumb(p)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.sku)} · ${p.barcode ? esc(p.barcode) : '<span class="tag amber">ไม่มีบาร์โค้ด</span>'}${p.trackStock === 'Y' ? ` · <span class="tag ${low ? 'red' : 'gray'}">คงเหลือ ${num(p.stock)}</span>` : ''}${can('viewCost') && num(p.cost) ? ` · ทุน ${money(p.cost)}` : ''}</div></div><div class="price">${baht(p.price)}</div></div>`;
     }).join('') + (res.length > PF.limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red);font-weight:600">แสดงเพิ่ม (${res.length - PF.limit})</div>` : '') : `<div class="empty">ไม่พบสินค้า<br><button class="btn sm" style="margin-top:10px" onclick="editProduct({name:${esc(JSON.stringify(PF.q))}})">เพิ่ม “${esc(PF.q)}”</button></div>`;
     $$('#pl [data-sku]', el).forEach(r => r.onclick = () => productCard(IDX.bySku[r.dataset.sku]));
     const m = $('#more', el); if (m) m.onclick = () => { PF.limit += 100; draw(); };
@@ -1249,13 +1281,14 @@ async function saveProducts(rows) {
   clean.forEach(r => { const i = S.products.findIndex(p => p.sku === r.sku); if (i >= 0) S.products[i] = { ...S.products[i], ...r }; else S.products.unshift(r); });
   LS.set('products', S.products); buildIndex();
 }
-function editProduct(p0) {
+async function editProduct(p0) {
+  if (!(await gate('editProducts'))) return; // รหัสเจ้าของครั้งเดียว แล้วแก้ต่อได้จนกว่าจะออกจากหน้าจัดการสินค้า
   const isNew = !p0 || !p0.sku;
   const p = { byWeight: 'N', trackStock: 'N', available: 'Y', bestseller: 'N', ...(p0 || {}) };
   if (isNew) p.sku = nextSku(S.products);
   const cats = [...new Set(S.categories.map(c => c.name).concat(S.products.map(x => x.category)).filter(Boolean))].sort();
   let newImg = null, rmImg = false;
-  const curImg = window.Img ? Img.get(p.sku) : '';
+  const curImg = typeof Img !== 'undefined' ? Img.get(p.sku) : '';
   const ov = sheet(isNew ? 'เพิ่มสินค้าใหม่' : 'แก้ไขสินค้า', `
     <div class="row" style="margin-bottom:12px;gap:12px"><div id="pimg" style="width:84px;height:84px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3);flex:none">${curImg ? `<img src="${curImg}" style="width:100%;height:100%;object-fit:cover">` : I(IC.image, 30)}</div>
       <div class="grow"><div class="small" style="font-weight:600">รูปสินค้า (แสดงบนหน้าจอขาย)</div><div class="row wrap" style="margin-top:6px"><label class="btn ghost sm">${I(IC.cam, 16)} ถ่าย/เลือกรูป<input type="file" accept="image/*" id="f_img" class="hidden"></label><button class="btn ghost sm" id="rmimg">ลบรูป</button></div><div class="tiny muted">ย่อขนาดอัตโนมัติ ~10 KB โหลดเร็ว</div></div></div>
@@ -1452,7 +1485,7 @@ function pickProducts(cb) {
   const ov = sheet('เลือกสินค้า', `<input class="in" id="pq" placeholder="ค้นหา..."><label class="row small" style="margin:8px 2px"><input type="checkbox" id="pf" checked> เฉพาะของสด / ไม่มีบาร์โค้ด</label><div class="list" id="pl"></div>`, `<button class="btn block" id="ok">เพิ่มที่เลือก (<span id="n">0</span>)</button>`);
   const draw = () => {
     let res = searchProducts(q, {}); if (onlyFresh) res = res.filter(p => !p.barcode || /ของสด/.test(p.category || '') || p.byWeight === 'Y');
-    $('#pl', ov).innerHTML = res.slice(0, 80).map(p => `<label class="item"><input type="checkbox" data-s="${esc(p.sku)}" ${sel.has(p.sku) ? 'checked' : ''}><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || 'ไม่มีบาร์โค้ด')}</div></div><div class="price" style="font-size:15px">${baht(p.price)}</div></label>`).join('') || '<div class="empty">ไม่พบ</div>';
+    $('#pl', ov).innerHTML = res.slice(0, 80).map(p => `<label class="item"><input type="checkbox" data-s="${esc(p.sku)}" ${sel.has(p.sku) ? 'checked' : ''}>${pthumb(p, 40)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || 'ไม่มีบาร์โค้ด')}</div></div><div class="price" style="font-size:15px">${baht(p.price)}</div></label>`).join('') || '<div class="empty">ไม่พบ</div>';
     $$('[data-s]', ov).forEach(c => c.onchange = () => { c.checked ? sel.set(c.dataset.s, IDX.bySku[c.dataset.s]) : sel.delete(c.dataset.s); $('#n', ov).textContent = sel.size; });
   };
   $('#pq', ov).oninput = e => { q = e.target.value; draw(); }; $('#pf', ov).onchange = e => { onlyFresh = e.target.checked; draw(); };
@@ -1566,7 +1599,7 @@ function matchDlg(it, done) {
   const ov = sheet('จับคู่สินค้า', `<div class="small muted" style="margin-bottom:6px">ในใบเสร็จ: <b>${esc(it.name)}</b></div><input class="in" id="mq" value="${esc(q)}"><div class="list" id="ml" style="margin-top:8px"></div>`, `<button class="btn ghost grow" id="nw">สร้างเป็นสินค้าใหม่</button><button class="btn ghost grow" id="sk">ไม่จับคู่</button>`);
   const draw = () => {
     let res = searchProducts(q); if (!res.length) res = S.products.map(p => [p, sim(q, p.name)]).sort((a, b) => b[1] - a[1]).slice(0, 20).map(x => x[0]);
-    $('#ml', ov).innerHTML = res.slice(0, 40).map(p => `<div class="item" data-s="${esc(p.sku)}"><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || '')} · ทุน ${money(p.cost)}</div></div><div class="price" style="font-size:15px">${baht(p.price)}</div></div>`).join('');
+    $('#ml', ov).innerHTML = res.slice(0, 40).map(p => `<div class="item" data-s="${esc(p.sku)}">${pthumb(p, 40)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || '')} · ทุน ${money(p.cost)}</div></div><div class="price" style="font-size:15px">${baht(p.price)}</div></div>`).join('');
     $$('[data-s]', ov).forEach(x => x.onclick = () => { it.sku = x.dataset.s; it.score = 1; it.createNew = false; it.updateCost = true; ov.remove(); done(); });
   };
   $('#mq', ov).oninput = e => { q = e.target.value; draw(); };
@@ -1997,7 +2030,7 @@ async function selfHeal(miss) {
 async function boot() {
   const miss = missingFiles(); if (miss.length) return selfHeal(miss);
   sessionStorage.removeItem('mm_heal');
-  if (!S.apiUrl && !document.getElementById('demobar')) document.body.insertAdjacentHTML('afterbegin', '<div id="demobar" style="position:fixed;left:0;right:0;bottom:0;z-index:70;background:#B45309;color:#fff;text-align:center;font-size:13px;padding:4px 8px;pointer-events:none">โหมดทดลอง — เครื่องนี้ยังไม่ได้เชื่อมฐานข้อมูลร้าน (ข้อมูลไม่ใช่ของจริง)</div>');
+  if (!S.apiUrl && !document.getElementById('demobar') && location.hash.indexOf('#display') !== 0) document.body.insertAdjacentHTML('afterbegin', '<div id="demobar" style="position:fixed;left:0;right:0;bottom:0;z-index:70;background:#B45309;color:#fff;text-align:center;font-size:13px;padding:4px 8px;pointer-events:none">โหมดทดลอง — เครื่องนี้ยังไม่ได้เชื่อมฐานข้อมูลร้าน (ข้อมูลไม่ใช่ของจริง)</div>');
   const h0 = (location.hash || '').slice(1);
   if (/^display/.test(h0) && VIEWS.display) return VIEWS.display(app, h0);
   if (!S.user || !S.token) return renderLogin();
@@ -2031,20 +2064,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.20"></script>
-<script src="logic.js?v=2.6.20"></script>
-<script src="cache.js?v=2.6.20"></script>
-<script src="offline.js?v=2.6.20"></script>
-<script src="scanner.js?v=2.6.20"></script>
-<script src="printer.js?v=2.6.20"></script>
-<script src="pos.js?v=2.6.20"></script>
-<script src="display.js?v=2.6.20"></script>
-<script src="reports.js?v=2.6.20"></script>
-<script src="inventory.js?v=2.6.20"></script>
-<script src="people.js?v=2.6.20"></script>
-<script src="quality.js?v=2.6.20"></script>
-<script src="services.js?v=2.6.20"></script>
-<script src="owner.js?v=2.6.20"></script>
+<script src="qr.js?v=2.6.22"></script>
+<script src="logic.js?v=2.6.22"></script>
+<script src="cache.js?v=2.6.22"></script>
+<script src="offline.js?v=2.6.22"></script>
+<script src="scanner.js?v=2.6.22"></script>
+<script src="printer.js?v=2.6.22"></script>
+<script src="pos.js?v=2.6.22"></script>
+<script src="display.js?v=2.6.22"></script>
+<script src="reports.js?v=2.6.22"></script>
+<script src="inventory.js?v=2.6.22"></script>
+<script src="people.js?v=2.6.22"></script>
+<script src="quality.js?v=2.6.22"></script>
+<script src="services.js?v=2.6.22"></script>
+<script src="owner.js?v=2.6.22"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
