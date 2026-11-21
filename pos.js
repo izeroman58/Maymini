@@ -556,12 +556,12 @@ const POS = {
       ['บริการ โอนเงิน/เติมเงิน/จ่ายบิล', IC.sale, () => svcMenu()],
       ['จอแสดงผลฝั่งลูกค้า', IC.monitor, () => go('displayset')],
       ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
-      can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)' + (canStrict('editProducts') ? '' : ' 🔒'), IC.edit, async () => { if (!this.edit && !(await gate('editProducts'))) return; this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }],
+      can('editProducts') && [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)' + (canStrict('editProducts') ? '' : ' 🔒'), IC.edit, async () => { if (!this.edit && !(await gate('editProducts'))) return; this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }, 'editLayout'],
       ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)],
       Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }],
       ['ออกจากระบบ', IC.logout, () => switchUser()]
     ].filter(Boolean);
-    popMenu($('#pm', this.el), acts.map(a => [a[0], a[2], a[1]]), 'left');
+    popMenu($('#pm', this.el), acts.map(a => [a[0], a[2], a[1], a[3]]), 'left', 'pos');
   },
 
   /* --- ชำระเงิน --- */
