@@ -121,10 +121,13 @@ const Img = {
       if (r.rows.length) document.dispatchEvent(new Event('mm:images'));
     } catch (e) { }
   },
-  async shrink(file, size = 240) {
+  async shrink(file, size = 240, fit) {
     const im = await loadImg(URL.createObjectURL(file));
-    const s = Math.min(im.width, im.height), cv = document.createElement('canvas'); cv.width = cv.height = size;
-    cv.getContext('2d').drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, size, size);
+    const s = Math.min(im.width, im.height), cv = document.createElement('canvas'); cv.width = cv.height = size; const g = cv.getContext('2d');
+    if (fit === 'contain') { // รูปจากเว็บ: เห็นสินค้าทั้งชิ้น พื้นขาว ไม่ตัดขอบ
+      const k = Math.min(size / im.width, size / im.height) * .94, w = im.width * k, h = im.height * k;
+      g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.drawImage(im, (size - w) / 2, (size - h) / 2, w, h);
+    } else g.drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, size, size);
     let q = .72, d = cv.toDataURL('image/jpeg', q);
     while (d.length > 30000 && q > .35) { q -= .1; d = cv.toDataURL('image/jpeg', q); }
     return d;

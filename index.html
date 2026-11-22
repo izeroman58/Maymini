@@ -191,7 +191,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.25';
+const APP_VER = '2.6.26';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -702,7 +702,9 @@ const HEAD_DOTS = 384; // หัวพิมพ์ NIIMBOT B1/B21 กว้า�
 // เลย์เอาต์ฉลากราคา (ปรับได้): ค่าเป็น % ของความสูงช่อง · w = % ของความกว้าง
 // ตำแหน่ง/ขนาดเป็น % ของช่องฉลาก (ลากย้าย/ย่อขยายบนตัวอย่างได้) · name/shop: x,y มุมซ้ายบน · price: r = ขอบขวา · code: กล่องบาร์โค้ด
 const LBL_LAYOUT_DEF = { v: 2, shop: false, sh: { x: 4, y: 3, s: 9 }, name: { x: 4, y: 4, w: 92, s: 15, lines: 2 }, price: { r: 96, y: 30, s: 36 }, code: { x: 4, y: 64, w: 92, h: 24, txt: 1 }, ox: 0, oy: 0 };
-const lblLayout = L0 => { const D = JSON.parse(JSON.stringify(LBL_LAYOUT_DEF)); if (!L0 || L0.v !== 2) return Object.assign(D, L0 ? { shop: !!L0.shop, ox: num(L0.ox), oy: num(L0.oy) } : {}); ['sh', 'name', 'price', 'code'].forEach(k => D[k] = { ...D[k], ...(L0[k] || {}) }); return { ...L0, ...D, sh: D.sh, name: D.name, price: D.price, code: D.code }; };
+// 2 ชุดใน 1 ดวง: ช่องเตี้ยกว้าง (ครึ่งบน/ครึ่งล่าง) → ชื่อซ้ายบน ราคาขวา บาร์โค้ดล่าง
+const LBL_LAYOUT_DEF2 = { v: 2, shop: false, sh: { x: 3, y: 2, s: 12 }, name: { x: 3, y: 5, w: 60, s: 22, lines: 2 }, price: { r: 97, y: 4, s: 46 }, code: { x: 3, y: 56, w: 94, h: 30, txt: 1 }, ox: 0, oy: 0 };
+const lblLayout = (L0, DEF) => { const D = JSON.parse(JSON.stringify(DEF || LBL_LAYOUT_DEF)); if (L0) { D.shop = !!L0.shop; D.ox = num(L0.ox); D.oy = num(L0.oy); } if (!L0 || L0.v !== 2) return D; ['sh', 'name', 'price', 'code'].forEach(k => D[k] = { ...D[k], ...(L0[k] || {}) }); return D; };
 const TEMPLATES = [
   { id: 'price', name: 'ราคา + บาร์โค้ด' }, { id: 'price2', name: '2 ชุดใน 1 ดวง (ตัดแบ่งครึ่ง)' }, { id: 'fresh', name: 'ของสด (วันที่แพ็ค/หมดอายุ)' },
   { id: 'barcode', name: 'บาร์โค้ดอย่างเดียว' }, { id: 'shelf', name: 'ป้ายราคาชั้นวาง' }
@@ -759,10 +761,10 @@ function renderLabel(cv, o) {
   const small = Math.max(14, Math.round(H * .085));
   let y = pad;
   if (o.tpl === 'price' || o.tpl === 'price2') {
-    const L = lblLayout(L0), boxes = [];
+    const L = lblLayout(L0, o.tpl === 'price2' ? LBL_LAYOUT_DEF2 : LBL_LAYOUT_DEF), boxes = [];
     if (o.tpl === 'price') { drawPriceCell(c, 0, 0, W, H, p, price, code, L, F, boxes); return { code, W, H, boxes, ox, oy }; }
-    // 2 ชุดใน 1 ดวง: แบ่งตามด้านที่ยาวกว่า + เส้นประสำหรับตัด
-    const vert = H >= W * .8;
+    // 2 ชุดใน 1 ดวง: แบ่งครึ่งบน/ครึ่งล่าง + เส้นประสำหรับตัด
+    const vert = true;
     const cw = vert ? W : Math.floor(W / 2), ch = vert ? Math.floor(H / 2) : H;
     drawPriceCell(c, 0, 0, cw, ch, p, price, code, L, F, boxes); drawPriceCell(c, vert ? 0 : cw, vert ? ch : 0, cw, ch, p, price, code, L, F, boxes);
     c.save(); c.setLineDash([6, 5]); c.lineWidth = 2; c.strokeStyle = '#000'; c.beginPath(); if (vert) { c.moveTo(0, ch); c.lineTo(W, ch); } else { c.moveTo(cw, 0); c.lineTo(cw, H); } c.stroke(); c.restore();
@@ -1266,7 +1268,7 @@ async function switchUser() {
 let PF = { q: '', cat: '', flag: '', limit: 60 };
 VIEWS.products = async (el, flag) => {
   if (flag) PF.flag = flag;
-  el.innerHTML = vhead('สินค้า', `<button class="btn sm" onclick="editProduct()">${I(IC.plus, 18)} เพิ่ม</button>`) +
+  el.innerHTML = vhead('สินค้า', `<button class="btn ghost sm" onclick="autoImages()">🖼 เติมรูปอัตโนมัติ</button><button class="btn sm" onclick="editProduct()">${I(IC.plus, 18)} เพิ่ม</button>`) +
     `<div class="search"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาชื่อ / รหัส / บาร์โค้ด" value="${esc(PF.q)}"><button class="scanbtn" id="sc">${I(IC.scan, 20)}</button></div>
      <div class="chips" id="flags" style="margin-top:10px"></div><div class="chips" id="cats"></div>
      <div class="row small muted" style="margin:2px 4px 8px"><span id="cnt" class="grow"></span><button class="btn ghost sm" id="rf">รีเฟรช</button></div>
@@ -1341,7 +1343,7 @@ async function editProduct(p0) {
   const curImg = typeof Img !== 'undefined' ? Img.get(p.sku) : '';
   const ov = sheet(isNew ? 'เพิ่มสินค้าใหม่' : 'แก้ไขสินค้า', `
     <div class="row" style="margin-bottom:12px;gap:12px"><div id="pimg" style="width:84px;height:84px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3);flex:none">${curImg ? `<img src="${curImg}" style="width:100%;height:100%;object-fit:cover">` : I(IC.image, 30)}</div>
-      <div class="grow"><div class="small" style="font-weight:600">รูปสินค้า (แสดงบนหน้าจอขาย)</div><div class="row wrap" style="margin-top:6px"><label class="btn ghost sm">${I(IC.cam, 16)} ถ่าย/เลือกรูป<input type="file" accept="image/*" id="f_img" class="hidden"></label><button class="btn ghost sm" id="rmimg">ลบรูป</button></div><div class="tiny muted">ย่อขนาดอัตโนมัติ ~10 KB โหลดเร็ว</div></div></div>
+      <div class="grow"><div class="small" style="font-weight:600">รูปสินค้า (แสดงบนหน้าจอขาย)</div><div class="row wrap" style="margin-top:6px"><label class="btn ghost sm">${I(IC.cam, 16)} ถ่าย/เลือกรูป<input type="file" accept="image/*" id="f_img" class="hidden"></label><button class="btn ghost sm" id="webimg">🔎 ค้นรูปจากเน็ต</button><button class="btn ghost sm" id="rmimg">ลบรูป</button></div><div class="tiny muted">ย่อขนาดอัตโนมัติ ~10 KB โหลดเร็ว ใช้ได้แม้ออฟไลน์</div></div></div>
     <label class="f"><span>ชื่อสินค้า *</span><input class="in" id="f_name" value="${esc(p.name)}"></label>
     <div class="f" style="margin-bottom:10px"><span style="display:block;font-size:13px;color:var(--ink2);margin-bottom:4px;font-weight:500">บาร์โค้ด <span class="tiny muted">· ยิงด้วยเครื่อง / แตะ 📷 ถ่ายรูป / แตะสแกนสด</span></span><div class="row">${barcodeFieldHTML('f_barcode', p.barcode)}<button class="btn sm" id="bscan" title="สแกนด้วยกล้องแบบสด">${I(IC.scan, 18)}</button><button class="btn ghost sm" id="bgen" title="สร้างบาร์โค้ดภายในร้าน">สร้าง</button></div><div class="tiny muted" id="bmsg"></div></div>
     <div class="grid2"><label class="f"><span>ราคาขาย *</span><input class="in" id="f_price" type="number" inputmode="decimal" step="any" value="${esc(p.price)}"></label>
@@ -1368,6 +1370,7 @@ async function editProduct(p0) {
   $('#f_barcode', ov).oninput = chk; chk();
   $('#f_img', ov).onchange = async e => { const f = e.target.files[0]; if (!f) return; newImg = await Img.shrink(f); rmImg = false; $('#pimg', ov).innerHTML = `<img src="${newImg}" style="width:100%;height:100%;object-fit:cover">`; };
   $('#rmimg', ov).onclick = () => { newImg = null; rmImg = true; $('#pimg', ov).innerHTML = I(IC.image, 30); };
+  $('#webimg', ov).onclick = () => webImagePicker({ name: $('#f_name', ov).value.trim() || p.name, barcode: ($('#f_barcode', ov) || {}).value || p.barcode }, d => { newImg = d; rmImg = false; $('#pimg', ov).innerHTML = `<img src="${d}" style="width:100%;height:100%;object-fit:cover">`; });
   $('#bscan', ov).onclick = () => openScanner(code => { $('#f_barcode', ov).value = code; chk(); return 'close'; });
   bindBarcodeField(ov, 'f_barcode', () => chk());
   $('#bgen', ov).onclick = () => { $('#f_barcode', ov).value = internalBarcode($('#f_sku', ov).value); chk(); toast('สร้างบาร์โค้ดภายในร้าน (ขึ้นต้น 21)'); };
@@ -1448,7 +1451,9 @@ let LQ = [];
 VIEWS.labels = (el, items) => {
   if (Array.isArray(items)) items.forEach(p => { if (!LQ.some(x => x.p.sku === p.sku)) LQ.push({ p, copies: 1 }); });
   const cfg = LS.get('labelCfg', { paper: '40x30', tpl: 'price', density: 3, labelType: 1, rotate: false, model: LS.get('printerModel', 'B1') });
-  const LY = cfg.layout = lblLayout(cfg.layout);
+  cfg.layout = lblLayout(cfg.layout); cfg.layout2 = lblLayout(cfg.layout2 || { ...cfg.layout, v: 0 }, LBL_LAYOUT_DEF2); // แยกผังของ 1 ชุด / 2 ชุด
+  let LY = cfg.tpl === 'price2' ? cfg.layout2 : cfg.layout; const BOTH = () => [cfg.layout, cfg.layout2];
+  BOTH().forEach(L => { const top = L.sh.y + Math.round(L.sh.s * 1.2 * 2) / 2; if (L.shop && L.name.y < top && L._ny == null) { L._ny = L.name.y; L._ns = L.name.s; L.name.y = top; const fit = (L.code.y - 1 - top) / (1.08 * Math.max(1, L.name.lines)); if (L.name.s > fit) L.name.s = Math.max(6, Math.floor(fit * 2) / 2); } });
   el.innerHTML = vhead('พิมพ์ฉลาก / บาร์โค้ด', '', 'more') + `
    <div class="card"><div class="row"><div class="grow"><b>เครื่องพิมพ์ NIIMBOT</b><div class="small muted" id="pst"></div></div><button class="btn sm" id="con">${I(IC.bt, 18)} เชื่อมต่อ</button></div>
      <div class="row small" style="margin-top:8px"><button class="btn ghost sm" id="rp">อ่านกระดาษอัตโนมัติ</button><span class="muted grow" id="pinfo"></span></div></div>
@@ -1481,8 +1486,8 @@ VIEWS.labels = (el, items) => {
    <div class="row" style="gap:8px"><button class="btn ghost grow" id="png">บันทึกรูป PNG</button><button class="btn grow" id="pr" style="min-height:52px">${I(IC.print)} พิมพ์ทั้งหมด</button></div>`;
   ['paper', 'tpl', 'model', 'density', 'labelType'].forEach(k => $('#' + k, el).value = cfg[k]); $('#rotate', el).checked = !!cfg.rotate; $('#n_l', el).value = LY.name.lines;
   const save = () => { ['paper', 'tpl', 'model'].forEach(k => cfg[k] = $('#' + k, el).value); cfg.density = +$('#density', el).value; cfg.labelType = +$('#labelType', el).value; cfg.rotate = $('#rotate', el).checked;
-    cfg.cw = +$('#cw', el).value || 50; cfg.ch = +$('#ch', el).value || 50; LY.shop = $('#lshop', el).checked;
-    LY.name.lines = +$('#n_l', el).value; LY.code.txt = $('#c_t', el).checked ? 1 : 0;
+    cfg.cw = +$('#cw', el).value || 50; cfg.ch = +$('#ch', el).value || 50; LY = cfg.tpl === 'price2' ? cfg.layout2 : cfg.layout;
+    BOTH().forEach(L => { L.shop = $('#lshop', el).checked; L.name.lines = +$('#n_l', el).value; L.code.txt = $('#c_t', el).checked ? 1 : 0; L.ox = LY.ox; L.oy = LY.oy; });
     $('#v_ox', el).textContent = (LY.ox > 0 ? '+' : '') + LY.ox; $('#v_oy', el).textContent = (LY.oy > 0 ? '+' : '') + LY.oy; LS.set('labelCfg', cfg); LS.set('printerModel', cfg.model); };
   const opts = it => ({ paper: cfg.paper, cw: cfg.cw, ch: cfg.ch, layout: LY, rotate: cfg.rotate, tpl: cfg.tpl, product: it.p, price: it.price, packDate: $('#packDate', el).value, shelfDays: $('#shelfDays', el).value, weight: $('#weight', el).value || it.weight, embedPrice: $('#embedPrice', el).checked });
   const preview = () => {
@@ -1502,7 +1507,11 @@ VIEWS.labels = (el, items) => {
     $$('[data-gen]', el).forEach(b => b.onclick = async () => { const it = LQ[+b.dataset.gen]; const code = internalBarcode(it.p.sku); try { busy(1); await saveProducts([{ ...it.p, barcode: code }]); it.p = IDX.bySku[it.p.sku]; busy(0); toast('บันทึกบาร์โค้ด ' + code + ' ให้สินค้าแล้ว'); drawQ(); preview(); } catch (e) { busy(0); toast(e.message, 1); } });
   };
   $$('select,input', el).forEach(i => i.addEventListener('change', preview));
-  $('#lrs', el).onclick = () => { const d = lblLayout(null); ['sh', 'name', 'price', 'code'].forEach(k => LY[k] = d[k]); PV.sel = null; $('#n_l', el).value = LY.name.lines; $('#c_t', el).checked = true; LY.code.txt = 1; preview(); };
+  // ติ๊กชื่อร้าน → เลื่อนชื่อสินค้าลงใต้บรรทัดชื่อร้าน (ไม่ทับกัน) · เอาติ๊กออก → เลื่อนกลับ
+  $('#lshop', el).addEventListener('change', e => BOTH().forEach(L => { const h = Math.round(L.sh.s * 1.2 * 2) / 2, top = L.sh.y + h;
+    if (e.target.checked) { if (L.name.y < top) { L._ny = L.name.y; L._ns = L.name.s; L.name.y = top; const fit = (L.code.y - 1 - top) / (1.08 * Math.max(1, L.name.lines)); if (L.name.s > fit) L.name.s = Math.max(6, Math.floor(fit * 2) / 2); } }
+    else if (L._ny != null) { L.name.y = L._ny; if (L._ns) L.name.s = L._ns; delete L._ny; delete L._ns; } }) || preview());
+  $('#lrs', el).onclick = () => { const d = lblLayout(null, cfg.tpl === 'price2' ? LBL_LAYOUT_DEF2 : LBL_LAYOUT_DEF); ['sh', 'name', 'price', 'code'].forEach(k => LY[k] = d[k]); PV.sel = null; $('#n_l', el).value = LY.name.lines; $('#c_t', el).checked = true; LY.code.txt = 1; preview(); };
   $$('[data-off]', el).forEach(b => b.onclick = () => { const [ax, d] = b.dataset.off.split(','), k = ax === 'x' ? 'ox' : 'oy'; LY[k] = Math.max(-6, Math.min(6, Math.round((num(LY[k]) + +d) * 2) / 2)); preview(); });
   // ลากย้าย/ย่อขยายบนตัวอย่าง: แตะเลือก → ลากตัว = ย้าย · ลากจุดมุมขวาล่าง (หรือ 2 นิ้วถ่าง) = ย่อ/ขยาย
   const PV = { r: null, sel: null, drag: null, pts: new Map(), raf: 0 };
@@ -2034,6 +2043,125 @@ function licenseForm(l, done) {
   const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg('ลบใบอนุญาตนี้?', 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Licenses', ids: [l.id] }); busy(0); ov.remove(); done && done(); } catch (e) { busy(0); toast(e.message, 1); } };
 }
 
+/* ---------- ค้นรูปสินค้าจากอินเทอร์เน็ต ----------
+   1) Open Food Facts (ฐานข้อมูลสินค้าฟรี) ค้นจากบาร์โค้ด + ชื่อ  2) Google รูปภาพ → คัดลอกรูป/ลิงก์ แล้วกลับมาวาง
+   รูปที่เลือกย่อเหลือ ~10–30 KB เก็บในเครื่อง (ใช้ได้ออฟไลน์) และบันทึกขึ้นฐานข้อมูลเหมือนรูปที่ถ่ายเอง */
+async function urlToBlob(url) {
+  if (/^data:image\//.test(url)) return (await fetch(url)).blob();
+  try { const r = await fetch(url, { mode: 'cors' }); if (r.ok) { const b = await r.blob(); if (/^image\//.test(b.type)) return b; } } catch (e) { }
+  if (!S.apiUrl) throw new Error('โหลดรูปจากลิงก์นี้ไม่ได้ (ต้องเชื่อมต่อ Google ก่อน)');
+  const r = await api('fetchImage', { url }); return (await fetch('data:' + r.mime + ';base64,' + r.base64)).blob();
+}
+function webImagePicker(p, onPick) {
+  const q = String(p.name || '').trim(), bc = String(p.barcode || '').replace(/\D/g, '');
+  const ov = sheet('ค้นรูปสินค้าจากเน็ต', `
+    <div class="small muted" style="margin-bottom:8px">${esc(q || '-')}${bc ? ' · ' + esc(bc) : ''}</div>
+    <div class="card"><b>ผลจากฐานข้อมูลสินค้า</b> <span class="tiny muted">(Open Food Facts · แตะรูปเพื่อใช้)</span><div id="wr" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:8px"><div class="empty small" style="grid-column:1/-1"><span class="spin dark"></span> กำลังค้น...</div></div></div>
+    <div class="card"><b>ค้นจาก Google รูปภาพ</b>
+      <div class="small muted" style="margin:4px 0 8px">1. กดปุ่มด้านล่าง → 2. กดค้างที่รูปที่ต้องการ เลือก <b>"คัดลอกรูปภาพ"</b> → 3. กลับมาที่แอปแล้วกด <b>"วางรูปที่คัดลอก"</b><br>(ถ้าวางไม่ได้ ให้เลือก "คัดลอกที่อยู่รูปภาพ" แล้ววางลิงก์ในช่องด้านล่าง)</div>
+      <button class="btn ghost block" id="gs" style="margin-bottom:8px">🔎 เปิด Google รูปภาพ: “${esc(q.slice(0, 40))}”</button>
+      <button class="btn block" id="pc" style="margin-bottom:8px">📋 วางรูปที่คัดลอก</button>
+      <div class="row" style="gap:6px"><input class="in grow" id="lu" placeholder="หรือวางลิงก์รูป https://..." inputmode="url"><button class="btn ghost" id="lg">ใช้</button></div></div>`);
+  const use = async (getBlob, label) => {
+    try { busy(1, 'กำลังโหลดรูป...'); const blob = await getBlob(); const d = await Img.shrink(blob, 240, 'contain'); busy(0); ov.remove(); onPick(d); toast((label || 'ได้รูปแล้ว') + ` (${Math.round(d.length * .75 / 1024)} KB) — กดบันทึกเพื่อเก็บ`); }
+    catch (e) { busy(0); toast(e.message || 'ใช้รูปนี้ไม่ได้', 1, 5000); }
+  };
+  // Open Food Facts: บาร์โค้ดตรงตัวก่อน แล้วตามด้วยค้นจากชื่อ
+  (async () => {
+    const box = $('#wr', ov), seen = new Set(), list = [];
+    const add = (img, name, exact) => { if (img && !seen.has(img)) { seen.add(img); list.push({ img, name, exact }); } };
+    const OFF = 'https://world.openfoodfacts.org';
+    await Promise.all([
+      bc.length >= 8 ? fetch(`${OFF}/api/v2/product/${bc}.json?fields=product_name,image_front_small_url,image_front_url,image_small_url`).then(r => r.json()).then(j => { const x = j && j.product; if (x) add(x.image_front_small_url || x.image_small_url || x.image_front_url, x.product_name, 1); }).catch(() => { }) : null,
+      q ? fetch(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=12&fields=code,product_name,image_front_small_url`).then(r => r.json()).then(j => (j.products || []).forEach(x => add(x.image_front_small_url, x.product_name))).catch(() => { }) : null
+    ]);
+    if (!box.isConnected) return;
+    list.sort((a, b) => (b.exact || 0) - (a.exact || 0));
+    box.innerHTML = list.length ? list.slice(0, 12).map((x, i) => `<button data-i="${i}" style="all:unset;cursor:pointer;display:flex;flex-direction:column;gap:3px;align-items:center"><div style="width:100%;aspect-ratio:1;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 ${x.exact ? '3px var(--green)' : '1.5px var(--line)'};overflow:hidden;display:flex;align-items:center;justify-content:center"><img src="${esc(x.img)}" loading="lazy" style="max-width:92%;max-height:92%;object-fit:contain" onerror="this.closest('button').remove()"></div><span class="tiny" style="text-align:center;line-height:1.2;max-height:2.4em;overflow:hidden">${x.exact ? '<b style="color:var(--green)">ตรงบาร์โค้ด</b> ' : ''}${esc(x.name || '')}</span></button>`).join('')
+      : `<div class="small muted" style="grid-column:1/-1;padding:6px 0">ไม่พบสินค้านี้ในฐานข้อมูล — ใช้ Google รูปภาพด้านล่าง</div>`;
+    $$('[data-i]', box).forEach(b => b.onclick = () => use(() => urlToBlob(list[+b.dataset.i].img), 'ได้รูปจากฐานข้อมูลสินค้า'));
+  })();
+  $('#gs', ov).onclick = () => window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(q), '_blank');
+  $('#pc', ov).onclick = () => use(async () => {
+    if (!navigator.clipboard || !navigator.clipboard.read) throw new Error('เครื่องนี้วางรูปไม่ได้ — ใช้ "คัดลอกที่อยู่รูปภาพ" แล้ววางลิงก์แทน');
+    const items = await navigator.clipboard.read();
+    for (const it of items) { const t = it.types.find(x => /^image\//.test(x)); if (t) return it.getType(t); }
+    for (const it of items) if (it.types.includes('text/plain')) { const u = (await (await it.getType('text/plain')).text()).trim(); if (/^(https?:|data:image)/.test(u)) return urlToBlob(u); }
+    throw new Error('ยังไม่ได้คัดลอกรูป — กดค้างที่รูปใน Google แล้วเลือก "คัดลอกรูปภาพ"');
+  }, 'ได้รูปจากที่คัดลอก');
+  // วางด้วยแป้นพิมพ์ (Ctrl+V) บนคอมพิวเตอร์
+  ov.addEventListener('paste', e => { const f = [...(e.clipboardData && e.clipboardData.files || [])].find(x => /^image\//.test(x.type)); if (f) { e.preventDefault(); use(async () => f, 'ได้รูปจากที่คัดลอก'); } });
+  $('#lg', ov).onclick = () => { const u = $('#lu', ov).value.trim(); if (!/^(https?:|data:image)/.test(u)) return toast('วางลิงก์รูปที่ขึ้นต้นด้วย https://', 1); use(() => urlToBlob(u), 'ได้รูปจากลิงก์'); };
+}
+window.webImagePicker = webImagePicker;
+
+/* ---------- เติมรูปอัตโนมัติ: ไล่ค้นรูปจากบาร์โค้ดของสินค้าที่ยังไม่มีรูป (Open Food Facts) ----------
+   ค้นครั้งละ 50 บาร์โค้ด เว้นจังหวะตามข้อกำหนดของ Open Food Facts · ที่พบแสดงให้ติ๊กเลือกก่อนบันทึก
+   บาร์โค้ดที่ไม่พบจำไว้ ครั้งหน้าไม่ค้นซ้ำ (เลือกค้นซ้ำได้) · บาร์โค้ดร้าน (ขึ้นต้น 20/21) ข้าม */
+async function autoImages() {
+  if (!(await gate('editProducts'))) return;
+  if (!S.products.length) await loadProducts(true).catch(() => { });
+  await Img.load();
+  const tried = LS.get('autoImgTried', {}), okCode = b => /^\d{8,14}$/.test(b) && !/^2[01]\d{11}$/.test(b);
+  const all = S.products.filter(p => p.available !== 'N'), has = all.filter(p => Img.get(p.sku)), noImg = all.filter(p => !Img.get(p.sku));
+  const cand = noImg.filter(p => okCode(String(p.barcode || '').trim())), noCode = noImg.length - cand.length, triedN = cand.filter(p => tried[p.barcode]).length;
+  const ov = sheet('เติมรูปสินค้าอัตโนมัติ', `
+    <div class="card small"><div class="kv"><span>สินค้าทั้งหมด</span><b>${all.length.toLocaleString()}</b></div><div class="kv"><span>มีรูปแล้ว</span><b>${has.length.toLocaleString()}</b></div>
+      <div class="kv"><span>ยังไม่มีรูป · มีบาร์โค้ดสินค้า</span><b style="color:var(--green)">${cand.length.toLocaleString()}</b></div><div class="kv"><span>ยังไม่มีรูป · ไม่มีบาร์โค้ด/บาร์โค้ดร้าน (ค้นไม่ได้)</span><b>${noCode.toLocaleString()}</b></div>
+      ${triedN ? `<label class="row" style="margin-top:6px"><input type="checkbox" id="rt"> ค้นซ้ำรายการที่เคยค้นแล้วไม่พบ (${triedN})</label>` : ''}
+      <div class="tiny muted" style="margin-top:6px">ค้นจากฐานข้อมูลสินค้า Open Food Facts ครั้งละ 50 รายการ (ประมาณ ${Math.max(1, Math.ceil((cand.length - triedN) / 50 * 7 / 60))} นาที) · ระหว่างค้นแตะเอาติ๊กรูปที่ไม่ถูกต้องออกได้ · กดบันทึกได้ตลอด</div></div>
+    <div class="row" style="gap:8px;margin-bottom:8px"><button class="btn green grow" id="st" ${cand.length ? '' : 'disabled'}>เริ่มค้น</button><button class="btn ghost" id="sp" style="display:none">หยุด</button></div>
+    <div class="small" id="pg" style="margin-bottom:6px"></div>
+    <div id="gr" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px"></div>`,
+    `<button class="btn block" id="sv" disabled>บันทึกรูปที่เลือก</button>`);
+  const found = [], pick = new Set(); let stop = false, running = false, done = 0, miss = 0, list = [];
+  const upd = () => { $('#sv', ov).disabled = !pick.size; $('#sv', ov).textContent = `บันทึกรูปที่เลือก (${pick.size})`; };
+  const card = f => { const d = document.createElement('button'); d.style.cssText = 'all:unset;cursor:pointer;display:flex;flex-direction:column;gap:3px'; d.dataset.k = f.p.sku;
+    d.innerHTML = `<div style="position:relative;aspect-ratio:1;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 3px var(--green);overflow:hidden;display:flex;align-items:center;justify-content:center"><img src="${esc(f.img)}" loading="lazy" style="max-width:90%;max-height:90%;object-fit:contain" onerror="this.closest('button').remove()"><span class="ck" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center">✓</span></div><span class="tiny" style="line-height:1.2;max-height:2.4em;overflow:hidden">${esc(f.p.name)}</span>`;
+    d.onclick = () => { const on = !pick.has(f.p.sku); on ? pick.add(f.p.sku) : pick.delete(f.p.sku); d.firstChild.style.boxShadow = on ? 'inset 0 0 0 3px var(--green)' : 'inset 0 0 0 1.5px var(--line)'; d.firstChild.style.opacity = on ? 1 : .45; $('.ck', d).style.display = on ? '' : 'none'; upd(); };
+    return d; };
+  const prog = () => { $('#pg', ov).innerHTML = `ค้นแล้ว <b>${done.toLocaleString()}</b>/${list.length.toLocaleString()} · พบรูป <b style="color:var(--green)">${found.length}</b> · ไม่พบ ${miss}${running ? ' <span class="spin dark" style="width:14px;height:14px;vertical-align:middle"></span>' : ''}`; };
+  const OFF = 'https://world.openfoodfacts.org', F = 'code,product_name,image_front_small_url,image_small_url,image_front_url', sleep = ms => new Promise(r => setTimeout(r, ms));
+  const lookup = async codes => { // ค้นหลายบาร์โค้ดในครั้งเดียว · ถ้าไม่สำเร็จค้นทีละตัว
+    try { const r = await fetch(`${OFF}/api/v2/search?code=${codes.join(',')}&fields=${F}&page_size=${codes.length}`); if (!r.ok) throw 0; return (await r.json()).products || []; }
+    catch (e) { const out = []; for (const c of codes) { if (stop) break; try { const j = await (await fetch(`${OFF}/api/v2/product/${c}.json?fields=${F}`)).json(); if (j.product) out.push({ ...j.product, code: c }); } catch (x) { } await sleep(650); } return out; }
+  };
+  $('#st', ov).onclick = async () => {
+    const again = $('#rt', ov) && $('#rt', ov).checked; list = cand.filter(p => again || !tried[p.barcode]);
+    if (!list.length) return toast('ค้นครบทุกรายการแล้ว — ติ๊ก "ค้นซ้ำ" ถ้าต้องการค้นใหม่');
+    $('#st', ov).style.display = 'none'; $('#sp', ov).style.display = ''; running = true; stop = false; done = 0; miss = 0; prog();
+    for (let i = 0; i < list.length && !stop && ov.isConnected; i += 50) {
+      const chunk = list.slice(i, i + 50), byCode = {}; chunk.forEach(p => (byCode[String(p.barcode).trim()] = byCode[String(p.barcode).trim()] || []).push(p));
+      const t0 = Date.now(), res = await lookup(Object.keys(byCode)), hit = new Set();
+      res.forEach(x => { const img = x.image_front_small_url || x.image_small_url || x.image_front_url, c = String(x.code || ''); if (!img || !byCode[c] || hit.has(c)) return; hit.add(c);
+        byCode[c].forEach(p => { if (Img.get(p.sku) || found.some(f => f.p.sku === p.sku)) return; const f = { p, img }; found.push(f); pick.add(p.sku); if (ov.isConnected) $('#gr', ov).appendChild(card(f)); }); });
+      Object.keys(byCode).forEach(c => { if (!hit.has(c)) { tried[c] = Date.now(); miss += byCode[c].length; } else delete tried[c]; });
+      LS.set('autoImgTried', tried); done += chunk.length; upd(); prog();
+      if (i + 50 < list.length && !stop) await sleep(Math.max(0, 6500 - (Date.now() - t0))); // ไม่เกิน ~10 ครั้ง/นาที
+    }
+    running = false; if (ov.isConnected) { $('#sp', ov).style.display = 'none'; $('#st', ov).style.display = ''; $('#st', ov).textContent = 'ค้นต่อ'; prog(); }
+  };
+  $('#sp', ov).onclick = () => { stop = true; toast('หยุดหลังรอบนี้'); };
+  $('#sv', ov).onclick = async () => {
+    const sel = found.filter(f => pick.has(f.p.sku)); let ok = 0, bad = 0, rows = [];
+    const flush = async () => { if (!rows.length) return; await api('upsert', { table: 'Images', rows }); rows.forEach(r => Img.map[r.sku] = r.data); Img.persist(); rows = []; };
+    try {
+      for (let i = 0; i < sel.length; i++) {
+        busy(1, `กำลังบันทึกรูป ${i + 1}/${sel.length}...`);
+        try { const d = await Img.shrink(await urlToBlob(sel[i].img), 240, 'contain'); rows.push({ sku: sel[i].p.sku, data: d }); ok++; } catch (e) { bad++; }
+        if (rows.length >= 15) await flush();
+      }
+      await flush(); busy(0);
+      sel.forEach(f => { pick.delete(f.p.sku); const c = $(`[data-k="${CSS.escape(f.p.sku)}"]`, ov); if (c) c.remove(); }); found.splice(0, found.length, ...found.filter(f => !sel.includes(f))); upd();
+      document.dispatchEvent(new Event('mm:images'));
+      const left = cand.length - ok;
+      ioReport('เติมรูปสินค้าแล้ว', [['บันทึกรูปใหม่', ok.toLocaleString() + ' รายการ'], ...(bad ? [['โหลดรูปไม่ได้', bad + ' รายการ']] : []), ['สินค้ามีรูปแล้วทั้งหมด', Object.keys(Img.map).length.toLocaleString() + ' รายการ'], ['ยังไม่มีรูป (มีบาร์โค้ด)', Math.max(0, left).toLocaleString() + ' รายการ'], 'สินค้าที่หาไม่เจอ ใช้ปุ่ม "🔎 ค้นรูปจากเน็ต" ในหน้าแก้ไขสินค้า (ค้นจาก Google ได้)'], 'import');
+    } catch (e) { busy(0); toast('บันทึกได้ ' + ok + ' รูปแล้วหยุด: ' + e.message, 1, 6000); }
+  };
+  upd();
+}
+window.autoImages = autoImages;
+
 /* ---------- IMPORT / EXPORT ---------- */
 VIEWS.io = el => {
   if (ownerOnly(el)) return;
@@ -2240,20 +2368,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.25"></script>
-<script src="logic.js?v=2.6.25"></script>
-<script src="cache.js?v=2.6.25"></script>
-<script src="offline.js?v=2.6.25"></script>
-<script src="scanner.js?v=2.6.25"></script>
-<script src="printer.js?v=2.6.25"></script>
-<script src="pos.js?v=2.6.25"></script>
-<script src="display.js?v=2.6.25"></script>
-<script src="reports.js?v=2.6.25"></script>
-<script src="inventory.js?v=2.6.25"></script>
-<script src="people.js?v=2.6.25"></script>
-<script src="quality.js?v=2.6.25"></script>
-<script src="services.js?v=2.6.25"></script>
-<script src="owner.js?v=2.6.25"></script>
+<script src="qr.js?v=2.6.26"></script>
+<script src="logic.js?v=2.6.26"></script>
+<script src="cache.js?v=2.6.26"></script>
+<script src="offline.js?v=2.6.26"></script>
+<script src="scanner.js?v=2.6.26"></script>
+<script src="printer.js?v=2.6.26"></script>
+<script src="pos.js?v=2.6.26"></script>
+<script src="display.js?v=2.6.26"></script>
+<script src="reports.js?v=2.6.26"></script>
+<script src="inventory.js?v=2.6.26"></script>
+<script src="people.js?v=2.6.26"></script>
+<script src="quality.js?v=2.6.26"></script>
+<script src="services.js?v=2.6.26"></script>
+<script src="owner.js?v=2.6.26"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
