@@ -1017,9 +1017,11 @@ const TSync = {
   // ---- เชื่อมตรง WebRTC ระหว่างเครื่อง (ใช้ช่องส่งสัญญาณเดียวกับจอลูกค้า) ----
   wire(ch) {
     this.dc = ch;
-    ch.onopen = () => { this.direct = true; this.peerAt = Date.now(); try { ch.send('hello'); } catch (e) { } this.badge(); };
-    ch.onmessage = e => { if (e.data === 'hello') { if (this.last) try { ch.send(JSON.stringify(this.last.dev === this.dev ? this.last : this.msg())); } catch (x) { } return; } try { this.in(JSON.parse(e.data)); } catch (x) { } };
-    ch.onclose = () => { if (this.dc === ch) { this.dc = null; this.direct = false; this.badge(); } };
+    ch.onopen = () => { this.direct = true; this.peerAt = this.rxAt = Date.now(); try { ch.send('hello'); } catch (e) { } this.badge();
+      // ตรวจสายทุก 3 วิ: เงียบเกิน 10 วิ (อีกเครื่องปิด/หลับ/หลุด Wi-Fi) → ตัดแล้วเชื่อมใหม่ทันที ระหว่างนั้นส่งผ่าน Google
+      clearInterval(this.hb); this.hb = setInterval(() => { if (this.dc !== ch) return clearInterval(this.hb); try { ch.send('ping'); } catch (e) { } if (Date.now() - this.rxAt > 10000) { clearInterval(this.hb); try { ch.close(); this.pc && this.pc.close(); } catch (e) { } this.dc = null; this.direct = false; this.own = null; this.badge(); this.rtc(); } }, 3000); };
+    ch.onmessage = e => { this.rxAt = this.peerAt = Date.now(); if (e.data === 'ping') { try { ch.send('pong'); } catch (x) { } return; } if (e.data === 'pong') return; if (e.data === 'hello') { if (this.last) try { ch.send(JSON.stringify(this.last.dev === this.dev ? this.last : this.msg())); } catch (x) { } return; } try { this.in(JSON.parse(e.data)); } catch (x) { } };
+    ch.onclose = () => { if (this.dc === ch) { this.dc = null; this.direct = false; this.own = null; this.badge(); clearTimeout(this.st); this.st = setTimeout(() => this.rtc(), 300); } };
   },
   async rtc() {
     clearTimeout(this.st);

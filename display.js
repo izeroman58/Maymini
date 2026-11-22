@@ -86,14 +86,16 @@ const Display = {
     const tick = async () => { if (!this.askCb || this.askCb.id !== id) return; try { const r = await sig(code, 'reply'); if (r && r.id === id) return this.reply(r); } catch (e) { } this.askPT = setTimeout(tick, 1000); };
     this.askPT = setTimeout(tick, 1200);
   },
-  send(state) { try { if (this.dc && this.dc.readyState === 'open') { this.dc.send(JSON.stringify(state)); return true; } } catch (e) { } return false; },
+  // ช่องตรงที่เงียบเกิน 12 วิ (จอลูกค้าปิด/หลับ) = ถือว่าขาด → ส่งผ่าน Google ทันที และรับคำขอเชื่อมใหม่ได้เลย
+  alive() { if (this.dc && this.dc.readyState === 'open' && this.rxAt && Date.now() - this.rxAt > 12000) { try { this.dc.close(); } catch (e) { } this.dc = null; } return !!(this.dc && this.dc.readyState === 'open'); },
+  send(state) { this.alive(); try { if (this.dc && this.dc.readyState === 'open') { this.dc.send(JSON.stringify(state)); return true; } } catch (e) { } return false; },
   // ฝั่ง POS: คอยรับคำขอเชื่อมตรงจากจอลูกค้า แล้วตอบกลับ
   listen() {
     clearTimeout(this.sigT);
     const code = LS.get('dispCode', '');
     if (!code || !S.apiUrl || !('RTCPeerConnection' in window) || !S.user) return;
     const tick = async () => {
-      const open = this.dc && this.dc.readyState === 'open';
+      const open = this.alive();
       try {
         const off = await sig(code, 'offer');
         // จอลูกค้าขอเชื่อมใหม่ (เช่น เพิ่งรีเฟรช) → ตอบรับทันทีแม้ช่องเดิมยังดูเหมือนเปิดอยู่
@@ -103,8 +105,8 @@ const Display = {
           const pc = this.pc = new RTCPeerConnection(RTC_CFG);
           pc.ondatachannel = ev => {
             const ch = ev.channel; this.dc = ch;
-            ch.onopen = () => { this.last && this.send(this.last); };
-            ch.onmessage = m => { if (m.data === 'hello') { this.last && this.send(this.last); return; } try { const o = JSON.parse(m.data); if (o && o.reply) this.reply(o.reply); } catch (e) { } };
+            ch.onopen = () => { this.rxAt = Date.now(); this.last && this.send(this.last); };
+            ch.onmessage = m => { this.rxAt = Date.now(); if (m.data === 'ping') { try { ch.send('pong'); } catch (e) { } return; } if (m.data === 'hello') { this.last && this.send(this.last); return; } try { const o = JSON.parse(m.data); if (o && o.reply) this.reply(o.reply); } catch (e) { } };
             ch.onclose = () => { if (this.dc === ch) this.dc = null; };
           };
           await pc.setRemoteDescription(off.sdp);
@@ -188,6 +190,10 @@ const LB = v => `<span class="cu">฿</span>${money(v, num(v) % 1 ? 2 : 0)}`;
 VIEWS.display = (root, hash) => {
   document.body.classList.add('full');
   const code = (String(hash || '').split('-')[1] || '').trim();
+  // จำรหัสจอนี้ไว้ — ติดตั้งเป็นแอป "จอลูกค้า" แล้วเปิดจากไอคอน จะเข้าหน้านี้เต็มจอทันที
+  try { if (code) localStorage.setItem('mm_dispOwnCode', code); } catch (e) { }
+  try { const lk = document.querySelector('link[rel=manifest]'); if (lk && !/display\.webmanifest/.test(lk.href)) lk.href = 'display.webmanifest?v=1'; } catch (e) { }
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { }
   root.innerHTML = `<style>
    .dsp{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;font-family:var(--fh);color:#111;overflow:hidden}
    .dsp .cu{opacity:.38;font-weight:400;margin-right:.08em}
@@ -407,9 +413,10 @@ VIEWS.display = (root, hash) => {
         try { Display.rpc && Display.rpc.close(); } catch (e) { }
         const pc = Display.rpc = new RTCPeerConnection(RTC_CFG);
         const ch = Display.rx = pc.createDataChannel('mm', { ordered: true });
-        ch.onopen = () => { ch.send('hello'); draw(cur); };
-        ch.onmessage = m => { try { accept(JSON.parse(m.data)); } catch (e) { } };
-        ch.onclose = () => { draw(cur); setTimeout(connect, 3000); };
+        let rx = Date.now();
+        ch.onopen = () => { rx = Date.now(); ch.send('hello'); draw(cur); clearInterval(VIEWS.display.hb); VIEWS.display.hb = setInterval(() => { if (Display.rx !== ch) return clearInterval(VIEWS.display.hb); if (ch.readyState !== 'open') return; try { ch.send('ping'); } catch (e) { } if (Date.now() - rx > 12000) { clearInterval(VIEWS.display.hb); try { ch.close(); pc.close(); } catch (e) { } Display.rx = null; draw(cur); connect(); } }, 4000); };
+        ch.onmessage = m => { rx = Date.now(); if (m.data === 'pong') return; try { accept(JSON.parse(m.data)); } catch (e) { } };
+        ch.onclose = () => { if (Display.rx !== ch) return; draw(cur); setTimeout(connect, 1000); };
         await pc.setLocalDescription(await pc.createOffer());
         await iceDone(pc);
         const id = Math.random().toString(36).slice(2);
@@ -446,6 +453,21 @@ VIEWS.display = (root, hash) => {
   const autoFS = () => { if (LS.get('dispFS', true) && !isFS() && location.hash.indexOf('#display') === 0) goFS(); };
   ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, autoFS, true));
   autoFS(); paintFS();
+  // เบราว์เซอร์ไม่ยอมให้เต็มจอเองโดยไม่มีการแตะ → ขึ้นป้ายใหญ่ให้แตะ 1 ครั้ง (ถ้าเปิดจากไอคอนแอป "จอลูกค้า" จะเต็มจอเองทันที ไม่ขึ้นป้ายนี้)
+  const appMode = () => matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches;
+  const hint = () => {
+    let h = document.getElementById('fshint');
+    const need = LS.get('dispFS', true) && !isFS() && !appMode() && location.hash.indexOf('#display') === 0;
+    if (!need) { h && h.remove(); return; }
+    if (h) return;
+    h = document.createElement('div'); h.id = 'fshint';
+    h.style.cssText = 'position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:var(--fh);text-align:center;padding:4vmin;cursor:pointer';
+    h.innerHTML = '<div style="font-size:9vmin;font-weight:800">แตะจอ 1 ครั้ง</div><div style="font-size:4.5vmin;margin-top:1vmin">เพื่อเปิดเต็มจอ</div><div style="font-size:2.6vmin;opacity:.8;margin-top:4vmin;max-width:80vw">ไม่อยากแตะทุกครั้ง: Chrome ⋮ › ติดตั้งแอป / เพิ่มลงในหน้าจอหลัก (ชื่อ "May จอลูกค้า") แล้วเปิดจากไอคอน จะเต็มจอเองทันที</div>';
+    h.addEventListener('pointerdown', e => { e.stopPropagation(); h.remove(); goFS(); });   // แตะแล้วป้ายหายเสมอ (กลับมาเมื่อออกจากเต็มจอ)
+    document.body.appendChild(h);
+  };
+  document.addEventListener('fullscreenchange', hint);
+  setTimeout(hint, 600);
   // กลับมาแสดงผล (สลับแท็บ/ปลดล็อกจอ): อ่านสถานะล่าสุดทันที ไม่ต้องรอรอบดึงข้อมูลถัดไป
   const wake = () => { if (document.hidden) return; local(); if (Display.bc) try { Display.bc.postMessage({ hello: 1 }); } catch (e) { } if (VIEWS.display.poll) { clearTimeout(VIEWS.display.pt); VIEWS.display.poll(); } };
   document.addEventListener('visibilitychange', () => { wake(); if (!document.hidden) { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { } } });

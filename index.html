@@ -194,7 +194,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.33';
+const APP_VER = '2.6.34';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -2390,7 +2390,9 @@ async function selfHeal(miss) {
 async function boot() {
   const miss = missingFiles(); if (miss.length) return selfHeal(miss);
   sessionStorage.removeItem('mm_heal');
-  if (!S.apiUrl && !document.getElementById('demobar') && location.hash.indexOf('#display') !== 0) document.body.insertAdjacentHTML('afterbegin', '<div id="demobar" style="position:fixed;left:0;right:0;bottom:0;z-index:70;background:#B45309;color:#fff;text-align:center;font-size:13px;padding:4px 8px;pointer-events:none">โหมดทดลอง — เครื่องนี้ยังไม่ได้เชื่อมฐานข้อมูลร้าน (ข้อมูลไม่ใช่ของจริง)</div>');
+  if (!S.apiUrl && !document.getElementById('demobar') && location.hash.indexOf('#display') !== 0 && !/[?&]display=1/.test(location.search)) document.body.insertAdjacentHTML('afterbegin', '<div id="demobar" style="position:fixed;left:0;right:0;bottom:0;z-index:70;background:#B45309;color:#fff;text-align:center;font-size:13px;padding:4px 8px;pointer-events:none">โหมดทดลอง — เครื่องนี้ยังไม่ได้เชื่อมฐานข้อมูลร้าน (ข้อมูลไม่ใช่ของจริง)</div>');
+  // เปิดจากไอคอนแอป "จอลูกค้า" (?display=1) → เข้าหน้าจอลูกค้าของเครื่องนี้ทันที
+  if (/[?&]display=1/.test(location.search) && location.hash.indexOf('#display') !== 0) { let c = ''; try { c = localStorage.getItem('mm_dispOwnCode') || ''; } catch (e) { } history.replaceState(null, '', location.pathname + location.search + '#display' + (c ? '-' + c : '')); }
   const h0 = (location.hash || '').slice(1);
   if (/^display/.test(h0) && VIEWS.display) return VIEWS.display(app, h0);
   if (!S.user || !S.token) return renderLogin();
@@ -2458,20 +2460,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.33"></script>
-<script src="logic.js?v=2.6.33"></script>
-<script src="cache.js?v=2.6.33"></script>
-<script src="offline.js?v=2.6.33"></script>
-<script src="scanner.js?v=2.6.33"></script>
-<script src="printer.js?v=2.6.33"></script>
-<script src="pos.js?v=2.6.33"></script>
-<script src="display.js?v=2.6.33"></script>
-<script src="reports.js?v=2.6.33"></script>
-<script src="inventory.js?v=2.6.33"></script>
-<script src="people.js?v=2.6.33"></script>
-<script src="quality.js?v=2.6.33"></script>
-<script src="services.js?v=2.6.33"></script>
-<script src="owner.js?v=2.6.33"></script>
+<script src="qr.js?v=2.6.34"></script>
+<script src="logic.js?v=2.6.34"></script>
+<script src="cache.js?v=2.6.34"></script>
+<script src="offline.js?v=2.6.34"></script>
+<script src="scanner.js?v=2.6.34"></script>
+<script src="printer.js?v=2.6.34"></script>
+<script src="pos.js?v=2.6.34"></script>
+<script src="display.js?v=2.6.34"></script>
+<script src="reports.js?v=2.6.34"></script>
+<script src="inventory.js?v=2.6.34"></script>
+<script src="people.js?v=2.6.34"></script>
+<script src="quality.js?v=2.6.34"></script>
+<script src="services.js?v=2.6.34"></script>
+<script src="owner.js?v=2.6.34"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
