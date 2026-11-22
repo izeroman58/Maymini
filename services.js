@@ -141,9 +141,9 @@ function svcDialog2(kind) {
       ${fieldBox(kind === 'out' ? 'acc' : kind === 'topup' ? 'phone' : 'billRef')}
       ${kind === 'out' ? `<input class="in" id="an" placeholder="ชื่อบัญชีปลายทาง (ถ้ามี)" value="${esc(f.accName)}" style="margin-bottom:8px">` : ''}
       ${kind === 'bill' ? `<div class="row" style="gap:8px;margin-bottom:8px"><input class="in grow" id="ct" placeholder="ชื่อ/เบอร์ติดต่อลูกค้า (ถ้ามี)" value="${esc(f.contact)}"><label class="btn ghost sm" style="flex:none">${f.photo ? '✓ รูปบิล' : '📷 ถ่ายรูปบิล'}<input type="file" accept="image/*" capture="environment" id="bp" hidden></label></div>` : ''}
-      ${kind === 'topup' ? `<div class="row wrap" style="gap:6px;margin-bottom:8px">${[10, 20, 30, 50, 100, 150, 200, 300, 500].map(v => `<button class="btn ${num(f.amt) === v ? '' : 'ghost'} sm" data-q="${v}">${v}</button>`).join('')}</div>` : ''}
+      ${kind === 'topup' ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">${[10, 20, 30, 50, 100, 150, 200, 300, 500].map(v => `<button class="btn ${num(f.amt) === v ? '' : 'ghost'}" data-q="${v}" style="min-height:58px;font-size:22px;font-weight:700;width:100%">${v}</button>`).join('')}</div>` : ''}
       ${fieldBox('amt')}
-      ${padHTML('npad')}
+      <div style="display:flex;justify-content:flex-end;margin:-4px 0 2px">${sndBtn()}</div>${padHTML('npad')}
       <div class="card" style="margin-top:10px;padding:10px 12px">
         <div class="kv"><span>ค่าบริการ ${k.over ? '<span class="tag amber">เกินตาราง กำหนดเอง</span>' : ''}</span><span><b>${k.fee != null ? money(k.fee, 0) : '-'}</b> <a href="javascript:void 0" id="ef" class="small">แก้</a></span></div>
         ${kind === 'out' ? `<div class="seg" id="md" style="margin:6px 0"><button data-m="add">บวกค่าบริการเพิ่ม</button><button data-m="deduct">หักจากยอด</button></div>` : ''}

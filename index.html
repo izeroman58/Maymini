@@ -130,7 +130,7 @@ body.kiosk main{padding-bottom:calc(24px + var(--safe-b))}
 .toast.err{background:var(--red-d)}
 /* scanner */
 .scan{position:fixed;inset:0;background:#000;z-index:80;display:flex;flex-direction:column}
-.scan video{flex:1;width:100%;object-fit:cover;min-height:0}
+.scan video{flex:1;width:100%;object-fit:cover;min-height:0}.scan .cam{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}.scan.split .cam{flex:none;height:44vh}.scan.split .frame{top:22%;height:36%}.scan.split .last{display:none}.scan.split .bot{padding-bottom:10px}.scan .spane{flex:1;min-height:0;background:var(--bg,#f6f3f2);display:flex;flex-direction:column}
 .scan .frame{position:absolute;left:10%;right:10%;top:30%;height:22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
 .scan .frame:after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff3049;box-shadow:0 0 8px #ff3049;animation:ln 1.6s ease-in-out infinite}
 @keyframes ln{0%,100%{transform:translateY(-34px)}50%{transform:translateY(34px)}}
@@ -191,7 +191,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.28';
+const APP_VER = '2.6.29';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -351,6 +351,18 @@ function beep() {
   try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 1850; g.gain.value = .08; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .09); } catch (e) { }
   try { navigator.vibrate && navigator.vibrate(40); } catch (e) { }
 }
+// เสียงกดแป้นตัวเลข: ปิด/เปิดได้ที่ไอคอน 🔊 บนแป้น · จำไว้ในเครื่องนี้ (เข้าระบบครั้งหน้ายังเป็นค่าเดิม)
+const keySndOn = () => LS.get('keySnd', true) !== false;
+function tick() {
+  if (!keySndOn()) return;
+  try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); const o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = 1300; g.gain.setValueAtTime(.09, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .045); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .05); } catch (e) { }
+}
+const sndBtn = () => `<button type="button" class="sndt" title="เสียงกดแป้น (แตะเพื่อปิด/เปิด)" onclick="toggleKeySnd()">${keySndOn() ? '🔊' : '🔇'}</button>`;
+function toggleKeySnd() { const on = !keySndOn(); LS.set('keySnd', on); $$('.sndt').forEach(x => x.textContent = on ? '🔊' : '🔇'); toast(on ? 'เปิดเสียงกดแป้นแล้ว' : 'ปิดเสียงกดแป้นแล้ว'); if (on) tick(); }
+// ทุกแป้นตัวเลขในระบบ: มีเสียงกด
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.kp button, .npad button, .cpad button, .pinpad button, .qcash button, [data-q]'); if (b && !b.disabled) tick(); }, true);
+// เตรียมระบบเสียงตั้งแต่แตะจอครั้งแรก → สแกนครั้งแรกมีเสียงทันที ไม่หน่วง
+addEventListener('pointerdown', () => { try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); } catch (e) { } }, { once: true, capture: true });
 function loadScript(src, globalName) {
   if (globalName && window[globalName]) return Promise.resolve();
   return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('โหลดไลบรารีไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)')); document.head.appendChild(s); });
@@ -386,7 +398,9 @@ const Elev = {
   touch() { if (this.scope && this.ok) this.until = Date.now() + 600e3; },
   set(pin, scope) {
     this.pin = pin; this.scope = scope || ''; this.until = Date.now() + (this.scope ? 600e3 : 180e3);
-    let b = $('#elev'); if (!b) { b = document.createElement('div'); b.id = 'elev'; b.className = 'outbox'; b.style.cssText = 'background:#7B3FB8;top:calc(92px + var(--safe-t));cursor:pointer'; b.onclick = () => { this.clear(); toast('ล็อกสิทธิ์เจ้าของแล้ว'); }; document.body.appendChild(b); }
+    let b = $('#elev'); if (!b) { b = document.createElement('div'); b.id = 'elev'; b.style.cssText = 'background:#7B3FB8;color:#fff;border-radius:12px;padding:7px 12px;margin:8px auto 0;max-width:960px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;box-shadow:var(--sh)'; b.onclick = () => { this.clear(); toast('ล็อกสิทธิ์เจ้าของแล้ว'); }; }
+    // แถบอยู่เหนือเนื้อหาหน้า (ไม่ลอยทับหัวข้อ)
+    const vw = $('#view'); if (vw && b.nextElementSibling !== vw) vw.before(b);
     const paint = () => { if (!this.ok) { this.clear(); return; } b.textContent = this.scope ? (this.scope === 'stock' ? '🔓 โหมดนับสต็อก (เจ้าของอนุมัติ) · แตะเพื่อล็อก' : '🔓 โหมดแก้ไขสินค้า (เจ้าของอนุมัติ) · แตะเพื่อล็อก') : '🔓 สิทธิ์เจ้าของ ' + Math.ceil((this.until - Date.now()) / 1000) + ' วิ · แตะเพื่อล็อก'; };
     clearInterval(this.t); this.t = setInterval(paint, 1000); paint();
   }
@@ -395,7 +409,7 @@ document.addEventListener('pointerdown', () => Elev.touch(), true);
 function ownerPinDlg(reason) {
   return new Promise(res => {
     let pin = '';
-    const ov = sheet('ต้องใช้รหัสเจ้าของร้าน', `<div class="center small muted" style="margin-bottom:4px">${esc(reason || '')}</div><div class="dots">${'<i></i>'.repeat(4)}</div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:#7B3FB8;color:#fff;font-size:15px">ยืนยัน</button></div>`, '', { onClose: () => res(null) });
+    const ov = sheet('ใส่รหัสเจ้าของร้าน / รหัสอนุมัติ', `<div class="center small muted" style="margin-bottom:4px">${esc(reason || '')}</div><div class="dots">${'<i></i>'.repeat(4)}</div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:#7B3FB8;color:#fff;font-size:15px">ยืนยัน</button></div>`, '', { onClose: () => res(null) });
     const dots = () => $$('.dots i', ov).forEach((d, i) => d.classList.toggle('on', i < pin.length));
     const ok = () => { if (pin.length < 4) return; ov.remove(); res(pin); };
     const add = d => { if (pin.length >= 4) return; pin += d; dots(); if (pin.length === 4) setTimeout(ok, 120); };
@@ -831,9 +845,11 @@ function renderLabel(cv, o) {
    ========================================================= */
 async function openScanner(onCode, opts = {}) {
   const el = document.createElement('div'); el.className = 'scan';
-  el.innerHTML = `<video playsinline muted></video><div class="frame"></div>
+  el.innerHTML = `<div class="cam"><video playsinline muted></video><div class="frame"></div>
    <div class="bar"><button class="iconbtn" data-x>${I(IC.x, 26)}</button><div class="grow disp" style="font-size:17px">${esc(opts.title || 'สแกนบาร์โค้ด')}</div><button class="iconbtn" data-torch title="ไฟฉาย">${I(IC.bolt, 24)}</button></div>
-   <div class="bot"><div class="last hidden"></div><div class="row"><input class="in grow" inputmode="numeric" placeholder="หรือพิมพ์/ยิงบาร์โค้ด แล้วกด Enter" style="background:rgba(255,255,255,.95)"><button class="btn" data-ok>ตกลง</button></div><div class="tiny center" style="margin-top:8px;opacity:.85" data-st>กำลังเปิดกล้อง...</div></div>`;
+   <div class="bot"><div class="last hidden"></div><div class="row"><input class="in grow" inputmode="numeric" placeholder="หรือพิมพ์/ยิงบาร์โค้ด แล้วกด Enter" style="background:rgba(255,255,255,.95)"><button class="btn" data-ok>ตกลง</button></div><div class="tiny center" style="margin-top:8px;opacity:.85" data-st>กำลังเปิดกล้อง...</div></div></div>`;
+  // แบ่งจอ: กล้องครึ่งบน · ล่างเป็นแผงของผู้เรียก (เช่น รายการขาย + ปุ่มชำระเงิน)
+  if (opts.panel) { el.classList.add('split'); const pane = document.createElement('div'); pane.className = 'spane'; el.appendChild(pane); setTimeout(() => opts.panel(pane, { close: () => close() }), 0); }
   document.body.appendChild(el);
   const video = $('video', el), st = $('[data-st]', el), inp = $('input', el);
   let stream = null, stop = false, last = '', lastAt = 0, reader = null, timer = null;
@@ -1422,7 +1438,8 @@ VIEWS.scan = el => {
       drawHist(); return '';
     }
     if (mode === 'label') { LQ.push({ p, copies: 1 }); ctx && ctx.showLast(`<b>${esc(p.name)}</b> เพิ่มเข้าคิวพิมพ์ (${LQ.length})`); drawHist(); return ''; }
-    $('#res', el).innerHTML = `<div class="card center"><div class="small muted">${esc(p.sku)} · ${esc(p.barcode)}</div><h3 style="margin:6px 0">${esc(p.name)}</h3><div class="big-price">${baht(f.price != null ? f.price : p.price)}</div>
+    const im = window.Img && Img.get(p.sku);
+    $('#res', el).innerHTML = `<div class="card center"><div style="width:min(64vw,220px);aspect-ratio:1;margin:0 auto 10px;border-radius:18px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3)">${im ? `<img src="${im}" alt="" style="width:100%;height:100%;object-fit:contain">` : `<div class="center">${I(IC.image, 44)}<div class="tiny">ยังไม่มีรูป</div></div>`}</div><div class="small muted">${esc(p.sku)} · ${esc(p.barcode)}</div><h3 style="margin:6px 0">${esc(p.name)}</h3><div class="big-price">${baht(f.price != null ? f.price : p.price)}</div>
       ${p.trackStock === 'Y' ? `<div class="small" style="margin-top:6px">คงเหลือ ${num(p.stock)}</div>` : ''}<div class="row" style="margin-top:12px"><button class="btn ghost grow" id="e">แก้ไข</button><button class="btn ghost grow" id="l">พิมพ์ฉลาก</button></div></div>`;
     $('#e', el).onclick = () => editProduct(p); $('#l', el).onclick = () => go('labels', [p]);
     return 'close';
@@ -2266,7 +2283,7 @@ const TBL_TH = { Products: 'สินค้า', Categories: 'หมวดหม
 /* ---------- USERS ---------- */
 VIEWS.users = async el => {
   if (ownerOnly(el)) return;
-  el.innerHTML = vhead('ผู้ใช้และสิทธิ์', `<button class="btn sm" id="add">${I(IC.plus, 18)} เพิ่ม</button>`, 'more') + `<div class="list" id="ul"></div>
+  el.innerHTML = vhead('ผู้ใช้และสิทธิ์', `<button class="btn sm" id="add">${I(IC.plus, 18)} เพิ่ม</button>`, 'more') + `<div class="card" id="apc"></div><div class="list" id="ul"></div>
    <div class="card small" style="margin-top:12px"><b>สิทธิ์การใช้งาน</b><div class="kv"><span>เจ้าของกิจการ</span><span class="muted right">ทุกเมนู ต้นทุน ภาษี ยอดขาย ใบเสร็จทั้งหมด นำเข้า/ส่งออก ลบข้อมูล จัดการผู้ใช้</span></div><div class="kv"><span>พนักงาน</span><span class="muted right">ค้นหา/สแกน/เพิ่ม-แก้สินค้า พิมพ์ฉลาก นับสต็อก บันทึกใบเสร็จรับสินค้า (เห็นเฉพาะที่ตนบันทึก) ดูใบอนุญาต</span></div></div>`;
   const draw = async () => {
     const us = await loadTable('Users');
@@ -2274,6 +2291,17 @@ VIEWS.users = async el => {
     $$('#ul [data-id]', el).forEach(x => x.onclick = () => userForm(us.find(u => u.id === x.dataset.id), draw));
   };
   $('#add', el).onclick = () => userForm(null, draw); draw();
+  // รหัสอนุมัติ: แยกจากรหัสเข้าระบบเจ้าของ — ใช้อนุมัติ นับสต็อก / แก้ไขสินค้า / คืนเงิน ฯลฯ
+  const apc = $('#apc', el), apDraw = () => { const on = !!S.settings.secretApprovePin;
+    apc.innerHTML = `<div class="row" style="gap:8px"><div class="grow"><b>🔐 รหัสอนุมัติของเจ้าของร้าน</b><div class="small muted">ใช้ตอนพนักงานขออนุมัติ (นับสต็อก แก้ไขสินค้า คืนเงิน ฯลฯ) แทนรหัสเข้าระบบของเจ้าของ · ให้คนที่ไว้ใจรู้ได้โดยไม่ต้องบอกรหัสเข้าระบบ</div></div><span class="tag ${on ? 'green' : 'gray'}">${on ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง'}</span></div>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" id="aps">${on ? 'เปลี่ยนรหัสอนุมัติ' : 'ตั้งรหัสอนุมัติ'}</button>${on ? '<button class="btn ghost" id="apx">ยกเลิกรหัสอนุมัติ</button>' : ''}</div>
+      <div class="tiny muted" style="margin-top:6px">${on ? 'อนุมัติได้ทั้งรหัสอนุมัติ และรหัสเข้าระบบของเจ้าของ' : 'ตอนนี้ใช้รหัสเข้าระบบของเจ้าของอนุมัติ'}</div>`;
+    $('#aps', apc).onclick = () => { const ov = sheet('ตั้งรหัสอนุมัติ (ตัวเลข 4 หลัก)', `<label class="f"><span>รหัสอนุมัติใหม่</span><input class="in" id="p1" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label><label class="f"><span>ยืนยันอีกครั้ง</span><input class="in" id="p2" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label><div class="tiny muted">ต้องไม่ซ้ำกับรหัสเข้าระบบของใคร</div>`, `<button class="btn block" id="ok">บันทึก</button>`);
+      $('#ok', ov).onclick = async () => { const a = $('#p1', ov).value.trim(), b = $('#p2', ov).value.trim(); if (!/^\d{4}$/.test(a)) return toast('ใส่ตัวเลข 4 หลัก', 1); if (a !== b) return toast('รหัสทั้ง 2 ช่องไม่ตรงกัน', 1);
+        try { busy(1); await api('setApprovePin', { pin: a }); await loadSettings(true).catch(() => { }); S.settings.secretApprovePin = S.settings.secretApprovePin || 'set'; busy(0); ov.remove(); toast('ตั้งรหัสอนุมัติแล้ว'); apDraw(); } catch (e) { busy(0); toast(e.message, 1); } }; };
+    const x = $('#apx', apc); if (x) x.onclick = async () => { if (!(await confirmDlg('ยกเลิกรหัสอนุมัติ? (กลับไปใช้รหัสเข้าระบบเจ้าของอนุมัติ)', 'ยกเลิกรหัส', true))) return; try { busy(1); await api('setApprovePin', { pin: '' }); S.settings.secretApprovePin = ''; busy(0); toast('ยกเลิกแล้ว'); apDraw(); } catch (e) { busy(0); toast(e.message, 1); } };
+  };
+  apDraw();
 };
 function userForm(u, done) {
   const isNew = !u; u = u || { role: 'staff', active: 'Y' };
@@ -2403,20 +2431,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.28"></script>
-<script src="logic.js?v=2.6.28"></script>
-<script src="cache.js?v=2.6.28"></script>
-<script src="offline.js?v=2.6.28"></script>
-<script src="scanner.js?v=2.6.28"></script>
-<script src="printer.js?v=2.6.28"></script>
-<script src="pos.js?v=2.6.28"></script>
-<script src="display.js?v=2.6.28"></script>
-<script src="reports.js?v=2.6.28"></script>
-<script src="inventory.js?v=2.6.28"></script>
-<script src="people.js?v=2.6.28"></script>
-<script src="quality.js?v=2.6.28"></script>
-<script src="services.js?v=2.6.28"></script>
-<script src="owner.js?v=2.6.28"></script>
+<script src="qr.js?v=2.6.29"></script>
+<script src="logic.js?v=2.6.29"></script>
+<script src="cache.js?v=2.6.29"></script>
+<script src="offline.js?v=2.6.29"></script>
+<script src="scanner.js?v=2.6.29"></script>
+<script src="printer.js?v=2.6.29"></script>
+<script src="pos.js?v=2.6.29"></script>
+<script src="display.js?v=2.6.29"></script>
+<script src="reports.js?v=2.6.29"></script>
+<script src="inventory.js?v=2.6.29"></script>
+<script src="people.js?v=2.6.29"></script>
+<script src="quality.js?v=2.6.29"></script>
+<script src="services.js?v=2.6.29"></script>
+<script src="owner.js?v=2.6.29"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

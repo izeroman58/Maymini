@@ -34,7 +34,8 @@ const padHTML = cls => `<div class="${cls || 'npad'}">${PAD_KEYS.map(k => `<butt
 const PICK_CSS = `.ptile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:12px;background:var(--pc);color:#fff;padding:6px 4px;min-height:58px;box-shadow:0 0 0 0 transparent;transition:transform .08s;text-align:center;line-height:1.1;width:100%;box-sizing:border-box;border:3px solid transparent}
   .ptile b{font-size:15px;font-weight:800;letter-spacing:.2px}.ptile i{font-style:normal;font-size:11px;opacity:.95}.ptile img{max-width:80%;max-height:36px;object-fit:contain;background:#fff;border-radius:6px;padding:2px}
   .ptile.on{border-color:#111;box-shadow:0 0 0 3px #fff inset;transform:scale(1.04)}
-  .npad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.npad button{min-height:56px;border-radius:14px;border:0;background:#eef1f5;font-size:26px;font-weight:700;color:#111;cursor:pointer;font-family:inherit}.npad button:active{background:#d7dde6}.npad [data-pk=clr],.npad [data-pk=del]{font-size:18px;background:#f6e7e9;color:#b0001b}`;
+  .npad{--kk:min(92px,12vh,26vw);display:grid;grid-template-columns:repeat(3,var(--kk));gap:10px;justify-content:center}.npad button{aspect-ratio:1/1;min-height:0;border-radius:16px;border:0;background:#eef1f5;font-size:clamp(22px,4vh,30px);font-weight:700;color:#111;cursor:pointer;font-family:inherit;touch-action:manipulation;user-select:none}.npad button:active{transform:scale(.96)}
+  .npad.big{grid-template-columns:repeat(3,1fr)}.npad.big button{aspect-ratio:auto}.npad button:active{background:#d7dde6}.npad [data-pk=clr],.npad [data-pk=del]{font-size:18px;background:#f6e7e9;color:#b0001b}`;
 if (!document.getElementById('pickcss')) { const st = document.createElement('style'); st.id = 'pickcss'; st.textContent = PICK_CSS; document.head.appendChild(st); }
 
 // เปิด/ปิดให้ลูกค้ากรอกข้อมูลบนจอลูกค้า (จอเสริมที่ไม่ใช่ทัชสกรีน → ปิด: จอลูกค้าแสดงข้อมูลให้ตรวจสอบอย่างเดียว)
@@ -186,7 +187,7 @@ const LB = v => `<span class="cu">฿</span>${money(v, num(v) % 1 ? 2 : 0)}`;
 
 VIEWS.display = (root, hash) => {
   document.body.classList.add('full');
-  const code = (hash.split('-')[1] || '').trim();
+  const code = (String(hash || '').split('-')[1] || '').trim();
   root.innerHTML = `<style>
    .dsp{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;font-family:var(--fh);color:#111;overflow:hidden}
    .dsp .cu{opacity:.38;font-weight:400;margin-right:.08em}

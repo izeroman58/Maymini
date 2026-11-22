@@ -47,14 +47,24 @@ VIEWS.stockcount = async el => {
     <div class="card" style="position:sticky;top:calc(56px + var(--safe-t));z-index:5"><div class="row"><div class="grow"><div class="small muted">นับแล้ว</div><div class="disp" style="font-size:22px" id="pg"></div></div><button class="btn" id="scn">${I(IC.scan, 20)} สแกน</button></div>
       <div class="prog" style="margin-top:8px"><i id="pb"></i></div>
       <div class="row" style="margin-top:10px"><input class="in grow" id="kb" placeholder="ยิงบาร์โค้ด / ค้นหา" inputmode="search"></div>
-      <div class="seg" id="md" style="margin-top:8px"><button data-m="inc">สแกน = +1</button><button data-m="ask">สแกนแล้วใส่จำนวน</button></div></div>
+      <div class="seg" id="md" style="margin-top:8px"><button data-m="inc">สแกน = +1</button><button data-m="ask">สแกนแล้วใส่จำนวน</button></div>
+      <div id="lastc"></div></div>
     <div class="chips" id="fl"></div>
     <div class="list" id="cl"></div>
     <div class="row" style="margin-top:12px;gap:8px"><button class="btn ghost grow" id="sv">บันทึกร่าง</button><button class="btn green grow" id="fin">${I(IC.check, 18)} ปิดการนับ & ปรับสต็อก</button></div>
     <div class="tiny muted" style="margin-top:6px">ร่างการนับเก็บไว้ในเครื่องนี้ ปิดแอปแล้วกลับมานับต่อได้</div>`;
   const save = () => { CNT.d = d; };
   const list = () => S.products.filter(inScope);
-  const setCount = (p, v, add) => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); const cur = d.counts[p.sku]; d.counts[p.sku] = { c: add ? num(cur && cur.c) + v : v, e: cur ? cur.e : num(p.stock) }; save(); };
+  // รายการที่เพิ่งนับ ขึ้นบนสุดของรายการ (ล่าสุดก่อน)
+  d.recent = d.recent || [];
+  const setCount = (p, v, add) => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); const cur = d.counts[p.sku]; d.counts[p.sku] = { c: add ? num(cur && cur.c) + v : v, e: cur ? cur.e : num(p.stock) }; d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); };
+  // ใส่จำนวนแทนการยิงซ้ำหลายรอบ: เพิ่ม (+) หรือแก้เป็นจำนวนรวม
+  const qty = (p, how, after) => keypad((how === 'add' ? 'เพิ่มจำนวน — ' : 'จำนวนรวมที่นับได้ — ') + esc(p.name), '', v => { setCount(p, v, how === 'add'); draw(); after && after(); },
+    { sub: `นับแล้ว ${d.counts[p.sku] ? num(d.counts[p.sku].c) : 0} · ในระบบ ${num(p.stock)}${how === 'add' ? ' · ใส่จำนวนที่จะบวกเพิ่ม' : ''}`, z: 95 });
+  const lastHTML = p => { const c = d.counts[p.sku]; return `<div class="row" style="gap:8px;align-items:center"><div class="grow" style="min-width:0"><div class="tiny muted">ล่าสุด</div><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</b></div><span class="tag green" style="font-size:18px;padding:4px 12px">${c ? num(c.c) : 0}</span></div>
+      <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost sm grow" onclick="CNTQ('${esc(p.sku)}','add')">＋ เพิ่มจำนวน</button><button class="btn ghost sm grow" onclick="CNTQ('${esc(p.sku)}','set')">แก้จำนวนรวม</button></div>`; };
+  const drawLast = () => { const box = $('#lastc', el); const p = d.recent[0] && IDX.bySku[d.recent[0]]; if (box) box.innerHTML = p ? `<div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#ecfdf3">${lastHTML(p)}</div>` : ''; };
+  window.CNTQ = (sku, how) => { const p = IDX.bySku[sku]; if (!p) return; qty(p, how, () => { const b = document.querySelector('.scan .last'); if (b) b.innerHTML = lastHTML(p); }); };
   const draw = () => {
     const L = list(), done = L.filter(p => p.sku in d.counts).length;
     $('#pg', el).textContent = `${done.toLocaleString()} / ${L.length.toLocaleString()}`; $('#pb', el).style.width = (L.length ? done / L.length * 100 : 0) + '%';
@@ -63,8 +73,12 @@ VIEWS.stockcount = async el => {
     $$('[data-f]', el).forEach(b => b.onclick = () => { filt = b.dataset.f; limit = 80; draw(); });
     const t = q.toLowerCase().split(/\s+/).map(norm).filter(Boolean);
     let res = L.filter(p => t.every(x => p._n.includes(x)));
+    // เรียงรายการที่เพิ่งนับไว้บนสุด
+    const rk = {}; d.recent.forEach((x, i) => rk[x] = i + 1);
+    if (d.recent.length) res = res.map((p, i) => [p, i]).sort((a, b) => (rk[a[0].sku] || 1e9) - (rk[b[0].sku] || 1e9) || a[1] - b[1]).map(x => x[0]);
+    drawLast();
     if (filt === 'todo') res = res.filter(p => !(p.sku in d.counts)); else if (filt === 'done') res = res.filter(p => p.sku in d.counts); else if (filt === 'diff') res = res.filter(p => p.sku in d.counts && num(d.counts[p.sku].c) !== num(d.counts[p.sku].e));
-    $('#cl', el).innerHTML = res.slice(0, limit).map(p => { const c = d.counts[p.sku], diff = c ? num(c.c) - num(c.e) : null; return `<div class="item" style="cursor:default"><div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)} · ระบบ ${num(c ? c.e : p.stock)}${diff ? ` · <b style="color:${diff > 0 ? 'var(--green)' : 'var(--red)'}">${diff > 0 ? '+' : ''}${Math.round(diff * 1000) / 1000}</b>` : ''}</div></div><input class="in num right" style="width:84px;min-height:40px" type="number" inputmode="decimal" step="any" data-s="${esc(p.sku)}" value="${c ? c.c : ''}" placeholder="นับ"></div>`; }).join('') + (res.length > limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red)">แสดงเพิ่ม (${res.length - limit})</div>` : '') || '<div class="empty">ไม่มีรายการ</div>';
+    $('#cl', el).innerHTML = res.slice(0, limit).map(p => { const c = d.counts[p.sku], diff = c ? num(c.c) - num(c.e) : null; const isLast = p.sku === d.recent[0]; return `<div class="item" style="cursor:default${isLast ? ';background:#ecfdf3;box-shadow:inset 4px 0 0 var(--green)' : ''}"><div class="grow"><div class="t">${isLast ? '<span class="tag green" style="margin-right:6px">ล่าสุด</span>' : ''}${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)} · ระบบ ${num(c ? c.e : p.stock)}${diff ? ` · <b style="color:${diff > 0 ? 'var(--green)' : 'var(--red)'}">${diff > 0 ? '+' : ''}${Math.round(diff * 1000) / 1000}</b>` : ''}</div></div><input class="in num right" style="width:84px;min-height:40px" type="number" inputmode="decimal" step="any" data-s="${esc(p.sku)}" value="${c ? c.c : ''}" placeholder="นับ"></div>`; }).join('') + (res.length > limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red)">แสดงเพิ่ม (${res.length - limit})</div>` : '') || '<div class="empty">ไม่มีรายการ</div>';
     $$('#cl [data-s]', el).forEach(i => i.onchange = () => { const p = IDX.bySku[i.dataset.s]; if (i.value === '') { delete d.counts[p.sku]; save(); } else setCount(p, num(i.value)); draw(); });
     const m = $('#more', el); if (m) m.onclick = () => { limit += 150; draw(); };
   };
@@ -73,7 +87,7 @@ VIEWS.stockcount = async el => {
     const p = f.p;
     if (d.scope.type !== 'selected' && !inScope(p)) { toast(p.name + ' ไม่อยู่ในขอบเขตการนับนี้', 1); return; }
     if (d.mode === 'ask') { keypad('จำนวนที่นับได้ — ' + esc(p.name), d.counts[p.sku] ? d.counts[p.sku].c : '', v => { setCount(p, v); draw(); }, { sub: 'ในระบบ ' + num(p.stock) }); return 'close'; }
-    setCount(p, 1, true); ctx && ctx.showLast(`<div class="row"><b class="grow">${esc(p.name)}</b><span class="tag green">${d.counts[p.sku].c}</span></div>`); draw();
+    setCount(p, 1, true); ctx && ctx.showLast(lastHTML(p)); draw(); if (!ctx) window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   $('#scn', el).onclick = () => openScanner((c, ctx) => hit(c, ctx), { continuous: d.mode === 'inc', title: 'สแกนนับสต็อก' });
   Scanner.on('stockcount', c => { if (findByCode(c)) { beep(); hit(c); } else { Scanner.err(); toast('ไม่พบ ' + c, 1); } });

@@ -53,7 +53,9 @@ var Logic = (function () {
   function pinOk(db) {
     if (PINOK !== null) return PINOK;
     if (!OWNERPIN) return (PINOK = false);
-    PINOK = db.read('Users', {}).some(function (x) { return x.role === 'owner' && x.active !== 'N' && x.pinHash === db.hash(String(OWNERPIN)); });
+    var h = db.hash(String(OWNERPIN)), ap = (db.settings() || {}).secretApprovePin;
+    // รับได้ทั้งรหัสเข้าระบบของเจ้าของ และ "รหัสอนุมัติ" ที่เจ้าของตั้งแยกไว้ (ให้พนักงานที่ไว้ใจได้ใช้นับสต็อก/แก้สินค้า โดยไม่ต้องรู้รหัสเข้าระบบเจ้าของ)
+    PINOK = (ap && ap === h) || db.read('Users', {}).some(function (x) { return x.role === 'owner' && x.active !== 'N' && x.pinHash === h; });
     if (!PINOK) err('PIN_BAD: รหัสเจ้าของร้านไม่ถูกต้อง');
     return PINOK;
   }
@@ -150,6 +152,7 @@ var Logic = (function () {
   }
   function pinTaken(db, pin, exceptId) {
     var h = db.hash(String(pin));
+    if ((db.settings() || {}).secretApprovePin === h) return true; // ห้ามตรงกับรหัสอนุมัติ
     return db.read('Users', {}).some(function (x) { return x.id !== exceptId && String(x.active) !== 'N' && x.pinHash === h; });
   }
   function registerDevice(db, u, dev) {
@@ -194,6 +197,16 @@ var Logic = (function () {
     if (!owners.length && (row.role !== 'owner' || row.active === 'N')) err('ต้องมีเจ้าของกิจการอย่างน้อย 1 คน');
     db.upsert('Users', [row]); db.log(u, 'saveUser', uname);
     return { username: uname };
+  }
+  // รหัสอนุมัติของเจ้าของร้าน (แยกจากรหัสเข้าระบบ) · ว่าง = ยกเลิก (ใช้รหัสเข้าระบบเจ้าของอนุมัติ)
+  function setApprovePin(db, u, pin) {
+    need(db, u, 'owner'); pin = String(pin == null ? '' : pin).trim();
+    if (!pin) { db.upsert('Settings', [{ key: 'secretApprovePin', value: '' }]); db.log(u, 'approvePin', 'off'); return { set: false }; }
+    if (!/^\d{4}$/.test(pin)) err('รหัสอนุมัติต้องเป็นตัวเลข 4 หลัก');
+    var h = db.hash(pin);
+    if (db.read('Users', {}).some(function (x) { return x.active !== 'N' && x.pinHash === h; })) err('รหัสนี้ซ้ำกับรหัสเข้าระบบของผู้ใช้ — ตั้งรหัสอนุมัติให้ต่างจากรหัสเข้าระบบทุกคน');
+    db.upsert('Settings', [{ key: 'secretApprovePin', value: h }]); db.log(u, 'approvePin', 'set');
+    return { set: true };
   }
   function changePin(db, u, oldPin, newPin) {
     if (u.role !== 'owner') err('พนักงานเปลี่ยนรหัสเองไม่ได้ — ให้เจ้าของร้านเปลี่ยนให้');
@@ -570,6 +583,7 @@ var Logic = (function () {
   function handle(db, u, a, p) {
     OWNERPIN = p && p.ownerPin || null; PINOK = null;
     switch (a) {
+      case 'setApprovePin': return setApprovePin(db, u, p.pin);
       case 'checkPin': pinOk(db); if (!PINOK) err('PIN_BAD: กรุณาใส่รหัสเจ้าของร้าน'); return { ok: true };
       case 'list': return { rows: list(db, u, p.table, p.opt) };
       case 'upsert': return { rows: upsert(db, u, p.table, p.rows) };
