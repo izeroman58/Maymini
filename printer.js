@@ -5,7 +5,9 @@
 'use strict';
 const RCFG_DEF = { paper: 80, header: '', footer: 'ขอบคุณที่อุดหนุนค่ะ', showCustomer: true, showCashier: true, showDevice: false, showPoints: true, showBarcode: true, showAddress: true, cut: true, fontScale: 1, showLogo: true, shopName: '', title: 'ใบเสร็จรับเงิน', taxId: '', qtyLine: false, bigTotal: true, qrText: '', qrLabel: '', feed: 4 };
 const rcfg = () => cfg('receiptCfg', RCFG_DEF);
-const PCONN_DEF = { type: 'system', chunk: 120, delay: 15, baud: 9600, autoPrint: true, drawer: false, drawerAll: false, drawerPin: 'both', name: '' };
+const PCONN_DEF = { type: 'system', chunk: 120, delay: 15, baud: 9600, autoPrint: true, drawer: false, drawerAll: false, drawerPin: '2', name: '' };
+// เดิมค่าเริ่มต้นส่งคำสั่งลิ้นชักทั้ง 2 ขา — เครื่องพิมพ์ที่ไม่รองรับขา 5 จะเลื่อนกระดาษ → เปลี่ยนเป็นขา 2 (มาตรฐาน) ครั้งเดียว
+(() => { const c = LS.get('printerConn', null); if (c && c.drawerPin === 'both' && !LS.get('drawerMig', false)) { c.drawerPin = '2'; LS.set('printerConn', c); } LS.set('drawerMig', true); })();
 const drawerBytes = () => { const pin = pconn().drawerPin, out = []; (pin === '2' ? [0] : pin === '5' ? [1] : [0, 1]).forEach(m => out.push(0x1B, 0x70, m, 0x19, 0xFA)); return out; };
 const pconn = () => ({ ...PCONN_DEF, ...LS.get('printerConn', {}) });
 
@@ -244,7 +246,8 @@ VIEWS.printer = el => {
     <label class="row small" style="margin-top:10px"><input type="checkbox" id="auto" ${pc.autoPrint ? 'checked' : ''}> พิมพ์ใบเสร็จอัตโนมัติหลังรับชำระ</label>
     <label class="row small" style="margin-top:6px"><input type="checkbox" id="drw" ${pc.drawer ? 'checked' : ''}> เปิดลิ้นชักเก็บเงินทันทีเมื่อกดรับเงินสด (สายลิ้นชัก RJ11 เสียบช่อง DK/Cash drawer หลังเครื่องพิมพ์)</label>
     <label class="row small" style="margin-top:6px;padding-left:26px"><input type="checkbox" id="drwa" ${pc.drawerAll ? 'checked' : ''}> เปิดลิ้นชักทุกการชำระ (รวมโอน/บัตร)</label>
-    <div class="row small" style="margin-top:6px;padding-left:26px;gap:8px">ขาสั่งลิ้นชัก <select class="in" id="dpin" style="width:auto;min-height:36px;padding:2px 8px"><option value="both">อัตโนมัติ (ขา 2 + 5)</option><option value="2">ขา 2</option><option value="5">ขา 5</option></select><button class="btn ghost sm" id="dtest">ทดสอบเปิดลิ้นชัก</button></div>
+    <div class="row small" style="margin-top:6px;padding-left:26px;gap:8px">ขาสั่งลิ้นชัก <select class="in" id="dpin" style="width:auto;min-height:36px;padding:2px 8px"><option value="2">ขา 2 (มาตรฐาน)</option><option value="5">ขา 5</option><option value="both">ขา 2 + 5</option></select><button class="btn ghost sm" id="dtest">ทดสอบเปิดลิ้นชัก</button></div>
+    <div class="tiny muted" style="margin-top:6px;padding-left:26px">ไม่ได้ต่อลิ้นชักกับเครื่องพิมพ์ → อย่าติ๊ก (ระบบจะส่งคำสั่งไปเครื่องพิมพ์ทุกครั้งที่รับเงิน · ผ่าน RawBT จะเห็นหน้าต่าง RawBT และกระดาษเลื่อนเล็กน้อย)</div>
     <details style="margin-top:8px"><summary class="small muted">ขั้นสูง</summary><div class="grid3" style="margin-top:8px"><label class="f"><span>ขนาดชิ้น BT (ไบต์)</span><input class="in" type="number" id="chunk" value="${pc.chunk}"></label><label class="f"><span>หน่วงเวลา (ms)</span><input class="in" type="number" id="delay" value="${pc.delay}"></label><label class="f"><span>Baud (Serial)</span><input class="in" type="number" id="baud" value="${pc.baud}"></label></div></details>
   </div>
   <div class="card"><h3>ออกแบบใบเสร็จ ${isOwner() ? '' : '<span class="tag gray">ดูอย่างเดียว</span>'}</h3>
@@ -262,7 +265,7 @@ VIEWS.printer = el => {
     ${isOwner() ? '<button class="btn block green" id="sv">บันทึกรูปแบบใบเสร็จ</button>' : ''}
   </div>
   <div class="card center"><div class="small muted" style="margin-bottom:8px">ตัวอย่างใบเสร็จ</div><canvas id="pv" style="max-width:100%;width:290px;box-shadow:0 4px 16px rgba(0,0,0,.12);background:#fff"></canvas></div>`;
-  $('#dpin', el).value = pc.drawerPin || 'both';
+  $('#dpin', el).value = pc.drawerPin || '2';
   const HELP = { bt: 'เครื่องพิมพ์ Bluetooth Low Energy (BLE) — ใช้ Chrome บน Android/Windows/Mac หรือแอป Bluefy บน iPhone/iPad', usb: 'ต่อสาย USB Type-C/Type-A กับมือถือ Android (ผ่าน OTG) หรือคอมพิวเตอร์ — ใช้ Chrome', serial: 'เครื่องพิมพ์ที่ต่อ USB แล้วขึ้นเป็นพอร์ต COM (คอมพิวเตอร์)', rawbt: 'เครื่องพิมพ์ Bluetooth แบบ Classic บน Android (เช่น QF300-UBT, AIMO, Xprinter) — ติดตั้งแอป RawBT จาก Play Store › จับคู่เครื่องพิมพ์ในแอป RawBT › ตั้ง Default printer แล้วกลับมากดทดสอบพิมพ์ · ใช้ได้แม้ไม่มีเน็ต', system: 'ใช้หน้าต่างพิมพ์ของระบบ (เครื่องพิมพ์ที่ติดตั้งไว้ในคอม/AirPrint) — ต้องกดยืนยันทุกครั้ง' };
   const getC = () => { const o = { ...c, header: $('#hd', el).value, footer: $('#ft', el).value, fontScale: +$('#fsz', el).value, shopName: $('#sn', el).value.trim(), title: $('#ttl', el).value.trim() || 'ใบเสร็จรับเงิน', taxId: $('#tax', el).value.trim(), qrText: $('#qrt', el).value.trim(), qrLabel: $('#qrl', el).value.trim(), feed: Math.max(0, Math.min(10, +$('#feed', el).value || 0)) }; $$('[data-k]', el).forEach(k => o[k.dataset.k] = k.checked); o.paper = +$('#paper .on', el).dataset.p; return o; };
   const pv = async () => { const saved = S.settings.receiptLogo; S.settings.receiptLogo = logo; const cv = await renderReceipt(SAMPLE_ORDER(), getC()); S.settings.receiptLogo = saved; const t = $('#pv', el); t.width = cv.width; t.height = cv.height; t.getContext('2d').drawImage(cv, 0, 0); };

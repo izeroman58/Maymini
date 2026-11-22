@@ -26,7 +26,8 @@
   --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:var(--fs)/1.5 var(--fb);overscroll-behavior:none;overflow-x:hidden;touch-action:manipulation;-webkit-text-size-adjust:100%}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:var(--fs)/1.5 var(--fb);overscroll-behavior:none;touch-action:manipulation;-webkit-text-size-adjust:100%}
+body{overflow-x:clip}
 /* หน้าขาย/จอลูกค้า: ล็อกพอดีจอ ไม่เลื่อนขึ้นลง */
 html:has(body.full),body.full{height:100%;overflow:hidden}body.full #app{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden}body.full #view{flex:1;min-height:0;overflow:hidden;width:100%;max-width:none;margin:0}body.full #view>.pos{height:100%}
 h1,h2,h3,.disp{font-family:var(--fh);margin:0;line-height:1.25}
@@ -193,7 +194,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.31';
+const APP_VER = '2.6.33';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -1436,10 +1437,12 @@ VIEWS.scan = el => {
    <div class="card center" style="padding:22px 14px">
      <button class="btn block" id="go" style="min-height:64px;font-size:18px">${I(IC.cam, 26)} เปิดกล้องสแกน</button>
      <div class="small muted" style="margin:12px 0 6px">หรือใช้เครื่องยิงบาร์โค้ด / พิมพ์รหัส</div>
-     <input class="in" id="kb" inputmode="numeric" placeholder="ยิงบาร์โค้ดที่ช่องนี้" style="text-align:center;font-size:18px">
+     <input class="in" id="kb" inputmode="numeric" placeholder="ยิงได้เลย ไม่ต้องแตะช่อง · หรือแตะเพื่อพิมพ์รหัส" style="text-align:center;font-size:18px">
      <div class="seg" id="md" style="margin-top:12px"><button class="on" data-m="price">เช็คราคา</button><button data-m="stock">นับ/รับสต็อก</button><button data-m="label">คิวพิมพ์ฉลาก</button></div>
    </div>
-   <div id="res"></div><div id="hist"></div>`;
+   <div id="hist"></div>`;
+  // ผลเช็คราคาอยู่บนสุด (เห็นทันทีไม่ต้องเลื่อน) · รูปซ้าย รายละเอียดขวา
+  $('.card', el).insertAdjacentHTML('beforebegin', '<div id="res"></div><style>.pcard{display:flex;gap:18px;align-items:stretch;padding:16px}.pcard .pimg{flex:0 0 min(42%,340px);aspect-ratio:1;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3)}.pcard .pimg img{width:100%;height:100%;object-fit:contain}.pcard .pinfo{flex:1;min-width:0;display:flex;flex-direction:column}.pcard .pname{font-family:var(--fh);font-size:clamp(22px,3.2vw,34px);font-weight:700;line-height:1.25}.pcard .pprice{font-family:var(--fh);font-size:clamp(44px,7vw,76px);font-weight:800;color:var(--red);line-height:1.1;margin:8px 0 10px}.pcard .pprice small{font-size:.4em;color:var(--ink2)}.pcard .pmeta{display:grid;gap:6px;font-size:16px}.pcard .pmeta div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:4px 0}.pcard .pmeta span{color:var(--ink2)}.pcard .pmeta b.low{color:var(--red)}@media (max-width:560px){.pcard{flex-direction:column}.pcard .pimg{flex:none;width:min(70vw,260px);margin:0 auto}.pcard .pinfo{text-align:center}}</style>');
   let mode = 'price'; const hist = [];
   $$('#md button', el).forEach(b => b.onclick = () => { mode = b.dataset.m; $$('#md button', el).forEach(x => x.classList.toggle('on', x === b)); });
   const show = (code, ctx) => {
@@ -1458,9 +1461,13 @@ VIEWS.scan = el => {
     }
     if (mode === 'label') { LQ.push({ p, copies: 1 }); ctx && ctx.showLast(`<b>${esc(p.name)}</b> เพิ่มเข้าคิวพิมพ์ (${LQ.length})`); drawHist(); return ''; }
     const im = window.Img && Img.get(p.sku);
-    $('#res', el).innerHTML = `<div class="card center"><div style="width:min(64vw,220px);aspect-ratio:1;margin:0 auto 10px;border-radius:18px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3)">${im ? `<img src="${im}" alt="" style="width:100%;height:100%;object-fit:contain">` : `<div class="center">${I(IC.image, 44)}<div class="tiny">ยังไม่มีรูป</div></div>`}</div><div class="small muted">${esc(p.sku)} · ${esc(p.barcode)}</div><h3 style="margin:6px 0">${esc(p.name)}</h3><div class="big-price">${baht(f.price != null ? f.price : p.price)}</div>
-      ${p.trackStock === 'Y' ? `<div class="small" style="margin-top:6px">คงเหลือ ${num(p.stock)}</div>` : ''}<div class="row" style="margin-top:12px"><button class="btn ghost grow" id="e">แก้ไข</button><button class="btn ghost grow" id="l">พิมพ์ฉลาก</button></div></div>`;
-    $('#e', el).onclick = () => editProduct(p); $('#l', el).onclick = () => go('labels', [p]);
+    const pr = f.price != null ? f.price : p.price;
+    $('#res', el).innerHTML = `<div class="card pcard"><div class="pimg">${im ? `<img src="${im}" alt="">` : `<div class="center">${I(IC.image, 56)}<div class="small">ยังไม่มีรูป</div></div>`}</div>
+      <div class="pinfo"><div class="pname">${esc(p.name)}</div><div class="pprice">${num(pr) ? baht(pr) : 'ระบุราคาตอนขาย'}${p.byWeight === 'Y' ? '<small> / กก.</small>' : ''}</div>
+        <div class="pmeta"><div><span>บาร์โค้ด</span><b class="num">${esc(p.barcode || '—')}</b></div><div><span>รหัสสินค้า</span><b>${esc(p.sku)}</b></div>${p.category ? `<div><span>หมวดหมู่</span><b>${esc(p.category)}</b></div>` : ''}${p.trackStock === 'Y' ? `<div><span>คงเหลือ</span><b class="${num(p.stock) <= num(p.lowStock || 0) ? 'low' : ''}">${num(p.stock)}</b></div>` : ''}</div>
+        <div class="row" style="margin-top:14px;gap:8px">${can('editProducts') ? '<button class="btn ghost grow" id="e">แก้ไข</button>' : ''}<button class="btn ghost grow" id="l">พิมพ์ฉลาก</button></div></div></div>`;
+    window.scrollTo({ top: 0 });
+    const eb = $('#e', el); if (eb) eb.onclick = () => editProduct(p); $('#l', el).onclick = () => go('labels', [p]);
     return 'close';
   };
   const drawHist = () => {
@@ -1477,9 +1484,10 @@ VIEWS.scan = el => {
   };
   $('#go', el).onclick = () => openScanner(show, { continuous: true, title: mode === 'price' ? 'เช็คราคา' : mode === 'stock' ? 'นับสต็อก (สแกนต่อเนื่อง)' : 'เพิ่มเข้าคิวพิมพ์' });
   const kb = $('#kb', el); kb.onkeydown = e => { if (e.key === 'Enter' && kb.value.trim()) { beep(); show(kb.value.trim()); kb.value = ''; } };
-  Scanner.on('scan', code => { const r = show(code); if (findByCode(code)) beep(); else Scanner.err(); return r; });
+  kb.onchange = () => { if (kb.value.trim()) { const v = kb.value.trim(); kb.value = ''; if (findByCode(v)) beep(); show(v); } };
+  // ไม่โฟกัสช่องพิมพ์อัตโนมัติ: เครื่องยิงทำงานได้ทันทีโดยไม่ต้องแตะช่อง และแถบแป้นพิมพ์ (F1–F6) ของแท็บเล็ตจะไม่ขึ้นมาบังสินค้า
+  Scanner.on('scan', code => { const a = document.activeElement; if (a && a.blur && a.tagName === 'INPUT') a.blur(); const r = show(code); if (findByCode(code)) beep(); else Scanner.err(); return r; });
   if (!S.products.length) loadProducts(true).catch(e => toast(e.message, 1)); else buildIndex();
-  setTimeout(() => kb.focus(), 100);
 };
 
 /* ---------- LABELS (NIIMBOT) ---------- */
@@ -2450,20 +2458,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.31"></script>
-<script src="logic.js?v=2.6.31"></script>
-<script src="cache.js?v=2.6.31"></script>
-<script src="offline.js?v=2.6.31"></script>
-<script src="scanner.js?v=2.6.31"></script>
-<script src="printer.js?v=2.6.31"></script>
-<script src="pos.js?v=2.6.31"></script>
-<script src="display.js?v=2.6.31"></script>
-<script src="reports.js?v=2.6.31"></script>
-<script src="inventory.js?v=2.6.31"></script>
-<script src="people.js?v=2.6.31"></script>
-<script src="quality.js?v=2.6.31"></script>
-<script src="services.js?v=2.6.31"></script>
-<script src="owner.js?v=2.6.31"></script>
+<script src="qr.js?v=2.6.33"></script>
+<script src="logic.js?v=2.6.33"></script>
+<script src="cache.js?v=2.6.33"></script>
+<script src="offline.js?v=2.6.33"></script>
+<script src="scanner.js?v=2.6.33"></script>
+<script src="printer.js?v=2.6.33"></script>
+<script src="pos.js?v=2.6.33"></script>
+<script src="display.js?v=2.6.33"></script>
+<script src="reports.js?v=2.6.33"></script>
+<script src="inventory.js?v=2.6.33"></script>
+<script src="people.js?v=2.6.33"></script>
+<script src="quality.js?v=2.6.33"></script>
+<script src="services.js?v=2.6.33"></script>
+<script src="owner.js?v=2.6.33"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
