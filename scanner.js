@@ -27,30 +27,42 @@ const Scanner = {
     if ((m = c.match(/^Key([A-Z])$/))) return (e.shiftKey !== e.getModifierState('CapsLock')) ? m[1] : m[1].toLowerCase();
     if (c in this.PLAIN) return e.shiftKey && this.SHIFT[c] ? this.SHIFT[c] : this.PLAIN[c];
     if (e.key && e.key.length === 1 && e.key.charCodeAt(0) < 128) return e.key;   // บางเครื่อง/Android ไม่ส่ง e.code
+    if (e.key && e.key.length === 1 && this.TH[e.key]) return this.TH[e.key];       // แป้นไทย (เกษมณี) ที่ไม่ส่ง e.code → แปลงกลับเป็นปุ่มภาษาอังกฤษ
     return null;
   },
+  // แป้นพิมพ์ไทยเกษมณี → ตัวอักษรอังกฤษบนปุ่มเดียวกัน
+  TH: (() => { const a = "ๅ/-ภถุึคตจขชๆไำพะัีรนยบลฃฟหกดเ้่าสวงผปแอิืทมใฝ+๑๒๓๔ู฿๕๖๗๘๙๐\"ฎฑธํ๊ณฯญฐ,ฅฤฆฏโฌ็๋ษศซ.()ฉฮฺ์?ฒฬฦ", b = "1234567890-=qwertyuiop[]\\asdfghjkl;'zxcvbnm,./!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:\"ZXCVBNM<>?"; const m = {}; [...a].forEach((c, i) => { if (b[i] != null && !(c in m)) m[c] = b[i]; }); return m; })(),
+  thai2en(s) { return [...String(s)].map(c => this.TH[c] != null ? this.TH[c] : c).join(''); },
   isField: el => el && (el.tagName === 'INPUT' && !/^(checkbox|radio|button|file|range|color|date)$/i.test(el.type) || el.tagName === 'TEXTAREA'),
   onKey(e) {
     if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
-    const cfg = this.cfg, now = performance.now();
+    const cfg = this.cfg, now = e.timeStamp || performance.now();
     if (e.key === 'Enter' || e.key === 'Tab' || e.code === 'NumpadEnter') {
-      if (this.b && now - this.b.last <= Math.max(cfg.maxGap * 3, 120)) { if (this.finish(e.key === 'Tab' ? 'Tab' : 'Enter', e)) return; }
-      this.b = null; return;
+      if (this.b && now - this.b.last <= Math.max(cfg.maxGap * 6, 400)) { if (this.finish(e.key === 'Tab' ? 'Tab' : 'Enter', e)) return; }
+      this.b = null;
+      if (e.key === 'Enter') this.thaiField(e);
+      return;
     }
     const ch = this.charOf(e);
     if (ch == null) return;            // Shift, CapsLock ฯลฯ — ไม่ตัดการยิง
     const b = this.b;
-    if (!b || now - b.last > cfg.maxGap) {
+    // เครื่องยิง Bluetooth ส่งเป็นชุด ๆ อาจเว้นช่วงได้ → เมื่อยืนยันแล้วว่าเป็นเครื่องยิง (ตัวอักษรมาเร็ว ≥ 3 ตัว) ยอมให้เว้นได้ถึง 250ms
+    const fastSoFar = b && b.gaps.length >= 2 && b.gaps.filter(g => g <= cfg.maxGap).length >= b.gaps.length - 1;
+    const allow = b ? (fastSoFar ? Math.max(cfg.maxGap, 250) : cfg.maxGap) : 0;
+    if (!b || now - b.last > allow) {
+      if (b && fastSoFar && b.chars.length >= cfg.minLen) this.finish('idle');
       const el = document.activeElement, f = this.isField(el);
-      this.b = { chars: [ch], keys: [e.key], t0: now, last: now, gaps: [], el: f ? el : null, before: f ? { v: el.value, s: el.selectionStart ?? el.value.length, e: el.selectionEnd ?? el.value.length } : null, thai: /[฀-๿]/.test(e.key), swallowed: 0 };
+      this.b = { chars: [ch], keys: [e.key], t0: now, last: now, gaps: [], el: f ? el : null, before: f ? { v: el.value, s: el.selectionStart ?? el.value.length, e: el.selectionEnd ?? el.value.length } : null, thai: /[฀-๿]/.test(e.key), noCode: !e.code, swallowed: 0 };
     } else {
       b.gaps.push(now - b.last); b.last = now; b.chars.push(ch); b.keys.push(e.key);
       if (/[฀-๿]/.test(e.key)) b.thai = true;
+      if (!e.code) b.noCode = true;
       // ตั้งแต่ตัวที่ 2 ที่มาเร็วผิดปกติ = เครื่องยิง → ไม่ให้ตัวอักษรลงช่องพิมพ์ (กันภาษาไทยเพี้ยน/ปนข้อความ)
       e.preventDefault(); b.swallowed++;
     }
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => { if (this.b) this.finish('idle'); }, Math.max(cfg.maxGap * 2, 70));
+    // ส่วนใหญ่เครื่องยิงส่ง Enter ท้าย → รอ Enter ให้นานพอ ไม่ตัดกลางรหัส (เครื่องที่ไม่ส่ง Enter จบเองหลังหยุด 300ms)
+    this.timer = setTimeout(() => { if (this.b) this.finish('idle'); }, LS.get('scanSeenEnter', false) ? 600 : 300);
   },
   clean(code) {
     const cfg = this.cfg;
@@ -68,12 +80,26 @@ const Scanner = {
       if (b.swallowed && b.el) { const add = b.keys.slice(b.keys.length - b.swallowed).join(''); const s = b.el.selectionStart ?? b.el.value.length; b.el.value = b.el.value.slice(0, s) + add + b.el.value.slice(b.el.selectionEnd ?? s); b.el.setSelectionRange && b.el.setSelectionRange(s + add.length, s + add.length); b.el.dispatchEvent(new Event('input', { bubbles: true })); }
       return false;
     }
-    const code = this.clean(b.chars.join(''));
+    // แป้นไทยที่ไม่ส่งตำแหน่งปุ่ม: ตัว - / + ฯลฯ ก็คือปุ่มตัวเลขบนแป้นไทย → แปลงจากตัวอักษรที่กดทั้งหมด
+    const code = this.clean(b.thai && b.noCode ? this.thai2en(b.keys.join('')) : b.chars.join(''));
+    if (term === 'Enter' && !LS.get('scanSeenEnter', false)) LS.set('scanSeenEnter', true);
     const ms = Math.round(b.last - b.t0), avg = b.gaps.length ? b.gaps.reduce((a, x) => a + x, 0) / b.gaps.length : 0;
     this.history.unshift({ code, len: code.length, ms, avg: Math.round(avg * 10) / 10, term, thai: b.thai, src: 'HID', at: new Date() }); this.history = this.history.slice(0, 30);
     if (!code) return false;
     this.dispatch(code, b, term, ev);
     return true;
+  },
+  // แป้นพิมพ์บนจอเป็นภาษาไทยและช่องพิมพ์ถูกเลือกอยู่ → Android ส่งตัวอักษรไทยเข้าช่องตรง ๆ (ไม่ผ่าน keydown)
+  // กด Enter แล้ว: ถ้าท้ายช่องเป็นตัวอักษรไทยที่แปลงกลับเป็นบาร์โค้ดได้ → แก้เป็นตัวเลขให้แล้วส่งต่อเหมือนยิงปกติ
+  thaiField(e) {
+    const el = document.activeElement; if (!this.isField(el)) return;
+    const m = String(el.value).match(/[\u0E00-\u0E7F0-9a-zA-Z\/\-+(),."?]{4,}$/); if (!m || !/[\u0E00-\u0E7F]/.test(m[0])) return;
+    const code = this.clean(this.thai2en(m[0]));
+    if (!/^[0-9A-Za-z\-]{4,}$/.test(code) || !/\d{3,}/.test(code)) return;
+    const pre = el.value.slice(0, m.index);
+    this.history.unshift({ code, len: code.length, ms: 0, avg: 0, term: 'Enter', thai: true, src: 'HID', at: new Date() }); this.history = this.history.slice(0, 30);
+    el.value = pre + code; el.dispatchEvent(new Event('input', { bubbles: true }));
+    this.dispatch(code, { el, before: { v: pre, s: pre.length, e: pre.length } }, 'Enter', e);
   },
   dispatch(code, b, term, ev) {
     const cfg = this.cfg;

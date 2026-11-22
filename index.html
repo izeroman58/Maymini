@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#D6001C">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -26,7 +26,9 @@
   --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:var(--fs)/1.5 var(--fb)}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:var(--fs)/1.5 var(--fb);overscroll-behavior:none;overflow-x:hidden;touch-action:manipulation;-webkit-text-size-adjust:100%}
+/* หน้าขาย/จอลูกค้า: ล็อกพอดีจอ ไม่เลื่อนขึ้นลง */
+html:has(body.full),body.full{height:100%;overflow:hidden}body.full #app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}body.full #view{flex:1;min-height:0;overflow:hidden;width:100%;max-width:none;margin:0}body.full #view>.pos{height:100%}
 h1,h2,h3,.disp{font-family:var(--fh);margin:0;line-height:1.25}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--blue)}
@@ -191,7 +193,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.29';
+const APP_VER = '2.6.30';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -355,12 +357,28 @@ function beep() {
 const keySndOn = () => LS.get('keySnd', true) !== false;
 function tick() {
   if (!keySndOn()) return;
-  try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); const o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = 1300; g.gain.setValueAtTime(.09, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .045); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .05); } catch (e) { }
+  try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = 1150; g.gain.setValueAtTime(.32, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .06); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .065); } catch (e) { }
+  try { navigator.vibrate && navigator.vibrate(12); } catch (e) { }
 }
 const sndBtn = () => `<button type="button" class="sndt" title="เสียงกดแป้น (แตะเพื่อปิด/เปิด)" onclick="toggleKeySnd()">${keySndOn() ? '🔊' : '🔇'}</button>`;
 function toggleKeySnd() { const on = !keySndOn(); LS.set('keySnd', on); $$('.sndt').forEach(x => x.textContent = on ? '🔊' : '🔇'); toast(on ? 'เปิดเสียงกดแป้นแล้ว' : 'ปิดเสียงกดแป้นแล้ว'); if (on) tick(); }
 // ทุกแป้นตัวเลขในระบบ: มีเสียงกด
-document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.kp button, .npad button, .cpad button, .pinpad button, .qcash button, [data-q]'); if (b && !b.disabled) tick(); }, true);
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.kp button, .kpg button, .npad button, .cpad button, .pinpad button, .qcash button, [data-q]'); if (b && !b.disabled) tick(); }, true);
+// แท็บเล็ต/มือถือ: แตะช่องตัวเลข → แป้นตัวเลขลอยขึ้นมา (ไม่เด้งคีย์บอร์ดของเครื่อง)
+document.addEventListener('pointerdown', e => {
+  const el = e.target;
+  if (!el || el.tagName !== 'INPUT' || el.readOnly || el.disabled || el.hasAttribute('data-nokp') || !window.keypad || typeof touchUI !== 'function' || !touchUI()) return;
+  const im = (el.getAttribute('inputmode') || '').toLowerCase();
+  if (!(el.type === 'number' || im === 'decimal' || im === 'numeric' || el.type === 'tel' || im === 'tel')) return;
+  if (el.closest('.kpov')) return;
+  e.preventDefault();
+  const tel = el.type === 'tel' || im === 'tel' || im === 'numeric';
+  const lb = el.closest('label'), cap = (lb && lb.querySelector('span') ? lb.querySelector('span').textContent : '') || el.placeholder || el.getAttribute('aria-label') || 'ใส่ตัวเลข';
+  const ttl = (el.closest('.ov') && el.closest('.ov').querySelector('h3, .sh h3, .ttl')) ? el.closest('.ov').querySelector('h3, .sh h3, .ttl').textContent : '';
+  keypad(ttl ? cap.trim() + ' — ' + ttl.trim() : cap.trim(), el.value, v => {
+    el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, { raw: true, noDot: tel, maxLen: tel ? 20 : 12, money: /ราคา|ทุน|ยอด|เงิน|ค่า/.test(cap) });
+}, true);
 // เตรียมระบบเสียงตั้งแต่แตะจอครั้งแรก → สแกนครั้งแรกมีเสียงทันที ไม่หน่วง
 addEventListener('pointerdown', () => { try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); } catch (e) { } }, { once: true, capture: true });
 function loadScript(src, globalName) {
@@ -524,7 +542,8 @@ async function loadTable(t) { const r = await api('list', { table: t }); return 
 
 /* ---------- product search index ---------- */
 let IDX = { byBarcode: {}, bySku: {} };
-const norm = s => String(s || '').toLowerCase().replace(/[\s\-_.,/()]+/g, '');
+// ค้นหาไม่สนวรรณยุกต์/ไม้ไต่คู้/การันต์ (เช่น พิมพ์ "เป็กเหล้" เจอ "เป๊กเหล้า") และช่องว่าง/เครื่องหมาย
+const norm = s => String(s || '').toLowerCase().normalize('NFC').replace(/\u0E4D\u0E32/g, '\u0E33').replace(/[\u0E47-\u0E4E\u200B-\u200D]/g, '').replace(/[\s\-_.,/()"'’]+/g, '');
 function buildIndex() {
   IDX = { byBarcode: {}, bySku: {} };
   S.products.forEach(p => { p._n = norm(p.name + ' ' + p.sku + ' ' + p.barcode + ' ' + p.category); if (p.barcode) String(p.barcode).split(/[,; ]+/).forEach(b => b && (IDX.byBarcode[b] = p)); IDX.bySku[p.sku] = p; });
@@ -2431,20 +2450,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.29"></script>
-<script src="logic.js?v=2.6.29"></script>
-<script src="cache.js?v=2.6.29"></script>
-<script src="offline.js?v=2.6.29"></script>
-<script src="scanner.js?v=2.6.29"></script>
-<script src="printer.js?v=2.6.29"></script>
-<script src="pos.js?v=2.6.29"></script>
-<script src="display.js?v=2.6.29"></script>
-<script src="reports.js?v=2.6.29"></script>
-<script src="inventory.js?v=2.6.29"></script>
-<script src="people.js?v=2.6.29"></script>
-<script src="quality.js?v=2.6.29"></script>
-<script src="services.js?v=2.6.29"></script>
-<script src="owner.js?v=2.6.29"></script>
+<script src="qr.js?v=2.6.30"></script>
+<script src="logic.js?v=2.6.30"></script>
+<script src="cache.js?v=2.6.30"></script>
+<script src="offline.js?v=2.6.30"></script>
+<script src="scanner.js?v=2.6.30"></script>
+<script src="printer.js?v=2.6.30"></script>
+<script src="pos.js?v=2.6.30"></script>
+<script src="display.js?v=2.6.30"></script>
+<script src="reports.js?v=2.6.30"></script>
+<script src="inventory.js?v=2.6.30"></script>
+<script src="people.js?v=2.6.30"></script>
+<script src="quality.js?v=2.6.30"></script>
+<script src="services.js?v=2.6.30"></script>
+<script src="owner.js?v=2.6.30"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
