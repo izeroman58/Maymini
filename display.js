@@ -10,19 +10,80 @@ const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls:
 const sig = (code, kind, data) => fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: data === undefined ? 'sigGet' : 'sigPut', payload: { code, kind, data } }) }).then(r => r.json()).then(r => { if (!r.ok) throw new Error(r.error || 'sig'); return r.data; });
 const iceDone = pc => new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 2500); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
 
+/* ---------- รูปแบบตัวเลข + ธนาคาร/เครือข่าย (ใช้ทั้งเครื่องขายและจอลูกค้า) ----------
+   ไม่ใช้โลโก้ของธนาคาร/ค่ายมือถือ (เป็นเครื่องหมายการค้า) — แสดงเป็นป้ายสีประจำ + ชื่อย่อ
+   เจ้าของร้านอัปโหลดรูปโลโก้ของตัวเองได้ที่ ค่าบริการหน้าร้าน › โลโก้ธนาคาร/เครือข่าย */
+const BANKS = [
+  ['KBANK', 'กสิกรไทย', '#138f2d'], ['SCB', 'ไทยพาณิชย์', '#4e2e7f'], ['KTB', 'กรุงไทย', '#1ba5e1'], ['BBL', 'กรุงเทพ', '#1e4598'],
+  ['BAY', 'กรุงศรี', '#e3a800'], ['TTB', 'ทหารไทยธนชาต', '#0050f0'], ['GSB', 'ออมสิน', '#eb198d'], ['BAAC', 'ธ.ก.ส.', '#4b9b3e'],
+  ['GHB', 'อาคารสงเคราะห์', '#f57d23'], ['UOB', 'ยูโอบี', '#0b3979'], ['CIMB', 'ซีไอเอ็มบี', '#7e2f36'], ['KKP', 'เกียรตินาคินภัทร', '#635f98'],
+  ['LHB', 'แลนด์ แอนด์ เฮ้าส์', '#6d6e71'], ['TISCO', 'ทิสโก้', '#12549f'], ['IBANK', 'อิสลาม', '#184615'], ['PP', 'พร้อมเพย์', '#1b3a6b'], ['TMN', 'ทรูมันนี่', '#ff8200']
+].map(([code, name, color]) => ({ code, name, color }));
+const CARRIERS = [['AIS', 'AIS', '#7cbd1e'], ['TRUE', 'True', '#e3001b'], ['DTAC', 'dtac', '#1d9ad6'], ['NT', 'NT (my)', '#f5a800'], ['TMN', 'TrueMoney Wallet', '#ff8200']].map(([code, name, color]) => ({ code, name, color }));
+const fmtNum = (v, kind) => { v = String(v || '').replace(/\D/g, '');
+  if (kind === 'phone') return v.replace(/^(\d{3})(\d{0,3})(\d{0,4}).*/, (m, a, b, c) => [a, b, c].filter(Boolean).join('-')) || v;
+  if (kind === 'account' && v.length === 10) return v.replace(/^(\d{3})(\d)(\d{5})(\d)$/, '$1-$2-$3-$4');
+  return v.replace(/(\d{4})(?=\d)/g, '$1 '); };
+const askValid = (a, v, pick) => { v = String(v || ''); if (a.pick && !pick) return false;
+  if (a.field === 'phone') return /^0\d{9}$/.test(v); if (a.field === 'account') return v.length >= (a.min || 10) && v.length <= (a.max || 15);
+  return v.length >= (a.min || 1) && v.length <= (a.max || 20); };
+// ป้ายธนาคาร/เครือข่าย: รูปที่เจ้าของอัปโหลด (ถ้ามี) หรือป้ายสี + ชื่อย่อ
+const pickTile = (x, on, big) => `<span class="ptile${on ? ' on' : ''}" style="--pc:${x.color}">${x.logo ? `<img src="${x.logo}" alt="">` : `<b>${esc(x.code === 'TMN' ? 'TrueMoney' : x.code === 'PP' ? 'PromptPay' : x.code)}</b>`}<i>${esc(x.name)}</i></span>`;
+const PAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clr', '0', 'del'];
+const padHTML = cls => `<div class="${cls || 'npad'}">${PAD_KEYS.map(k => `<button type="button" data-pk="${k}">${k === 'del' ? '⌫' : k === 'clr' ? 'ล้าง' : k}</button>`).join('')}</div>`;
+const PICK_CSS = `.ptile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:12px;background:var(--pc);color:#fff;padding:6px 4px;min-height:58px;box-shadow:0 0 0 0 transparent;transition:transform .08s;text-align:center;line-height:1.1;width:100%;box-sizing:border-box;border:3px solid transparent}
+  .ptile b{font-size:15px;font-weight:800;letter-spacing:.2px}.ptile i{font-style:normal;font-size:11px;opacity:.95}.ptile img{max-width:80%;max-height:36px;object-fit:contain;background:#fff;border-radius:6px;padding:2px}
+  .ptile.on{border-color:#111;box-shadow:0 0 0 3px #fff inset;transform:scale(1.04)}
+  .npad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.npad button{min-height:56px;border-radius:14px;border:0;background:#eef1f5;font-size:26px;font-weight:700;color:#111;cursor:pointer;font-family:inherit}.npad button:active{background:#d7dde6}.npad [data-pk=clr],.npad [data-pk=del]{font-size:18px;background:#f6e7e9;color:#b0001b}`;
+if (!document.getElementById('pickcss')) { const st = document.createElement('style'); st.id = 'pickcss'; st.textContent = PICK_CSS; document.head.appendChild(st); }
+
+// เปิด/ปิดให้ลูกค้ากรอกข้อมูลบนจอลูกค้า (จอเสริมที่ไม่ใช่ทัชสกรีน → ปิด: จอลูกค้าแสดงข้อมูลให้ตรวจสอบอย่างเดียว)
+const custInputOn = () => (S.settings && S.settings.custInput) !== 'N';
 const Display = {
   bc: ('BroadcastChannel' in window) ? new BroadcastChannel('mm-display') : null,
   last: null, t: null, dc: null, pc: null, offerId: '', sigT: null,
   push(state) {
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
-    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: (S.settings && S.settings.brandLogo) || '', ads: adsCfg(), cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
+    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: (S.settings && S.settings.brandLogo) || '', ads: adsCfg(), cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now(), ask: this.askSt || null, pv: this.askSt ? null : (this.pvSt || null) };
     this.last = state;
     try { this.bc && this.bc.postMessage(state); } catch (e) { }
+    // เครื่องเดียวกัน (อีกแท็บ/อีกหน้าต่าง): เก็บสถานะล่าสุดในเครื่องด้วย — แท็บจอลูกค้าที่ถูกพัก (iPad/มือถือ) อ่านได้ทันทีเมื่อกลับมาแสดง
+    try { localStorage.setItem('mm_dispState', JSON.stringify(state)); } catch (e) { }
     const direct = this.send(state);
     const code = LS.get('dispCode', '');
     // สำรองผ่านเซิร์ฟเวอร์: ถ้าเชื่อมตรงอยู่ ส่งช้าๆ ไว้กันพลาด (ใช้ตอนจอเพิ่งเปิดใหม่)
     // ส่งผ่าน Google ทุกครั้งด้วย (เร็ว ~150 มิลลิวิ) กันกรณีเชื่อมตรงค้าง/ขาด เช่น จอลูกค้าเพิ่งโหลดใหม่หรือใช้เน็ตมือถือ · จอลูกค้าตัดข้อมูลซ้ำ/เก่าทิ้งเอง
     if (code && S.apiUrl) { clearTimeout(this.t); this.t = setTimeout(() => api('displayPush', { code, state: this.last }).catch(() => { }), state.mode === 'cart' ? 150 : 0); }
+  },
+  // ---- ให้ลูกค้ากรอกที่จอลูกค้า ----
+  // spec: { title, sub, field: 'phone'|'account'|'digits', min, max, pick: 'bank'|'carrier', picks: [...], value, pickValue }
+  // onPartial(r) ระหว่างลูกค้ากด · คืนค่า { value, pick } เมื่อลูกค้ากดยืนยัน หรือ null เมื่อยกเลิก/หมดเวลา
+  askSt: null, askCb: null,
+  ask(spec, onPartial) {
+    this.cancelAsk();
+    const id = Math.random().toString(36).slice(2, 10);
+    this.askSt = { id, ...spec };
+    return new Promise(res => {
+      this.askCb = { id, res, onPartial };
+      this.askTO = setTimeout(() => this.cancelAsk(), (spec.timeout || 120) * 1000);
+      this.repush(); this.pollReply(id);
+    });
+  },
+  // แสดงข้อมูลที่พนักงานกำลังกรอก (เลขบัญชี ธนาคาร เครือข่าย เบอร์ ยอด) ให้ลูกค้าตรวจสอบบนจอลูกค้า
+  pvSt: null,
+  preview(pv) { const k = JSON.stringify(pv || null); if (k === this.pvKey) return; this.pvKey = k; this.pvSt = pv || null; this.repush(); },
+  repush() { this.push(this.last ? { ...this.last } : { mode: 'idle' }); },
+  cancelAsk() { if (!this.askSt) return; const cb = this.askCb; this.askSt = null; this.askCb = null; clearTimeout(this.askTO); clearTimeout(this.askPT); this.repush(); cb && cb.res(null); },
+  reply(r) {
+    const cb = this.askCb; if (!cb || !r || r.id !== cb.id) return;
+    if (r.partial) { try { cb.onPartial && cb.onPartial(r); } catch (e) { } return; }
+    this.askSt = null; this.askCb = null; clearTimeout(this.askTO); clearTimeout(this.askPT); this.repush(); cb.res(r);
+  },
+  // จออีกเครื่องที่ไม่ได้เชื่อมตรง: รับคำตอบผ่านเซิร์ฟเวอร์ (ทุก 1 วินาทีระหว่างรอ)
+  pollReply(id) {
+    const code = LS.get('dispCode', ''); if (!code || !S.apiUrl) return;
+    const tick = async () => { if (!this.askCb || this.askCb.id !== id) return; try { const r = await sig(code, 'reply'); if (r && r.id === id) return this.reply(r); } catch (e) { } this.askPT = setTimeout(tick, 1000); };
+    this.askPT = setTimeout(tick, 1200);
   },
   send(state) { try { if (this.dc && this.dc.readyState === 'open') { this.dc.send(JSON.stringify(state)); return true; } } catch (e) { } return false; },
   // ฝั่ง POS: คอยรับคำขอเชื่อมตรงจากจอลูกค้า แล้วตอบกลับ
@@ -42,7 +103,7 @@ const Display = {
           pc.ondatachannel = ev => {
             const ch = ev.channel; this.dc = ch;
             ch.onopen = () => { this.last && this.send(this.last); };
-            ch.onmessage = m => { if (m.data === 'hello' && this.last) this.send(this.last); };
+            ch.onmessage = m => { if (m.data === 'hello') { this.last && this.send(this.last); return; } try { const o = JSON.parse(m.data); if (o && o.reply) this.reply(o.reply); } catch (e) { } };
             ch.onclose = () => { if (this.dc === ch) this.dc = null; };
           };
           await pc.setRemoteDescription(off.sdp);
@@ -57,7 +118,8 @@ const Display = {
   }
 };
 window.Display = Display;
-if (Display.bc) Display.bc.onmessage = e => { if (e.data && e.data.hello && Display.last && S.view === 'pos') Display.bc.postMessage(Display.last); };
+if (Display.bc) Display.bc.onmessage = e => { if (e.data && e.data.reply) return Display.reply(e.data.reply); if (e.data && e.data.hello && Display.last && S.view === 'pos') Display.bc.postMessage(Display.last); };
+addEventListener('storage', e => { if (e.key === 'mm_dispReply' && e.newValue && Display.askCb) { try { Display.reply(JSON.parse(e.newValue)); } catch (x) { } } });
 document.addEventListener('mm:booted', () => Display.listen());
 
 /* ===== โฆษณาฝั่งขวาของจอลูกค้า =====
@@ -182,6 +244,27 @@ VIEWS.display = (root, hash) => {
    .dsp .rp:not(.hasqr)::after{content:'';flex:.35 1 0}
    .dsp .rp .rlg img{max-height:100%!important;max-width:92%!important}
    .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:#bbb;margin-right:.3em;vertical-align:middle}.dot.on{background:#4ade80}
+   .dsp .ask{flex:1;min-height:0;display:flex;gap:3vmin;padding:2.5vmin 4vmin 2.5vmin 6vmin;background:#fff}
+   .dsp .ask .askq{flex:1.2;min-width:0;display:flex;flex-direction:column;gap:1.6vmin;overflow:auto}
+   .dsp .ask .askt{font-size:clamp(20px,5vmin,46px);font-weight:800;line-height:1.2}
+   .dsp .ask .asks{font-size:clamp(14px,2.8vmin,24px);color:#555}
+   .dsp .ask .askv{font-size:clamp(28px,8vmin,80px);font-weight:800;letter-spacing:1px;border-bottom:4px solid var(--red);padding:.1em 0;font-variant-numeric:tabular-nums;line-height:1.15}
+   .dsp .ask .askv.ph{color:#c4c4c4;font-weight:600;font-size:clamp(20px,5vmin,48px)}
+   .dsp .ask .askl{font-size:clamp(14px,2.6vmin,22px);font-weight:700;margin-top:.5vmin}
+   .dsp .ask .askg{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(84px,14vmin,140px),1fr));gap:1.2vmin}
+   .dsp .ask .askg button{all:unset;cursor:pointer;display:block}
+   .dsp .ask .askg .ptile{min-height:clamp(54px,10vmin,96px)}.dsp .ask .askg .ptile b{font-size:clamp(13px,2.6vmin,22px)}.dsp .ask .askg .ptile i{font-size:clamp(10px,1.8vmin,15px)}
+   .dsp .ask .askk{flex:1;min-width:0;display:flex;flex-direction:column;gap:1.4vmin;max-width:62vh}
+   .dsp .ask .npad.big{flex:1;gap:1.4vmin;grid-auto-rows:1fr}.dsp .ask .npad.big button{min-height:0;font-size:clamp(24px,6vmin,56px)}
+   .dsp .ask .askok{min-height:clamp(52px,11vmin,96px);border:0;border-radius:16px;background:#1f9d4c;color:#fff;font-size:clamp(20px,5vmin,44px);font-weight:800;font-family:inherit;cursor:pointer}
+   .dsp .ask .askok:disabled{background:#c9d2cc}
+   @media (orientation:portrait){.dsp .ask{flex-direction:column}.dsp .ask .askk{max-width:none;flex:1.3}}
+   .dsp .ask .pvr{display:flex;justify-content:space-between;align-items:baseline;gap:2vmin;border-bottom:1px solid #eee;padding:.6vmin 0;font-size:clamp(16px,3.4vmin,30px)}
+   .dsp .ask .pvr span{color:#666}.dsp .ask .pvr b{font-weight:800;text-align:right}
+   .dsp .ask .pvr b.pvb{font-size:clamp(26px,7vmin,66px);letter-spacing:1px;font-variant-numeric:tabular-nums;color:#111}
+   .dsp .ask .pvtile{width:clamp(140px,26vmin,260px)}.dsp .ask .pvtile .ptile{min-height:clamp(70px,13vmin,120px)}.dsp .ask .pvtile .ptile b{font-size:clamp(18px,4vmin,34px)}.dsp .ask .pvtile .ptile i{font-size:clamp(12px,2.4vmin,20px)}
+   .dsp .ask .pvsum{justify-content:center;background:#fff5f6;border-radius:2vmin;padding:2vmin 3vmin}.dsp .ask .pvsum .pvr.pvt{border:0;font-size:clamp(22px,5.5vmin,54px)}.dsp .ask .pvsum .pvr.pvt b{color:var(--red)}.dsp .ask .pvsum .pvr.pvt span{font-size:.55em;white-space:nowrap;color:#333;font-weight:700}
+   .dsp .ask .pvr.pvbig{flex-direction:column;align-items:flex-start;gap:0}.dsp .ask .pvr.pvbig b{text-align:left;white-space:nowrap}
    .dsp .rp.ad{padding:0;gap:0;justify-content:stretch}
    .dsp .rp.ad::after{display:none}
    .dsp .adslot{flex:1 1 0;min-height:0;width:100%;display:flex}
@@ -193,6 +276,38 @@ VIEWS.display = (root, hash) => {
    @media (orientation:portrait){.dsp .rp.ad{flex:0 0 40%}.dsp .bd{flex-direction:column}.dsp .lst{flex:1}.dsp .rp{flex:none;padding:1.5vmin 3vmin}.dsp .qr img{width:min(56vw,34vh)}}
   </style><div class="dsp" id="d"><div class="hd"><span class="sh" id="sh"></span><span class="ck" id="ck"></span><button class="dfs" id="fs" title="ย่อ/ขยายเต็มจอ"></button></div><div class="bd" id="bd"></div><div class="tot" id="tt" hidden></div><div class="ft"><span id="cnt"><span class="dot" id="lk"></span></span><span class="cs" id="cs"></span></div></div>`;
   const bd = $('#bd', root), tt = $('#tt', root);
+  // ---- หน้ากรอกข้อมูลของลูกค้า (เครื่องขายขอ) ----
+  const askSt = { id: '', v: '', pick: '', el: null };
+  const sendReply = r => {
+    try { Display.bc && Display.bc.postMessage({ reply: r }); } catch (e) { }
+    try { localStorage.setItem('mm_dispReply', JSON.stringify({ ...r, t: Date.now() })); } catch (e) { }
+    try { Display.rx && Display.rx.readyState === 'open' && Display.rx.send(JSON.stringify({ reply: r })); } catch (e) { }
+    if (code && S.apiUrl && !r.partial) sig(code, 'reply', r).catch(() => { });
+  };
+  const pvDraw = p => {
+    if (!askSt.el) { askSt.el = document.createElement('div'); askSt.el.className = 'ask'; bd.after(askSt.el); }
+    askSt.id = 'pv'; bd.style.display = 'none'; tt.hidden = true;
+    const row = (k, v, big) => v ? `<div class="pvr${big ? ' pvbig' : ''}"><span>${esc(k)}</span><b class="${big ? 'pvb' : ''}">${esc(v)}</b></div>` : '';
+    askSt.el.innerHTML = `<div class="askq"><div class="askt">${esc(p.title || 'กรุณาตรวจสอบข้อมูล')}</div><div class="asks">กรุณาตรวจสอบความถูกต้องกับพนักงานก่อนชำระเงิน</div>
+        ${p.tile ? `<div class="pvtile">${pickTile(p.tile, 1)}</div>` : ''}
+        ${(p.rows || []).map(r => row(r[0], r[1], r[2])).join('')}</div>
+      <div class="askk pvsum">${(p.sum || []).map(r => `<div class="pvr${r[2] ? ' pvt' : ''}"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('')}</div>`;
+  };
+  const askDraw = (a, pv) => {
+    if (!a && pv) return pvDraw(pv);
+    if (!a) { if (askSt.el) { askSt.el.remove(); askSt.el = null; askSt.id = ''; } bd.style.display = ''; return; }
+    if (askSt.id !== a.id) { askSt.id = a.id; askSt.v = String(a.value || ''); askSt.pick = a.pickValue || ''; }
+    bd.style.display = 'none'; tt.hidden = true;
+    if (!askSt.el) { askSt.el = document.createElement('div'); askSt.el.className = 'ask'; bd.after(askSt.el); }
+    const ok = askValid(a, askSt.v, askSt.pick), max = a.field === 'phone' ? 10 : (a.max || 15);
+    askSt.el.innerHTML = `<div class="askq"><div class="askt">${esc(a.title || 'กรุณากรอกข้อมูล')}</div>${a.sub ? `<div class="asks">${esc(a.sub)}</div>` : ''}
+        <div class="askv${askSt.v ? '' : ' ph'}">${askSt.v ? esc(fmtNum(askSt.v, a.field)) : esc(a.field === 'phone' ? '0XX-XXX-XXXX' : 'แตะตัวเลขด้านขวา')}</div>
+        ${a.picks && a.picks.length ? `<div class="askl">${a.pick === 'bank' ? 'เลือกธนาคาร' : 'เลือกเครือข่าย'}</div><div class="askg">${a.picks.map(x => `<button data-pv="${esc(x.code)}">${pickTile(x, askSt.pick === x.code)}</button>`).join('')}</div>` : ''}</div>
+      <div class="askk">${padHTML('npad big')}<button class="askok" ${ok ? '' : 'disabled'}>ยืนยัน</button></div>`;
+    $$('[data-pk]', askSt.el).forEach(b => b.onclick = () => { const k = b.dataset.pk; if (k === 'del') askSt.v = askSt.v.slice(0, -1); else if (k === 'clr') askSt.v = ''; else if (askSt.v.length < max) askSt.v += k; askDraw(a); sendReply({ id: a.id, partial: 1, value: askSt.v, pick: askSt.pick }); });
+    $$('[data-pv]', askSt.el).forEach(b => b.onclick = () => { askSt.pick = b.dataset.pv; askDraw(a); sendReply({ id: a.id, partial: 1, value: askSt.v, pick: askSt.pick }); });
+    $('.askok', askSt.el).onclick = () => { if (!askValid(a, askSt.v, askSt.pick)) return; sendReply({ id: a.id, value: askSt.v, pick: askSt.pick }); askSt.el.innerHTML = '<div class="askq" style="justify-content:center;align-items:center;display:flex"><div class="askt">✓ ส่งข้อมูลแล้ว ขอบคุณค่ะ</div></div>'; };
+  };
   const tick = () => { const c = $('#ck', root); if (!c) return clearInterval(tk); c.textContent = bkk() + ' น.'; };
   const tk = setInterval(tick, 5000); tick();
   let cur = null, lastAt = 0;
@@ -235,6 +350,7 @@ VIEWS.display = (root, hash) => {
   // ย่อตัวเลขยอดรวมให้พอดีกว้างของแถบแดง
   const fitOne = el => { if (!el) return; const W = el.parentElement.clientWidth * .92; let f = parseFloat(getComputedStyle(el).fontSize); el.style.fontSize = ''; f = parseFloat(getComputedStyle(el).fontSize); while (el.scrollWidth > W && f > 18) { f -= 2; el.style.fontSize = f + 'px'; } };
   const draw = s => {
+    askDraw(s && s.ask, s && s.pv);
     cur = s;
     const lg = (s && s.logo) || '', lm = (s && s.logoMode) || 'mark';
     $('#sh', root).innerHTML = dispLogoHTML(lm, lg, (s && s.shop) || S.settings.shopName, s && s.brandW);
@@ -270,8 +386,11 @@ VIEWS.display = (root, hash) => {
   const accept = s => {
     // เครื่องขายใช้เวอร์ชันใหม่กว่า → จอลูกค้าโหลดตัวเองใหม่ (ไม่ต้องไปกดรีเฟรชที่จอลูกค้า)
     if (s && s.ver && s.ver !== APP_VER && sessionStorage.getItem('mm_dver') !== s.ver) { sessionStorage.setItem('mm_dver', s.ver); location.reload(); return; }
-    if (!s || (s.at && s.at < lastAt)) return; lastAt = s.at || lastAt; Display.cur = s; draw(s); };
-  draw(null);
+    if (!s || (s.at && s.at <= lastAt)) return; lastAt = s.at || lastAt; Display.cur = s; draw(s); };
+  // สถานะล่าสุดที่เครื่องขายเก็บไว้ในเครื่องนี้ (เปิดหน้าขาย + จอลูกค้าในเครื่องเดียวกัน)
+  const local = maxAge => { try { const s = JSON.parse(localStorage.getItem('mm_dispState') || 'null'); if (s && (!maxAge || Date.now() - (s.at || 0) < maxAge)) accept(s); } catch (e) { } };
+  addEventListener('storage', e => { if (e.key === 'mm_dispState' && e.newValue) { try { accept(JSON.parse(e.newValue)); } catch (x) { } } });
+  draw(null); local(30 * 60000);
   addEventListener('resize', () => { clearTimeout(VIEWS.display.rt); VIEWS.display.rt = setTimeout(() => draw(cur), 150); });
   // ฟอนต์โหลดเสร็จทีหลัง (ตัวอักษรกว้างขึ้น) → คำนวณขนาดใหม่ ไม่ให้ชื่อถูกตัด
   if (document.fonts) { document.fonts.ready.then(() => draw(cur)); document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', () => { clearTimeout(VIEWS.display.ft); VIEWS.display.ft = setTimeout(() => draw(cur), 80); }); }
@@ -312,8 +431,9 @@ VIEWS.display = (root, hash) => {
         const r = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'displayPull', payload: { code, v } }) }).then(x => x.json());
         if (r && r.ok && !r.same && r.v) { v = r.v; accept(r.state); }
       } catch (e) { }
-      setTimeout(poll, document.hidden ? 5000 : direct ? 3000 : 700);
+      clearTimeout(VIEWS.display.pt); VIEWS.display.pt = setTimeout(poll, document.hidden ? 5000 : direct ? 3000 : 700);
     };
+    VIEWS.display.poll = poll;
     poll();
   }
   // เต็มจอ: ปุ่มย่อ/ขยาย · เปิดเต็มจอเองอัตโนมัติ (เบราว์เซอร์ยอมให้เต็มจอเมื่อมีการแตะ/คลิกครั้งแรก) · จำว่าผู้ใช้ปิดเองหรือไม่
@@ -325,7 +445,10 @@ VIEWS.display = (root, hash) => {
   const autoFS = () => { if (LS.get('dispFS', true) && !isFS() && location.hash.indexOf('#display') === 0) goFS(); };
   ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, autoFS, true));
   autoFS(); paintFS();
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { } } });
+  // กลับมาแสดงผล (สลับแท็บ/ปลดล็อกจอ): อ่านสถานะล่าสุดทันที ไม่ต้องรอรอบดึงข้อมูลถัดไป
+  const wake = () => { if (document.hidden) return; local(); if (Display.bc) try { Display.bc.postMessage({ hello: 1 }); } catch (e) { } if (VIEWS.display.poll) { clearTimeout(VIEWS.display.pt); VIEWS.display.poll(); } };
+  document.addEventListener('visibilitychange', () => { wake(); if (!document.hidden) { try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { } } });
+  addEventListener('pageshow', wake); addEventListener('focus', wake);
   try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => { }); } catch (e) { }
 };
 
@@ -345,7 +468,7 @@ VIEWS.displayset = el => {
      <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="image" ${dc.logoMode === 'image' ? 'checked' : ''}> รูปโลโก้ของร้าน (แนวนอน · พื้นโปร่งใสจะสวยที่สุด)</label>
      <label class="row" style="margin-bottom:8px"><input type="radio" name="lgm" value="name" ${dc.logoMode === 'name' ? 'checked' : ''}> ชื่อร้านแบบตัวอักษร</label>
      <div id="lgup" style="margin-bottom:8px"><label class="btn ghost sm">อัปโหลดรูปโลโก้<input type="file" accept="image/*" id="lgf" hidden></label></div>
-     <div id="lgp"></div><div class="tiny muted" style="margin-top:6px">กดบันทึกด้านล่าง แล้วจอลูกค้าจะเปลี่ยนตอนขายบิลถัดไป</div></div><div class="card" id="adc"></div><div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
+     <div id="lgp"></div><div class="tiny muted" style="margin-top:6px">กดบันทึกด้านล่าง แล้วจอลูกค้าจะเปลี่ยนตอนขายบิลถัดไป</div></div><div class="card" id="cic"></div><div class="card" id="adc"></div><div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
   $('#op', el).onclick = async () => {
     // ถ้ามีจอที่สอง: เปิดหน้าต่างจอลูกค้าเต็มพื้นที่จอนั้นเลย (Chrome จะถามสิทธิ์ "จัดการหน้าต่าง" ครั้งแรก)
     try { if ('getScreenDetails' in window) { const sd = await window.getScreenDetails(); const ext = sd.screens.find(x => x !== sd.currentScreen) || null; if (ext) { const w2 = window.open(base + '#display', 'mmdisplay', `popup,left=${ext.availLeft},top=${ext.availTop},width=${ext.availWidth},height=${ext.availHeight}`); if (w2) { toast('เปิดจอลูกค้าบนจอที่สองแล้ว — คลิกที่จอลูกค้า 1 ครั้งเพื่อเต็มจอ'); return; } } } } catch (e) { }
@@ -363,6 +486,11 @@ VIEWS.displayset = el => {
     pv();
   }
   const adc = $('#adc', el); if (adc) adSettings(adc);
+  const cic = $('#cic', el);
+  if (cic) { const dr = () => { cic.innerHTML = `<h3>ลูกค้ากรอกข้อมูลบนจอลูกค้า</h3><label class="row" style="margin:4px 0"><input type="checkbox" id="ci" ${custInputOn() ? 'checked' : ''}> <b>เปิดให้ลูกค้ากดกรอกเลขบัญชี / เบอร์โทร / เลขบิล ที่จอลูกค้า</b></label>
+      <div class="small muted">ใช้ได้เมื่อจอลูกค้าเป็นจอทัชสกรีน (แท็บเล็ต/มือถือ) · ถ้าเป็นจอเสริมที่แตะไม่ได้ ให้ปิด — จอลูกค้าจะแสดงเลขบัญชี ธนาคาร เครือข่าย เบอร์ และยอด ที่พนักงานกรอก ให้ลูกค้าตรวจสอบอย่างเดียว (แสดงทั้งเปิดและปิด)</div>`;
+      $('#ci', cic).onchange = async e => { try { busy(1); await saveSetting('custInput', e.target.checked ? 'Y' : 'N'); busy(0); toast(e.target.checked ? 'เปิดให้ลูกค้ากรอกบนจอลูกค้าแล้ว' : 'ปิดแล้ว — จอลูกค้าแสดงข้อมูลให้ตรวจสอบอย่างเดียว'); } catch (x) { busy(0); toast(x.message, 1); dr(); } }; };
+    dr(); }
   const sv = $('#sv', el); if (sv) sv.onclick = async () => { try { busy(1); await saveSetting('displayCfg', { welcome: $('#wc', el).value, promo: $('#pm', el).value, logoMode: ($('[name=lgm]:checked', el) || {}).value || 'mark', logo: lgImg }); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
 };
 

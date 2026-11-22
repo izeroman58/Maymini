@@ -29,9 +29,10 @@ VIEWS.home = async el => {
      ${can('receiveGoods') ? `<button onclick="newReceipt()"><span class="ic" style="background:#E07A00">${I(IC.cam)}</span>ใบเสร็จร้านส่ง</button>` : ''}
      ${own ? `<button onclick="go('tax')"><span class="ic" style="background:#7B3FB8">${I(IC.tax)}</span>ภาษี</button>` : `<button onclick="go('labels')"><span class="ic" style="background:#2B4C9B">${I(IC.print)}</span>พิมพ์ฉลาก</button>`}
    </div>
-   ${own ? '<div id="kpi"></div><div id="vat"></div>' : ''}<div id="alerts"></div><div id="stats"></div>
+   ${own ? '<div id="jobsb"></div><div id="kpi"></div><div id="vat"></div>' : ''}<div id="alerts"></div><div id="stats"></div>
    ${S.apiUrl ? '' : `<div class="alert blue">${I(IC.alert, 20)}<div>กำลังใช้ <b>โหมดทดลอง</b> ข้อมูลอยู่ในเครื่องนี้เท่านั้น</div></div>`}`;
   const t = todayISO(), m0 = t.slice(0, 8) + '01', lmEnd = addDays(m0, -1), lm0 = lmEnd.slice(0, 8) + '01';
+  if (own && window.jobsBadge) jobsBadge($('#jobsb', el));
   if (own) {
     const kpi = $('#kpi', el);
     kpi.innerHTML = `<div class="kpi3">${['วันนี้', 'เดือนนี้', 'เดือนก่อน'].map(n => `<div class="stat"><div class="k">ยอดขาย${n}</div><div class="v"><span class="skel">000,000</span></div></div>`).join('')}</div>`;

@@ -660,6 +660,7 @@ const POS = {
       k && can('customers') && ['ฐานลูกค้า', IC.user, () => go('customers')],
       k && ['พิมพ์ฉลาก/บาร์โค้ด', IC.tag, () => go('labels')],
       ['บริการ โอนเงิน/เติมเงิน/จ่ายบิล', IC.sale, () => svcMenu()],
+      ['งานโอน/ชำระบิล (สถานะ)', IC.alert, () => go('jobs')],
       ['จอแสดงผลฝั่งลูกค้า', IC.monitor, () => go('displayset')],
       ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
       [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)', IC.edit, async () => { this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }, 'editLayout'],
@@ -743,7 +744,7 @@ const POS = {
     const order = {
       id: `${S.device.no || 0}-${seq}`, date: LocalDB.now(), deviceId: S.device.id, deviceName: S.device.name || '',
       cashier: S.user.username, cashierName: S.user.name, customerId: c ? c.id : '', customerName: c ? c.name : '',
-      items: JSON.stringify(t.items.map(it => ({ sku: it.sku, name: it.name, qty: it.qty, price: it.price, cost: it.cost, cat: it.cat, byWeight: it.byWeight || '', ...(it.pass ? { pass: 1 } : {}), ...(it.svc ? { svc: it.svc } : {}) }))),
+      items: JSON.stringify(t.items.map(it => ({ sku: it.sku, name: it.name, qty: it.qty, price: it.price, cost: it.cost, cat: it.cat, byWeight: it.byWeight || '', ...(it.pass ? { pass: 1 } : {}), ...(it.svc ? { svc: it.svc } : {}), ...(it.job ? { job: it.job } : {}) }))),
       itemCount: T.count, subtotal: T.sub, discount: T.disc, total: T.total, cost: Math.round(T.cost * 100) / 100,
       payments: JSON.stringify(P.payments), payType: types.length > 1 ? 'split' : types[0], cash: P.cash || '', change: P.change || '',
       pointsEarned: earned, pointsUsed: t.pointsUse || 0, status: 'sale', refundOf: '', note: ''

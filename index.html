@@ -191,7 +191,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.26';
+const APP_VER = '2.6.28';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -1741,6 +1741,7 @@ VIEWS.more = el => {
   const own = isOwner();
   const items = [
     ['dataquality', IC.count, 'ความครบถ้วนของข้อมูล', 'ต้นทุน บาร์โค้ด สต็อก ปุ่มระบุราคา — คะแนนร้าน', own],
+    ['jobs', IC.alert, 'งานรอดำเนินการ', isOwner() ? 'โอนเงิน · เติม TrueMoney · ชำระบิล ให้ลูกค้า' : 'สถานะงานโอน/ชำระบิลวันนี้', 1],
     ['salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', seesSales() ? 'ดูย้อนหลัง พิมพ์ซ้ำ คืนเงิน' : 'บิลของฉันวันนี้ · พิมพ์ซ้ำ', 1],
     ['customers', IC.user, 'ฐานลูกค้า', 'เบอร์โทร ยอดซื้อ แต้มสะสม เงินเชื่อ', can('customers')],
     ['inventory', IC.count, 'สินค้าคงคลัง', 'ตรวจนับสต็อก ใบสั่งซื้อ มูลค่าสต็อก', can('stockCount') || can('receiveGoods') || canStrict('viewCost')],
@@ -2357,31 +2358,65 @@ const IdleLock = {
     setInterval(() => {
       if (!S.user) return;
       const mins = num(cfg('idleLock', '10'));
-      const applies = S.user.role === 'owner' || !isKiosk();
+      // มือถือเจ้าของที่ตั้ง "ไม่ต้องออกจากระบบอัตโนมัติ" ไว้ → ไม่ล็อก (รับแจ้งเตือนงานได้ตลอด)
+      const applies = S.user.role === 'owner' ? !LS.get('stayIn', false) : !isKiosk();
       if (mins > 0 && applies && Date.now() - this.last > mins * 60e3) { Elev.clear(); toast('ล็อกหน้าจออัตโนมัติ (ไม่ได้ใช้งาน ' + mins + ' นาที)'); logout(); }
     }, 20e3);
   }
 };
 window.addEventListener('online', () => { S.online = true; const n = $('.net'); n && n.classList.remove('off'); });
 window.addEventListener('offline', () => { S.online = false; const n = $('.net'); n && n.classList.add('off'); });
+/* แจ้งเตือนบนมือถือ (Web Push) — เฉพาะเจ้าของร้าน */
+const PushMe = {
+  ok: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+  ios: () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+  standalone: () => matchMedia('(display-mode: standalone)').matches || !!navigator.standalone,
+  devName: () => { const u = navigator.userAgent; return (/iPad/.test(u) || (PushMe.ios() && !/iPhone/.test(u)) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? (/Mobile/.test(u) ? 'มือถือ Android' : 'แท็บเล็ต Android') : 'คอมพิวเตอร์') + ' · ' + new Date().toLocaleDateString('th-TH'); },
+  put(k, v) { return new Promise((res, rej) => { const q = indexedDB.open('mm-push', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv'); q.onsuccess = () => { const t = q.result.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }; q.onerror = () => rej(q.error); }); },
+  reg() { return Promise.race([navigator.serviceWorker.ready, new Promise((_, rej) => setTimeout(() => rej(new Error('ยังไม่พร้อม — เปิดแอปจากลิงก์ https ของร้าน')), 5000))]); },
+  b64(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); const b = atob(s + '==='.slice((s.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); },
+  async state() {
+    if (!this.ok()) return this.ios() && !this.standalone() ? 'ios-home' : 'unsupported';
+    if (Notification.permission === 'denied') return 'denied';
+    const reg = await this.reg().catch(() => null); if (!reg) return 'unsupported'; const s = await reg.pushManager.getSubscription();
+    return s && LS.get('pushId', '') ? 'on' : 'off';
+  },
+  async enable() {
+    if (!S.apiUrl) throw new Error('ต้องเชื่อมต่อ Google ก่อน (โหมดทดลองใช้ไม่ได้)');
+    if ((await Notification.requestPermission()) !== 'granted') throw new Error('ไม่ได้รับอนุญาตให้แจ้งเตือน — กด "อนุญาต" เมื่อเบราว์เซอร์ถาม');
+    const { key } = await api('pushKey', {}), reg = await this.reg();
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) { const cur = sub.options && sub.options.applicationServerKey; if (cur && btoa(String.fromCharCode(...new Uint8Array(cur))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== key) { await sub.unsubscribe(); sub = null; } }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: this.b64(key) });
+    const r = await api('pushSubscribe', { sub: { ...sub.toJSON(), origin: location.origin }, name: this.devName() });
+    await this.put('cfg', { api: S.apiUrl, secret: r.secret }); LS.set('pushId', r.id);
+  },
+  async disable() {
+    try { const reg = await this.reg(), s = await reg.pushManager.getSubscription(); if (s) await s.unsubscribe(); } catch (e) { }
+    const id = LS.get('pushId', ''); LS.del('pushId'); await this.put('cfg', null).catch(() => { });
+    if (id) await api('pushRemove', { id }).catch(() => { });
+  }
+};
+window.PushMe = PushMe;
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.go && S.user && VIEWS[e.data.go]) go(e.data.go); });
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (S.user && VIEWS[v] && v !== S.view) go(v); });
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.26"></script>
-<script src="logic.js?v=2.6.26"></script>
-<script src="cache.js?v=2.6.26"></script>
-<script src="offline.js?v=2.6.26"></script>
-<script src="scanner.js?v=2.6.26"></script>
-<script src="printer.js?v=2.6.26"></script>
-<script src="pos.js?v=2.6.26"></script>
-<script src="display.js?v=2.6.26"></script>
-<script src="reports.js?v=2.6.26"></script>
-<script src="inventory.js?v=2.6.26"></script>
-<script src="people.js?v=2.6.26"></script>
-<script src="quality.js?v=2.6.26"></script>
-<script src="services.js?v=2.6.26"></script>
-<script src="owner.js?v=2.6.26"></script>
+<script src="qr.js?v=2.6.28"></script>
+<script src="logic.js?v=2.6.28"></script>
+<script src="cache.js?v=2.6.28"></script>
+<script src="offline.js?v=2.6.28"></script>
+<script src="scanner.js?v=2.6.28"></script>
+<script src="printer.js?v=2.6.28"></script>
+<script src="pos.js?v=2.6.28"></script>
+<script src="display.js?v=2.6.28"></script>
+<script src="reports.js?v=2.6.28"></script>
+<script src="inventory.js?v=2.6.28"></script>
+<script src="people.js?v=2.6.28"></script>
+<script src="quality.js?v=2.6.28"></script>
+<script src="services.js?v=2.6.28"></script>
+<script src="owner.js?v=2.6.28"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

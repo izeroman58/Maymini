@@ -21,6 +21,7 @@ var Logic = (function () {
     POs: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', cols: ['id', 'date', 'supplier', 'status', 'items', 'total', 'note', 'createdBy', 'receivedAt'] },
     Licenses: { key: 'id', read: 'all', write: 'owner', cols: ['id', 'type', 'subtype', 'number', 'holder', 'issueDate', 'expiryDate', 'fileId', 'fileUrl', 'note', 'updatedAt'] },
     Users: { key: 'id', read: 'owner', write: 'none', cols: ['id', 'name', 'username', 'pinHash', 'role', 'active', 'createdAt'] },
+    Jobs: { key: 'id', read: 'owner', write: 'owner', dateCol: 'date', cols: ['id', 'date', 'orderId', 'type', 'status', 'title', 'amount', 'fee', 'bank', 'bankName', 'acc', 'accName', 'carrier', 'carrierName', 'phone', 'billType', 'ref', 'contact', 'fileUrl', 'customerName', 'cashier', 'cashierName', 'deviceName', 'note', 'doneAt', 'doneBy', 'doneRef'] },
     Settings: { key: 'key', read: 'all', write: 'owner', cols: ['key', 'value'] },
     Log: { key: 'time', read: 'owner', write: 'none', cols: ['time', 'user', 'action', 'detail'] }
   };
@@ -325,8 +326,43 @@ var Logic = (function () {
       eff = applyOrderEffects(db, fresh, 1, prods, needC ? db.read('Customers', {}) : [], now, u.username);
       db.append('Orders', fresh);
       db.log(u, 'syncOrders', fresh.length + ' บิล');
+      makeJobs(db, fresh);
     }
     return { saved: orders.map(function (o) { return o.id; }), stock: eff.products, customers: eff.customers };
+  }
+  // ---------- งานที่เจ้าของร้านต้องทำต่อ (โอนเงินให้ลูกค้า / เติม TrueMoney / ชำระบิล) ----------
+  // สร้างจากบิลขายที่มีรายการบริการ job.notify (สร้างตอนบิลเข้าระบบ จึงใช้ได้แม้ขายตอนออฟไลน์) แล้วแจ้งเตือนเจ้าของร้าน
+  function makeJobs(db, orders) {
+    var jobs = [];
+    orders.forEach(function (o) {
+      J(o.items, []).forEach(function (it, i) {
+        var j = it && it.job; if (!j || !j.notify) return;
+        jobs.push({ id: o.id + '-J' + i, date: o.date, orderId: o.id, type: String(j.type || ''), status: 'pending', title: String(it.name || ''), amount: String(n(j.amount)), fee: String(n(j.fee)),
+          bank: j.bank || '', bankName: j.bankName || '', acc: j.acc || '', accName: j.accName || '', carrier: j.carrier || '', carrierName: j.carrierName || '', phone: j.phone || '',
+          billType: j.billType || '', ref: j.ref || '', contact: j.contact || '', fileUrl: j.fileUrl || '', customerName: o.customerName || '', cashier: o.cashier || '', cashierName: o.cashierName || '', deviceName: o.deviceName || '' });
+      });
+    });
+    if (!jobs.length) return [];
+    db.upsert('Jobs', jobs);
+    if (db.notify) { try { db.notify(jobs); } catch (e) { } }
+    return jobs;
+  }
+  function jobsList(db, u, opt) {
+    need(db, u, 'sell'); opt = opt || {};
+    var rows = db.read('Jobs', {}), today = db.now().slice(0, 10);
+    if (u.role !== 'owner') rows = rows.filter(function (j) { return String(j.date).slice(0, 10) === today; }); // พนักงานเห็นเฉพาะงานวันนี้ (ไว้บอกสถานะลูกค้า)
+    if (opt.status) rows = rows.filter(function (j) { return j.status === opt.status; });
+    rows.sort(function (a, b) { return String(b.date).localeCompare(a.date); });
+    return rows.slice(0, n(opt.limit) || 300);
+  }
+  function jobUpdate(db, u, id, status, ref) {
+    need(db, u, 'owner');
+    if (['done', 'cancelled', 'pending'].indexOf(status) < 0) err('สถานะไม่ถูกต้อง');
+    var j = db.read('Jobs', { ids: [id] })[0]; if (!j) err('ไม่พบงาน ' + id);
+    var c = { id: id, status: status, doneAt: status === 'pending' ? '' : db.now(), doneBy: status === 'pending' ? '' : (u.name || u.username), doneRef: status === 'pending' ? '' : String(ref || '') };
+    db.upsert('Jobs', [c]); db.log(u, 'job ' + status, id);
+    for (var k in c) j[k] = c[k];
+    return { job: j };
   }
   function hideCost(o) { var c = Object.assign({}, o); c.cost = ''; c.items = JSON.stringify(J(o.items, []).map(function (i) { var x = Object.assign({}, i); delete x.cost; return x; })); return c; }
   function ordersRange(db, u, from, to, cashier) {
@@ -362,6 +398,12 @@ var Logic = (function () {
     applyOrderEffects(db, [o], -1, db.read('Products', {}), o.customerId ? db.read('Customers', {}) : [], now, u.username);
     db.upsert('Orders', [{ id: o.id, status: 'refunded' }]);
     db.append('Orders', [r]);
+    // บิลที่มีงานโอน/ชำระบิลค้างอยู่ → ยกเลิกงานและแจ้งเจ้าของร้าน
+    var js = db.read('Jobs', {}).filter(function (j) { return j.orderId === o.id && j.status === 'pending'; });
+    if (js.length) {
+      db.upsert('Jobs', js.map(function (j) { return { id: j.id, status: 'cancelled', doneAt: now, doneBy: u.name || u.username, doneRef: 'คืนเงินบิล ' + o.id }; }));
+      if (db.notify) { try { db.notify(js.map(function (j) { j.status = 'cancelled'; j.doneRef = 'คืนเงินบิล ' + o.id; return j; })); } catch (e) { } }
+    }
     db.log(u, 'refund', o.id);
     return { refund: r };
   }
@@ -541,6 +583,8 @@ var Logic = (function () {
       case 'getOrder': return { order: getOrder(db, u, p.id) };
       case 'refund': return refund(db, u, p.id, p.reason);
       case 'salesMonthly': return salesMonthly(db, u, p.year);
+      case 'jobs': return { rows: jobsList(db, u, p) };
+      case 'jobUpdate': return jobUpdate(db, u, p.id, p.status, p.ref);
       case 'importOrders': return importOrders(db, u, p.rows, p.dry);
       case 'backupTable': return backupTable(db, u, p.table, p.offset, p.limit);
       case 'restoreTable': return restoreTable(db, u, p.table, p.rows, p.dry);
