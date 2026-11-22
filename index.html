@@ -6,10 +6,10 @@
 <meta name="theme-color" content="#D6001C">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="ร้านเมย์">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" href="favicon.png" id="favi">
+<meta name="apple-mobile-web-app-title" content="MayMiniMart">
+<link rel="manifest" href="manifest.webmanifest?v=3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=3">
+<link rel="icon" type="image/png" href="favicon.png?v=3" id="favi">
 <meta name="mobile-web-app-capable" content="yes">
 <title>ร้านเมย์ Mini Mart</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -191,7 +191,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.23';
+const APP_VER = '2.6.24';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -475,7 +475,9 @@ const Local = {
     switch (a) {
       case 'login': { const r = Logic.login(LocalDB, p.username, p.pin, p.device); r.token = 'local'; return r; }
       case 'logout': case 'ping': return {};
-      case 'upload': return { fileId: '', fileUrl: p.base64.length < 300000 ? p.base64 : '' };
+      case 'upload': if (p.kind === 'ad') return { fileId: 'loc' + Date.now().toString(36), fileUrl: '' }; return { fileId: '', fileUrl: p.base64.length < 300000 ? p.base64 : '' };
+      case 'adGet': throw new Error('ไม่พบไฟล์');
+      case 'adDelete': return {};
       case 'ocr': { await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'Tesseract'); const r = await Tesseract.recognize(p.base64, 'tha+eng'); return { engine: 'tesseract', text: r.data.text }; }
       case 'displayPush': return { v: String(Date.now()) };
       case 'displayPull': return { v: '', state: null };
@@ -691,11 +693,16 @@ const PAPERS = [
   { id: '40x30', w: 40, h: 30, name: '40×30 มม.' }, { id: '50x30', w: 50, h: 30, name: '50×30 มม.' },
   { id: '40x20', w: 40, h: 20, name: '40×20 มม.' }, { id: '50x20', w: 50, h: 20, name: '50×20 มม.' },
   { id: '30x20', w: 30, h: 20, name: '30×20 มม.' }, { id: '30x15', w: 30, h: 15, name: '30×15 มม.' },
-  { id: '50x40', w: 50, h: 40, name: '50×40 มม.' }, { id: '50x50', w: 50, h: 50, name: '50×50 มม.' },
-  { id: '60x40', w: 60, h: 40, name: '60×40 มม. (B21 ไม่รองรับ)' }
+  { id: '40x40', w: 40, h: 40, name: '40×40 มม.' }, { id: '50x40', w: 50, h: 40, name: '50×40 มม.' },
+  { id: '50x50', w: 50, h: 50, name: '50×50 มม.' }, { id: '50x60', w: 50, h: 60, name: '50×60 มม.' },
+  { id: '50x70', w: 50, h: 70, name: '50×70 มม.' }, { id: '50x80', w: 50, h: 80, name: '50×80 มม.' },
+  { id: 'custom', w: 50, h: 50, name: 'กำหนดเอง (กว้าง×สูง)' }
 ];
+const HEAD_DOTS = 384; // หัวพิมพ์ NIIMBOT B1/B21 กว้าง 48 มม. (384 จุด)
+// เลย์เอาต์ฉลากราคา (ปรับได้): ค่าเป็น % ของความสูงช่อง · w = % ของความกว้าง
+const LBL_LAYOUT_DEF = { shop: false, name: { y: 4, s: 15, lines: 2 }, price: { y: 30, s: 36, align: 'right' }, code: { y: 64, h: 24, w: 100, txt: 1 }, ox: 0, oy: 0 };
 const TEMPLATES = [
-  { id: 'price', name: 'ราคา + บาร์โค้ด' }, { id: 'fresh', name: 'ของสด (วันที่แพ็ค/หมดอายุ)' },
+  { id: 'price', name: 'ราคา + บาร์โค้ด' }, { id: 'price2', name: '2 ชุดใน 1 ดวง (ตัดแบ่งครึ่ง)' }, { id: 'fresh', name: 'ของสด (วันที่แพ็ค/หมดอายุ)' },
   { id: 'barcode', name: 'บาร์โค้ดอย่างเดียว' }, { id: 'shelf', name: 'ป้ายราคาชั้นวาง' }
 ];
 function wrapText(ctx, text, maxW, maxLines) {
@@ -712,11 +719,36 @@ function wrapText(ctx, text, maxW, maxLines) {
   if (out.length === maxLines && (out.join('').length < String(text).length)) { let l = out[maxLines - 1]; while (l && ctx.measureText(l + '…').width > maxW) l = l.slice(0, -1); out[maxLines - 1] = l + '…'; }
   return out;
 }
+function labelSize(o) {
+  const paper = PAPERS.find(p => p.id === o.paper) || PAPERS[0];
+  const w = paper.id === 'custom' ? Math.max(15, num(o.cw) || 50) : paper.w, h = paper.id === 'custom' ? Math.max(10, num(o.ch) || 50) : paper.h;
+  return { w, h };
+}
+// ฉลากราคาตามเลย์เอาต์ที่ปรับได้ (ใช้กับแบบ 1 ชุด และ 2 ชุดใน 1 ดวง)
+function drawPriceCell(c, x0, y0, CW, CH, p, price, code, L, F) {
+  const pad = Math.round(Math.min(CW, CH) * .04) + 4, iw = CW - pad * 2, P = v => Math.round(CH * v / 100);
+  c.save(); c.beginPath(); c.rect(x0, y0, CW, CH); c.clip(); c.fillStyle = '#000';
+  let top = 0;
+  if (L.shop) { const ss = Math.max(12, P(L.name.s * .6)); c.font = F(600, ss); c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText(S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', x0 + pad, y0 + P(L.name.y)); top = ss * 1.1; }
+  const ns = Math.max(12, P(L.name.s)); c.font = F(600, ns); c.textAlign = 'left'; c.textBaseline = 'top';
+  wrapText(c, p.name || '', iw, Math.max(1, L.name.lines || 1)).forEach((l, i) => c.fillText(l, x0 + pad, y0 + P(L.name.y) + top + i * ns * 1.08));
+  const ps = Math.max(14, P(L.price.s)), pTxt = money(price, price % 1 ? 2 : 0);
+  c.font = F(800, ps); c.textBaseline = 'alphabetic'; const pw = c.measureText(pTxt).width; const cs = Math.max(11, Math.round(ps * .3));
+  c.font = F(600, cs); const cw = c.measureText('฿').width + 4;
+  const total = pw + cw, base = y0 + P(L.price.y) + ps * .9;
+  const px = L.price.align === 'left' ? x0 + pad + cw : L.price.align === 'center' ? x0 + (CW - total) / 2 + cw : x0 + CW - pad - pw;
+  c.textAlign = 'left'; c.fillText('฿', px - cw, base); c.font = F(800, ps); c.fillText(pTxt, px, base);
+  if (code) { const bw = Math.round(iw * Math.min(100, L.code.w) / 100), bh = Math.max(20, P(L.code.h)); drawBarcode(c, code, x0 + Math.round((CW - bw) / 2), y0 + P(L.code.y), bw, bh, !!L.code.txt, Math.max(15, Math.round(bh * .24))); }
+  c.restore();
+}
 function renderLabel(cv, o) {
-  const dpm = 8; const paper = PAPERS.find(p => p.id === o.paper) || PAPERS[0];
-  const W = Math.round(paper.w * dpm), H = Math.round(paper.h * dpm);
+  const dpm = 8; const sz = labelSize(o);
+  // กว้างเกินหัวพิมพ์ (48 มม.) → วาดเท่าความกว้างหัวพิมพ์ ไม่บีบภาพ (ตัวอย่างตรงกับที่พิมพ์จริง)
+  const W = Math.min(Math.round(sz.w * dpm), o.rotate ? 9999 : HEAD_DOTS), H = Math.round(sz.h * dpm);
   cv.width = W; cv.height = H; const c = cv.getContext('2d');
   c.fillStyle = '#fff'; c.fillRect(0, 0, W, H); c.fillStyle = '#000';
+  const L0 = o.layout || {}, ox = Math.round(num(L0.ox) * dpm), oy = Math.round(num(L0.oy) * dpm);
+  if (ox || oy) c.translate(ox, oy);
   const pad = Math.round(1.5 * dpm), iw = W - pad * 2; const p = o.product || {};
   const price = o.price != null && o.price !== '' ? num(o.price) : num(p.price);
   let code = o.barcode || p.barcode || '';
@@ -724,6 +756,22 @@ function renderLabel(cv, o) {
   const F = (w, s) => `${w} ${s}px Prompt,"Noto Sans Thai",sans-serif`;
   const small = Math.max(14, Math.round(H * .085));
   let y = pad;
+  if (o.tpl === 'price' || o.tpl === 'price2') {
+    const L = { ...LBL_LAYOUT_DEF, ...L0, name: { ...LBL_LAYOUT_DEF.name, ...(L0.name || {}) }, price: { ...LBL_LAYOUT_DEF.price, ...(L0.price || {}) }, code: { ...LBL_LAYOUT_DEF.code, ...(L0.code || {}) } };
+    if (o.tpl === 'price') { drawPriceCell(c, 0, 0, W, H, p, price, code, L, F); return { code, W, H }; }
+    // 2 ชุดใน 1 ดวง: แบ่งตามด้านที่ยาวกว่า + เส้นประสำหรับตัด
+    const vert = H >= W * .8;
+    const cw = vert ? W : Math.floor(W / 2), ch = vert ? Math.floor(H / 2) : H;
+    drawPriceCell(c, 0, 0, cw, ch, p, price, code, L, F); drawPriceCell(c, vert ? 0 : cw, vert ? ch : 0, cw, ch, p, price, code, L, F);
+    c.save(); c.setLineDash([6, 5]); c.lineWidth = 2; c.strokeStyle = '#000'; c.beginPath(); if (vert) { c.moveTo(0, ch); c.lineTo(W, ch); } else { c.moveTo(cw, 0); c.lineTo(cw, H); } c.stroke(); c.restore();
+    return { code, W, H, split: vert ? 'h' : 'v' };
+  }
+  if (o.tpl === 'test') { // ทดสอบตำแหน่ง: กรอบขอบฉลาก + เส้นกึ่งกลาง + ขีดทุก 5 มม.
+    c.lineWidth = 2; c.strokeRect(1, 1, W - 2, H - 2); c.beginPath(); c.moveTo(W / 2, 0); c.lineTo(W / 2, H); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
+    c.font = F(600, 18); c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillRect(W / 2 - 70, H / 2 - 14, 140, 28); c.fillStyle = '#000'; c.fillText(`${sz.w}×${sz.h} มม.`, W / 2, H / 2);
+    for (let m = 5; m * dpm < Math.max(W, H); m += 5) { const t = m % 10 ? 6 : 12; c.fillRect(m * dpm, 0, 2, t); c.fillRect(0, m * dpm, t, 2); }
+    return { code: '', W, H };
+  }
   if (o.tpl === 'barcode') {
     c.font = F(600, small); c.textAlign = 'center'; c.textBaseline = 'top';
     wrapText(c, p.name || '', iw, 1).forEach(l => { c.fillText(l, W / 2, y); y += small * 1.15; });
@@ -744,9 +792,9 @@ function renderLabel(cv, o) {
   // price / fresh
   const shop = S.settings.shopName || 'ร้านเมย์ มินิมาร์ท';
   c.font = F(600, small); c.textAlign = 'left'; c.textBaseline = 'top';
-  c.fillText(shop, pad, y);
+  if (L0.shop) c.fillText(shop, pad, y);
   if (o.tpl === 'fresh' && o.weight) { c.textAlign = 'right'; c.fillText(o.weight + ' กก.', W - pad, y); }
-  y += small * 1.2;
+  if (L0.shop || (o.tpl === 'fresh' && o.weight)) y += small * 1.2;
   const nameS = Math.max(16, Math.round(H * (o.tpl === 'fresh' ? .1 : .115)));
   c.font = F(600, nameS); c.textAlign = 'left';
   const nl = wrapText(c, p.name || '', iw, H < 200 || o.tpl === 'fresh' ? 1 : 2);
@@ -1398,6 +1446,7 @@ let LQ = [];
 VIEWS.labels = (el, items) => {
   if (Array.isArray(items)) items.forEach(p => { if (!LQ.some(x => x.p.sku === p.sku)) LQ.push({ p, copies: 1 }); });
   const cfg = LS.get('labelCfg', { paper: '40x30', tpl: 'price', density: 3, labelType: 1, rotate: false, model: LS.get('printerModel', 'B1') });
+  cfg.layout = { ...JSON.parse(JSON.stringify(LBL_LAYOUT_DEF)), ...(cfg.layout || {}) }; const LY = cfg.layout; ['name', 'price', 'code'].forEach(k => LY[k] = { ...LBL_LAYOUT_DEF[k], ...(LY[k] || {}) });
   el.innerHTML = vhead('พิมพ์ฉลาก / บาร์โค้ด', '', 'more') + `
    <div class="card"><div class="row"><div class="grow"><b>เครื่องพิมพ์ NIIMBOT</b><div class="small muted" id="pst"></div></div><button class="btn sm" id="con">${I(IC.bt, 18)} เชื่อมต่อ</button></div>
      <div class="row small" style="margin-top:8px"><button class="btn ghost sm" id="rp">อ่านกระดาษอัตโนมัติ</button><span class="muted grow" id="pinfo"></span></div></div>
@@ -1407,18 +1456,42 @@ VIEWS.labels = (el, items) => {
      <div class="grid3"><label class="f"><span>รุ่น</span><select class="in" id="model"><option value="B1">B1</option><option value="B21">B21</option></select></label>
      <label class="f"><span>ความเข้ม</span><select class="in" id="density">${[1, 2, 3, 4, 5].map(n => `<option>${n}</option>`).join('')}</select></label>
      <label class="f"><span>ชนิดกระดาษ</span><select class="in" id="labelType"><option value="1">มีช่องว่าง</option><option value="2">แถบดำ</option><option value="3">ต่อเนื่อง</option></select></label></div>
+     <div id="cust" class="grid2" style="margin-top:6px"><label class="f"><span>กว้าง (มม.)</span><input class="in" type="number" id="cw" min="15" max="80" value="${cfg.cw || 50}"></label><label class="f"><span>สูง (มม.)</span><input class="in" type="number" id="ch" min="10" max="120" value="${cfg.ch || 50}"></label></div>
+     <div id="lw" class="small" style="margin:6px 0 2px"></div>
      <label class="row small"><input type="checkbox" id="rotate"> หมุนภาพ 90° (ถ้าพิมพ์ออกมาตะแคง)</label>
+     <label class="row small"><input type="checkbox" id="lshop" ${LY.shop ? 'checked' : ''}> แสดงชื่อร้านบนฉลาก</label>
+     <details id="lay" style="margin-top:8px" open><summary style="font-weight:600;cursor:pointer">ปรับตำแหน่ง/ขนาด ชื่อ · ราคา · บาร์โค้ด</summary>
+       <div class="grid2" style="margin-top:8px;gap:6px 14px">
+        <label class="f" style="margin:0"><span>ชื่อ: ขนาด <b id="v_n_s"></b></span><input type="range" style="width:100%" id="n_s" min="6" max="40" step="1" value="${LY.name.s}"></label><label class="f" style="margin:0"><span>ชื่อ: ระยะจากบน <b id="v_n_y"></b></span><input type="range" style="width:100%" id="n_y" min="0" max="80" step="1" value="${LY.name.y}"></label>
+        <label class="f" style="margin:0"><span>ชื่อ: จำนวนบรรทัด</span><select class="in" id="n_l"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label><span></span>
+        <label class="f" style="margin:0"><span>ราคา: ขนาด <b id="v_p_s"></b></span><input type="range" style="width:100%" id="p_s" min="10" max="70" step="1" value="${LY.price.s}"></label><label class="f" style="margin:0"><span>ราคา: ระยะจากบน <b id="v_p_y"></b></span><input type="range" style="width:100%" id="p_y" min="0" max="85" step="1" value="${LY.price.y}"></label>
+        <label class="f" style="margin:0"><span>ราคา: ตำแหน่ง</span><select class="in" id="p_a"><option value="left">ซ้าย</option><option value="center">กลาง</option><option value="right">ขวา</option></select></label><span></span>
+        <label class="f" style="margin:0"><span>บาร์โค้ด: ระยะจากบน <b id="v_c_y"></b></span><input type="range" style="width:100%" id="c_y" min="0" max="90" step="1" value="${LY.code.y}"></label><label class="f" style="margin:0"><span>บาร์โค้ด: ความสูง <b id="v_c_h"></b></span><input type="range" style="width:100%" id="c_h" min="10" max="70" step="1" value="${LY.code.h}"></label>
+        <label class="f" style="margin:0"><span>บาร์โค้ด: ความกว้าง % <b id="v_c_w"></b></span><input type="range" style="width:100%" id="c_w" min="50" max="100" step="1" value="${LY.code.w}"></label><label class="row small" style="align-self:end"><input type="checkbox" id="c_t" ${LY.code.txt ? 'checked' : ''}> แสดงตัวเลขใต้บาร์โค้ด</label>
+       </div>
+       <div class="row" style="gap:8px;margin-top:6px"><button class="btn ghost sm" id="lrs">ค่าเริ่มต้น</button></div></details>
+     <details style="margin-top:8px"><summary style="font-weight:600;cursor:pointer">ปรับตำแหน่งการพิมพ์ให้ตรงสติ๊กเกอร์ (เลื่อนทั้งภาพ)</summary>
+       <div class="grid2" style="margin-top:8px;gap:6px 14px"><label class="f" style="margin:0"><span>เลื่อนซ้าย/ขวา (มม.) <b id="v_ox"></b></span><input type="range" style="width:100%" id="ox" min="-6" max="6" step="0.5" value="${LY.ox}"></label><label class="f" style="margin:0"><span>เลื่อนขึ้น/ลง (มม.) <b id="v_oy"></b></span><input type="range" style="width:100%" id="oy" min="-6" max="6" step="0.5" value="${LY.oy}"></label></div>
+       <div class="small muted">พิมพ์ "ทดสอบตำแหน่ง" แล้วดูกรอบ: ถ้าเส้นกรอบเลยขอบบน → เลื่อนลง (+) · เลยขอบซ้าย → เลื่อนขวา (+)</div>
+       <button class="btn ghost sm" id="tst" style="margin-top:6px">พิมพ์ทดสอบตำแหน่ง 1 ดวง</button></details>
      <div id="freshOpt" class="grid3" style="margin-top:10px"><label class="f"><span>วันที่แพ็ค</span><input class="in" type="date" id="packDate" value="${todayISO()}"></label><label class="f"><span>อายุ (วัน)</span><input class="in" type="number" id="shelfDays" placeholder="ตามสินค้า"></label><label class="f"><span>น้ำหนัก กก.</span><input class="in" type="number" step="any" id="weight"></label></div>
      <label class="row small" id="embedRow"><input type="checkbox" id="embedPrice"> ฝังราคาในบาร์โค้ด (ขึ้นต้น 20 สำหรับ POS ที่รองรับ)</label>
    </div>
    <div class="card"><div class="row" style="margin-bottom:8px"><h3 class="grow">รายการที่จะพิมพ์</h3><button class="btn ghost sm" id="addp">${I(IC.plus, 16)} เลือกสินค้า</button><button class="btn ghost sm" id="adds">${I(IC.scan, 16)}</button></div><div id="queue"></div></div>
    <div class="card center"><div class="small muted" style="margin-bottom:8px">ตัวอย่าง (ขนาดจริง 8 จุด/มม.)</div><canvas class="lbl" id="pv"></canvas></div>
    <div class="row" style="gap:8px"><button class="btn ghost grow" id="png">บันทึกรูป PNG</button><button class="btn grow" id="pr" style="min-height:52px">${I(IC.print)} พิมพ์ทั้งหมด</button></div>`;
-  ['paper', 'tpl', 'model', 'density', 'labelType'].forEach(k => $('#' + k, el).value = cfg[k]); $('#rotate', el).checked = !!cfg.rotate;
-  const save = () => { ['paper', 'tpl', 'model'].forEach(k => cfg[k] = $('#' + k, el).value); cfg.density = +$('#density', el).value; cfg.labelType = +$('#labelType', el).value; cfg.rotate = $('#rotate', el).checked; LS.set('labelCfg', cfg); LS.set('printerModel', cfg.model); };
-  const opts = it => ({ paper: cfg.paper, tpl: cfg.tpl, product: it.p, price: it.price, packDate: $('#packDate', el).value, shelfDays: $('#shelfDays', el).value, weight: $('#weight', el).value || it.weight, embedPrice: $('#embedPrice', el).checked });
+  ['paper', 'tpl', 'model', 'density', 'labelType'].forEach(k => $('#' + k, el).value = cfg[k]); $('#rotate', el).checked = !!cfg.rotate; $('#n_l', el).value = LY.name.lines; $('#p_a', el).value = LY.price.align;
+  const save = () => { ['paper', 'tpl', 'model'].forEach(k => cfg[k] = $('#' + k, el).value); cfg.density = +$('#density', el).value; cfg.labelType = +$('#labelType', el).value; cfg.rotate = $('#rotate', el).checked;
+    cfg.cw = +$('#cw', el).value || 50; cfg.ch = +$('#ch', el).value || 50; LY.shop = $('#lshop', el).checked;
+    LY.name.s = +$('#n_s', el).value; LY.name.y = +$('#n_y', el).value; LY.name.lines = +$('#n_l', el).value; LY.price.s = +$('#p_s', el).value; LY.price.y = +$('#p_y', el).value; LY.price.align = $('#p_a', el).value;
+    LY.code.y = +$('#c_y', el).value; LY.code.h = +$('#c_h', el).value; LY.code.w = +$('#c_w', el).value; LY.code.txt = $('#c_t', el).checked ? 1 : 0; LY.ox = +$('#ox', el).value; LY.oy = +$('#oy', el).value;
+    $$('input[type=range]', el).forEach(r => { const v = $('#v_' + r.id, el); if (v) v.textContent = r.value; }); LS.set('labelCfg', cfg); LS.set('printerModel', cfg.model); };
+  const opts = it => ({ paper: cfg.paper, cw: cfg.cw, ch: cfg.ch, layout: LY, rotate: cfg.rotate, tpl: cfg.tpl, product: it.p, price: it.price, packDate: $('#packDate', el).value, shelfDays: $('#shelfDays', el).value, weight: $('#weight', el).value || it.weight, embedPrice: $('#embedPrice', el).checked });
   const preview = () => {
-    save(); $('#freshOpt', el).style.display = cfg.tpl === 'fresh' ? '' : 'none'; $('#embedRow', el).style.display = cfg.tpl === 'fresh' || cfg.tpl === 'price' ? '' : 'none';
+    save(); $('#freshOpt', el).style.display = cfg.tpl === 'fresh' ? '' : 'none'; $('#embedRow', el).style.display = cfg.tpl === 'fresh' || cfg.tpl === 'price' || cfg.tpl === 'price2' ? '' : 'none';
+    $('#cust', el).style.display = cfg.paper === 'custom' ? '' : 'none'; $('#lay', el).style.display = cfg.tpl === 'price' || cfg.tpl === 'price2' ? '' : 'none';
+    const sz = labelSize({ paper: cfg.paper, cw: cfg.cw, ch: cfg.ch });
+    $('#lw', el).innerHTML = (cfg.labelType === 3 ? '<span style="color:var(--red)">⚠ เลือก "ต่อเนื่อง" อยู่ — ถ้าสติ๊กเกอร์เป็นดวงมีช่องว่างระหว่างดวง ให้เลือก "มีช่องว่าง" ไม่งั้นตำแหน่งพิมพ์จะเลื่อน</span><br>' : '') + `ฉลาก ${sz.w}×${sz.h} มม.${sz.w > 48 && !cfg.rotate ? ' · พิมพ์ได้กว้างสุด 48 มม. (ขอบซ้าย-ขวาเว้น ' + ((sz.w - 48) / 2) + ' มม.)' : ''} — วัดขนาดสติ๊กเกอร์จริงด้วยไม้บรรทัดแล้วเลือกให้ตรง`;
     const it = LQ[0] || { p: { name: 'ตัวอย่างสินค้า ผักกาดขาว', price: '25', sku: '10001', barcode: internalBarcode('10001') } };
     const r = renderLabel($('#pv', el), opts(it)); $('#pv', el).style.width = Math.min(r.W * 1.0, 340) + 'px';
     if (cfg.model === 'B21' && r.W > 384 && !cfg.rotate) $('#pinfo', el).textContent = '⚠ กว้างเกินหัวพิมพ์ 48 มม. ระบบจะย่อให้พอดี';
@@ -1431,6 +1504,8 @@ VIEWS.labels = (el, items) => {
     $$('[data-gen]', el).forEach(b => b.onclick = async () => { const it = LQ[+b.dataset.gen]; const code = internalBarcode(it.p.sku); try { busy(1); await saveProducts([{ ...it.p, barcode: code }]); it.p = IDX.bySku[it.p.sku]; busy(0); toast('บันทึกบาร์โค้ด ' + code + ' ให้สินค้าแล้ว'); drawQ(); preview(); } catch (e) { busy(0); toast(e.message, 1); } });
   };
   $$('select,input', el).forEach(i => i.addEventListener('change', preview));
+  $$('input[type=range]', el).forEach(i => i.addEventListener('input', preview));
+  $('#lrs', el).onclick = () => { const d = JSON.parse(JSON.stringify(LBL_LAYOUT_DEF)); Object.assign(LY, d, { ox: LY.ox, oy: LY.oy }); go('labels'); };
   $('#addp', el).onclick = () => pickProducts(ps => { ps.forEach(p => LQ.push({ p, copies: 1 })); drawQ(); preview(); });
   Scanner.on('labels', code => { const f = findByCode(code); if (f) { beep(); LQ.push({ p: f.p, copies: 1 }); drawQ(); preview(); toast('เพิ่มเข้าคิว: ' + f.p.name); } else { Scanner.err(); toast('ไม่พบ ' + code, 1); } });
   $('#adds', el).onclick = () => openScanner((code, ctx) => { const f = findByCode(code); if (f) { LQ.push({ p: f.p, copies: 1 }); ctx.showLast(`<b>${esc(f.p.name)}</b> เพิ่มแล้ว (${LQ.length})`); drawQ(); preview(); } else ctx.showLast('ไม่พบ ' + esc(code)); return ''; }, { continuous: true, title: 'สแกนเพิ่มเข้าคิว' });
@@ -1458,6 +1533,11 @@ VIEWS.labels = (el, items) => {
     if (!LQ.length) return toast('ยังไม่มีรายการ', 1);
     LQ.forEach((it, i) => { const c = document.createElement('canvas'); renderLabel(c, opts(it)); c.toBlob(b => download(`label_${it.p.sku}.png`, b), 'image/png'); });
     toast('บันทึกรูปแล้ว — เปิดในแอป NIIMBOT เพื่อพิมพ์');
+  };
+  $('#tst', el).onclick = async () => {
+    if (!NB.connected) { try { await NB.connect(); renderPrinterBadge(); } catch (e) { return e.name !== 'NotFoundError' && toast(e.message, 1); } }
+    save(); const c = document.createElement('canvas'); renderLabel(c, { ...opts({ p: {} }), tpl: 'test' });
+    try { busy(1, 'กำลังพิมพ์ทดสอบ...'); const { rows, cols } = canvasToRows(c, cfg.rotate); await NB.print(rows, cols, { copies: 1, density: cfg.density, labelType: cfg.labelType, model: cfg.model }); busy(0); toast('ดูกรอบบนสติ๊กเกอร์ แล้วปรับเลื่อนซ้าย/ขวา ขึ้น/ลง ถ้ายังไม่ตรง'); } catch (e) { busy(0); toast('พิมพ์ไม่สำเร็จ: ' + e.message, 1); }
   };
   $('#pr', el).onclick = async () => {
     if (!LQ.length) return toast('ยังไม่มีรายการ', 1);
@@ -2064,20 +2144,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.23"></script>
-<script src="logic.js?v=2.6.23"></script>
-<script src="cache.js?v=2.6.23"></script>
-<script src="offline.js?v=2.6.23"></script>
-<script src="scanner.js?v=2.6.23"></script>
-<script src="printer.js?v=2.6.23"></script>
-<script src="pos.js?v=2.6.23"></script>
-<script src="display.js?v=2.6.23"></script>
-<script src="reports.js?v=2.6.23"></script>
-<script src="inventory.js?v=2.6.23"></script>
-<script src="people.js?v=2.6.23"></script>
-<script src="quality.js?v=2.6.23"></script>
-<script src="services.js?v=2.6.23"></script>
-<script src="owner.js?v=2.6.23"></script>
+<script src="qr.js?v=2.6.24"></script>
+<script src="logic.js?v=2.6.24"></script>
+<script src="cache.js?v=2.6.24"></script>
+<script src="offline.js?v=2.6.24"></script>
+<script src="scanner.js?v=2.6.24"></script>
+<script src="printer.js?v=2.6.24"></script>
+<script src="pos.js?v=2.6.24"></script>
+<script src="display.js?v=2.6.24"></script>
+<script src="reports.js?v=2.6.24"></script>
+<script src="inventory.js?v=2.6.24"></script>
+<script src="people.js?v=2.6.24"></script>
+<script src="quality.js?v=2.6.24"></script>
+<script src="services.js?v=2.6.24"></script>
+<script src="owner.js?v=2.6.24"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

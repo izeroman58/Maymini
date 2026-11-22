@@ -15,7 +15,7 @@ const Display = {
   last: null, t: null, dc: null, pc: null, offerId: '', sigT: null,
   push(state) {
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
-    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: (S.settings && S.settings.brandLogo) || '', cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
+    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: (S.settings && S.settings.brandLogo) || '', ads: adsCfg(), cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now() };
     this.last = state;
     try { this.bc && this.bc.postMessage(state); } catch (e) { }
     const direct = this.send(state);
@@ -60,6 +60,64 @@ window.Display = Display;
 if (Display.bc) Display.bc.onmessage = e => { if (e.data && e.data.hello && Display.last && S.view === 'pos') Display.bc.postMessage(Display.last); };
 document.addEventListener('mm:booted', () => Display.listen());
 
+/* ===== โฆษณาฝั่งขวาของจอลูกค้า =====
+   ไฟล์อยู่ใน Google Drive (โฟลเดอร์ "โฆษณาจอลูกค้า") — ชีตเก็บแค่รายการชื่อไฟล์ ไม่หนักฐานข้อมูล
+   จอลูกค้าโหลดแต่ละไฟล์ครั้งเดียวแล้วเก็บไว้ในเครื่อง (IndexedDB) เปิดครั้งต่อไปเล่นได้ทันทีแม้เน็ตช้า */
+const ADS_DEF = { on: false, idle: true, fit: 'contain', items: [] };
+const adsCfg = () => { const c = cfg('displayAds', ADS_DEF); return { on: !!c.on, idle: c.idle !== false, fit: c.fit === 'cover' ? 'cover' : 'contain', items: (c.items || []).filter(x => x && x.id).map(x => ({ id: x.id, t: x.t === 'v' ? 'v' : 'i', s: Math.max(3, Math.min(60, +x.s || 8)) })) }; };
+const AdFiles = {
+  urls: {}, wait: {},
+  async url(id) {
+    if (this.urls[id]) return this.urls[id];
+    if (this.wait[id]) return this.wait[id];
+    return this.wait[id] = (async () => {
+      const ce = await Cache.get('ad_' + id); let du = ce && ce.v;
+      if (!du) {
+        if (!S.apiUrl) throw new Error('no file');
+        const r = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'adGet', payload: { id } }) }).then(x => x.json());
+        if (!r.ok) throw new Error(r.error || 'load');
+        du = 'data:' + r.mime + ';base64,' + r.base64; await Cache.set('ad_' + id, du);
+      }
+      delete Cache.mem['ad_' + id]; // ไม่ค้างไฟล์ใหญ่ไว้ในหน่วยความจำ 2 ชุด
+      const blob = await (await fetch(du)).blob();
+      return this.urls[id] = URL.createObjectURL(blob);
+    })().finally(() => delete this.wait[id]);
+  },
+  async put(id, dataUrl) { await Cache.set('ad_' + id, dataUrl); delete Cache.mem['ad_' + id]; },
+  drop(id) { Cache.del('ad_' + id); if (this.urls[id]) { URL.revokeObjectURL(this.urls[id]); delete this.urls[id]; } }
+};
+// เล่นวนทีละรายการ: รูปค้างตามวินาทีที่ตั้ง · วิดีโอเล่นจนจบ (ปิดเสียง) · ไฟล์ไหนโหลดไม่ได้ข้ามไป
+const AdPlayer = {
+  el: null, key: '', list: [], i: -1, t: null, fails: 0, fit: 'contain',
+  set(ads) {
+    if (!this.el) { this.el = document.createElement('div'); this.el.className = 'adv'; }
+    const list = ads && ads.on ? ads.items : [], key = JSON.stringify([list, ads && ads.fit]);
+    this.fit = (ads && ads.fit) || 'contain'; this.el.dataset.fit = this.fit;
+    if (key === this.key) return list.length > 0;
+    this.key = key; this.list = list; this.i = -1; this.fails = 0; clearTimeout(this.t);
+    list.forEach(x => AdFiles.url(x.id).catch(() => { })); // โหลดล่วงหน้าทั้งหมด
+    if (list.length) this.next(); else this.el.innerHTML = '';
+    return list.length > 0;
+  },
+  async next() {
+    clearTimeout(this.t); if (!this.list.length) return;
+    if (this.fails >= this.list.length) { this.fails = 0; this.t = setTimeout(() => this.next(), 15000); return; }
+    this.i = (this.i + 1) % this.list.length; const it = this.list[this.i], key = this.key;
+    let u; try { u = await AdFiles.url(it.id); } catch (e) { this.fails++; return key === this.key && this.next(); }
+    if (key !== this.key) return; this.fails = 0;
+    if (it.t === 'v') {
+      const v = document.createElement('video'); v.src = u; v.muted = true; v.playsInline = true; v.autoplay = true; v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+      if (this.list.length === 1) v.loop = true; else v.onended = () => this.next();
+      v.onerror = () => { this.fails++; this.next(); };
+      this.el.replaceChildren(v); v.play().catch(() => { });
+      this.t = setTimeout(() => this.next(), 5 * 60000); // กันวิดีโอค้าง
+    } else {
+      const im = new Image(); im.src = u; im.alt = ''; this.el.replaceChildren(im);
+      if (this.list.length > 1) this.t = setTimeout(() => this.next(), it.s * 1000);
+    }
+  },
+  mount(slot) { if (!slot || !this.el) return; slot.appendChild(this.el); const v = this.el.querySelector('video'); if (v) v.play().catch(() => { }); }
+};
 const dispLogoHTML = (m, img, shop, brandW, big) => m === 'image' && img ? `<img src="${img}" alt="" style="height:${big ? 'clamp(60px,22vmin,200px)' : 'clamp(26px,7vmin,60px)'};width:auto;max-width:${big ? '92%' : '60vw'};object-fit:contain;display:block">` : m === 'name' ? `<b>${esc(shop || 'ร้านเมย์ มินิมาร์ท')}</b>` : `<img src="${brandW || 'logo-white.png'}" alt="ร้านเมย์ Mini Mart" style="height:${big ? 'clamp(60px,22vmin,200px)' : 'clamp(28px,7.5vmin,64px)'};width:auto;max-width:${big ? '92%' : '60vw'};object-fit:contain;display:block">`;
 const bkk = () => new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
 const LB = v => `<span class="cu">฿</span>${money(v, num(v) % 1 ? 2 : 0)}`;
@@ -70,7 +128,7 @@ VIEWS.display = (root, hash) => {
   root.innerHTML = `<style>
    .dsp{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;font-family:var(--fh);color:#111;overflow:hidden}
    .dsp .cu{opacity:.38;font-weight:400;margin-right:.08em}
-   .dsp .hd{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--red);color:#fff;font-size:clamp(14px,3.2vmin,26px);flex:none}
+   .dsp .hd{display:flex;align-items:center;gap:8px;padding:max(8px,1.4vmin) max(28px,5vmin) max(8px,1.4vmin) max(32px,6vmin);background:var(--red);color:#fff;font-size:clamp(14px,3.2vmin,26px);flex:none}
    .dsp .hd .sh{flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap;overflow:hidden}
    .dsp .hd .sh img{height:clamp(26px,7vmin,60px);width:auto;max-width:60vw;object-fit:contain;display:block}
    .dsp .lgo{font-family:var(--flogo);font-style:italic;display:inline-flex;align-items:baseline;gap:.25em;line-height:1}
@@ -98,11 +156,14 @@ VIEWS.display = (root, hash) => {
    .dsp .gr>.a{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;padding:.06em 0;border-bottom:1px solid #00000012}
    .dsp .gr>.more{grid-column:1/-1;color:#888;font-size:.72em;font-weight:400;border-bottom:1px dashed #ddd;padding-bottom:.15em;margin-bottom:.1em}
    .dsp .gr>.ln{grid-column:1/-1;height:1px;background:#eee}
+   .dsp .gr>.tl{font-size:1.45em;font-weight:800;border-bottom:none;border-top:3px solid #222;margin-top:.15em;padding-top:.12em;color:#111}
+   .dsp .gr>.n.tl>b{font-weight:800}
+   .dsp .gr>.n.tl>i{font-size:.55em;color:#666;font-weight:500}
    .dsp .tot{flex:none;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:1.2vmin 3vmin}
    .dsp .tot .l{font-size:clamp(16px,4.2vmin,34px);line-height:1.15}
    .dsp .tot .v{font-size:clamp(34px,12vmin,120px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
    .dsp .tot .cu{opacity:.55}
-   .dsp .ft{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 12px;font-size:clamp(12px,2.8vmin,22px);color:#666;background:#fafafa;border-top:1px solid #eee}
+   .dsp .ft{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px max(28px,5vmin) 4px max(32px,6vmin);font-size:clamp(12px,2.8vmin,22px);color:#666;background:#fafafa;border-top:1px solid #eee}
    .dsp .ft .cs{font-weight:800;color:#222;white-space:nowrap;font-size:clamp(15px,4vmin,30px)}
    .dsp .side{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FFF3F4;padding:2vmin 3vmin;text-align:center;gap:1vmin}
    .dsp .qr{background:#fff;padding:1.5vmin;border-radius:2vmin;box-shadow:0 2px 10px #0001}
@@ -119,22 +180,31 @@ VIEWS.display = (root, hash) => {
    .dsp .rp:not(.hasqr)::after{content:'';flex:.35 1 0}
    .dsp .rp .rlg img{max-height:100%!important;max-width:92%!important}
    .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:#bbb;margin-right:.3em;vertical-align:middle}.dot.on{background:#4ade80}
-   @media (orientation:portrait){.dsp .bd{flex-direction:column}.dsp .lst{flex:1}.dsp .rp{flex:none;padding:1.5vmin 3vmin}.dsp .qr img{width:min(56vw,34vh)}}
+   .dsp .rp.ad{padding:0;gap:0;justify-content:stretch}
+   .dsp .rp.ad::after{display:none}
+   .dsp .adslot{flex:1 1 0;min-height:0;width:100%;display:flex}
+   .dsp .adv{flex:1;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+   .dsp .adv img,.dsp .adv video{width:100%;height:100%;object-fit:contain;display:block}
+   .dsp .adv[data-fit=cover] img,.dsp .adv[data-fit=cover] video{object-fit:cover}
+   .dsp .rp.ad .adx{flex:none;display:flex;flex-wrap:wrap;gap:1vmin;justify-content:center;padding:1vmin}
+   .dsp .idl{flex:2;min-width:0}
+   @media (orientation:portrait){.dsp .rp.ad{flex:0 0 40%}.dsp .bd{flex-direction:column}.dsp .lst{flex:1}.dsp .rp{flex:none;padding:1.5vmin 3vmin}.dsp .qr img{width:min(56vw,34vh)}}
   </style><div class="dsp" id="d"><div class="hd"><span class="sh" id="sh"></span><span class="ck" id="ck"></span><button class="dfs" id="fs" title="ย่อ/ขยายเต็มจอ"></button></div><div class="bd" id="bd"></div><div class="tot" id="tt" hidden></div><div class="ft"><span id="cnt"><span class="dot" id="lk"></span></span><span class="cs" id="cs"></span></div></div>`;
   const bd = $('#bd', root), tt = $('#tt', root);
   const tick = () => { const c = $('#ck', root); if (!c) return clearInterval(tk); c.textContent = bkk() + ' น.'; };
   const tk = setInterval(tick, 5000); tick();
   let cur = null, lastAt = 0;
-  const fit = (box, grid, items) => {
+  const fit = (box, grid, items, tot) => {
     // หาขนาดตัวอักษรที่ใหญ่ที่สุดที่แสดงได้ครบ ไม่ล้นจอ; ถ้าเล็กสุดแล้วยังล้น ยุบรายการเก่าเป็น “+N รายการ”
     const H = box.clientHeight - 4, W = box.clientWidth - 4;
     const minF = Math.max(15, Math.min(22, Math.round(Math.min(innerWidth, innerHeight) / 22)));
-    const maxF = Math.max(minF, Math.min(72, Math.round(H / 2.6)));
+    const maxF = Math.max(minF, Math.min(60, Math.round(H / 3.2)));
     const render = (skip, f) => {
       const shown = items.slice(skip), old = items.slice(0, skip);
       grid.style.fontSize = f + 'px';
       grid.innerHTML = (old.length ? `<div class="more">+ ${old.length} รายการก่อนหน้า · ${LB(old.reduce((a, x) => a + num(x.a), 0))}</div>` : '') +
-        shown.map(it => { const q = it.w === 'Y' ? num(it.q).toFixed(3).replace(/\.?0+$/, '') + ' กก.' : (num(it.q) !== 1 ? '×' + num(it.q) : ''); return `<div class="n"><s>-</s><b>${esc(it.n)}</b>${q ? `<i>${q}</i>` : ''}</div><div class="a">${LB(it.a)}</div>`; }).join('');
+        shown.map(it => { const q = it.w === 'Y' ? num(it.q).toFixed(3).replace(/\.?0+$/, '') + ' กก.' : (num(it.q) !== 1 ? '×' + num(it.q) : ''); return `<div class="n"><s>-</s><b>${esc(it.n)}</b>${q ? `<i>${q}</i>` : ''}</div><div class="a">${LB(it.a)}</div>`; }).join('') +
+        (tot ? `<div class="n tl"><b>รวม</b><i>${tot.c} ชิ้น</i></div><div class="a tl">${LB(tot.a)}</div>` : '');
     };
     const fitsH = () => grid.scrollHeight <= H;
     const fitsW = () => { grid.classList.add('m'); const ok = grid.scrollWidth <= W; grid.classList.remove('m'); return ok; };
@@ -148,7 +218,7 @@ VIEWS.display = (root, hash) => {
     // ยอมตัดชื่อยาวด้วย … เล็กน้อย เพื่อให้ตัวอักษรใหญ่ขึ้น (อ่านง่ายสำหรับผู้สูงอายุ) — ความสูงต้องพอดีเสมอ
     let bh = best; lo = best; hi = maxF;
     while (lo <= hi) { const m = (lo + hi) >> 1; render(0, m); if (fitsH()) { bh = m; lo = m + 1; } else hi = m - 1; }
-    render(0, Math.max(best, Math.min(bh, Math.round(best * 1.2), Math.round(minF * 2.4))));
+    render(0, Math.max(minF, Math.round(Math.max(best, Math.min(bh, Math.round(best * 1.2), Math.round(minF * 2.4))) * .88)));
   };
   // ย่อตัวเลขยอดรวมให้พอดีกว้างของแถบแดง
   const fitOne = el => { if (!el) return; const W = el.parentElement.clientWidth * .92; let f = parseFloat(getComputedStyle(el).fontSize); el.style.fontSize = ''; f = parseFloat(getComputedStyle(el).fontSize); while (el.scrollWidth > W && f > 18) { f -= 2; el.style.fontSize = f + 'px'; } };
@@ -160,7 +230,9 @@ VIEWS.display = (root, hash) => {
     const cnt = $('#cnt', root); cnt.innerHTML = `<span class="dot ${Display.rx && Display.rx.readyState === 'open' ? 'on' : ''}" id="lk"></span>` + (s && s.mode !== 'idle' && s.mode !== 'done' && s.count ? `${s.count} รายการ` : '');
     if (!s || s.mode === 'idle' || !s.mode) {
       tt.hidden = true;
-      bd.innerHTML = `<div class="cen"><img src="${(s && s.brandC) || 'logo.png'}" alt="ร้านเมย์ Mini Mart" style="width:auto;height:min(46vh,60vw);max-width:80vw;object-fit:contain"><div style="font-size:6vmin;margin-top:1vmin">${esc((s && s.welcome) || 'ยินดีต้อนรับ')}</div>${s && s.promo ? `<div style="font-size:4.5vmin;background:var(--green);color:#fff;border-radius:2vmin;padding:1vmin 3vmin">${esc(s.promo)}</div>` : ''}</div>`;
+      const idleAd = s && s.ads && s.ads.idle && AdPlayer.set(s.ads);
+      bd.innerHTML = `<div class="cen${idleAd ? ' idl' : ''}"><img src="${(s && s.brandC) || 'logo.png'}" alt="ร้านเมย์ Mini Mart" style="width:auto;height:min(46vh,${s && s.ads && s.ads.on && s.ads.idle && s.ads.items.length ? '38vw' : '60vw'});max-width:80vw;object-fit:contain"><div style="font-size:6vmin;margin-top:1vmin">${esc((s && s.welcome) || 'ยินดีต้อนรับ')}</div>${s && s.promo ? `<div style="font-size:4.5vmin;background:var(--green);color:#fff;border-radius:2vmin;padding:1vmin 3vmin">${esc(s.promo)}</div>` : ''}</div>${idleAd ? '<div class="rp ad"><div class="adslot" id="ads"></div></div>' : ''}`;
+      if (idleAd) AdPlayer.mount($('#ads', root));
       return;
     }
     if (s.mode === 'done') {
@@ -171,13 +243,17 @@ VIEWS.display = (root, hash) => {
     const amt = s.mode === 'pay' && s.amount != null ? s.amount : s.total;
     // ฝั่งขวา 1/3 สีแดง: ยอดรวม · QR ชำระเงิน · ส่วนลด · สมาชิก · เงินสดที่ลูกค้าได้รับ (แนวตั้ง: อยู่ด้านล่าง)
     const qr = s.mode === 'pay' && s.qr ? `<div class="qr"><img src="${s.qr}"></div><div class="qrl">สแกนจ่าย${s.qrLabel ? ' · ' + esc(s.qrLabel) : ''}</div>` : '';
-    bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr || `<div class="rlg">${dispLogoHTML(s.logoMode || 'mark', s.logo || '', s.shop || S.settings.shopName, s.brandW, true)}</div>`}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}</div>`;
+    const extras = `${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}`;
+    // โฆษณา: แสดงตอนสแกนสินค้า · ตอนรับชำระ/โชว์ QR กลับเป็นยอดเงินตัวใหญ่ตามเดิม
+    const showAd = s.mode === 'cart' && !qr && s.ads && AdPlayer.set(s.ads);
+    if (showAd) { bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp ad"><div class="adslot" id="ads"></div>${extras ? `<div class="adx">${extras}</div>` : ''}</div>`; AdPlayer.mount($('#ads', root)); }
+    else bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr || `<div class="rlg">${dispLogoHTML(s.logoMode || 'mark', s.logo || '', s.shop || S.settings.shopName, s.brandW, true)}</div>`}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${extras}</div>`;
     tt.hidden = true;
     const items = s.items || [];
     // จำนวนที่ถูกตัดตั้งแต่ฝั่ง POS (ส่งมาแค่ 60 ล่าสุด)
     const extra = Math.max(0, (s.count || items.length) - items.length);
     const all = extra ? [{ n: `(+${extra} รายการ)`, q: 1, a: 0 }].concat(items) : items;
-    requestAnimationFrame(() => { const box = $('#lst', root), gr = $('#gr', root); if (box && gr) fit(box, gr, all); fitOne($('#rv', root)); });
+    requestAnimationFrame(() => { const box = $('#lst', root), gr = $('#gr', root); if (box && gr) fit(box, gr, all, { a: amt, c: items.reduce((a, x) => a + (x.w === 'Y' ? 1 : num(x.q) || 1), 0) + extra }); fitOne($('#rv', root)); });
   };
   const accept = s => {
     // เครื่องขายใช้เวอร์ชันใหม่กว่า → จอลูกค้าโหลดตัวเองใหม่ (ไม่ต้องไปกดรีเฟรชที่จอลูกค้า)
@@ -255,7 +331,7 @@ VIEWS.displayset = el => {
      <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="image" ${dc.logoMode === 'image' ? 'checked' : ''}> รูปโลโก้ของร้าน (แนวนอน · พื้นโปร่งใสจะสวยที่สุด)</label>
      <label class="row" style="margin-bottom:8px"><input type="radio" name="lgm" value="name" ${dc.logoMode === 'name' ? 'checked' : ''}> ชื่อร้านแบบตัวอักษร</label>
      <div id="lgup" style="margin-bottom:8px"><label class="btn ghost sm">อัปโหลดรูปโลโก้<input type="file" accept="image/*" id="lgf" hidden></label></div>
-     <div id="lgp"></div><div class="tiny muted" style="margin-top:6px">กดบันทึกด้านล่าง แล้วจอลูกค้าจะเปลี่ยนตอนขายบิลถัดไป</div></div><div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
+     <div id="lgp"></div><div class="tiny muted" style="margin-top:6px">กดบันทึกด้านล่าง แล้วจอลูกค้าจะเปลี่ยนตอนขายบิลถัดไป</div></div><div class="card" id="adc"></div><div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
   $('#op', el).onclick = async () => {
     // ถ้ามีจอที่สอง: เปิดหน้าต่างจอลูกค้าเต็มพื้นที่จอนั้นเลย (Chrome จะถามสิทธิ์ "จัดการหน้าต่าง" ครั้งแรก)
     try { if ('getScreenDetails' in window) { const sd = await window.getScreenDetails(); const ext = sd.screens.find(x => x !== sd.currentScreen) || null; if (ext) { const w2 = window.open(base + '#display', 'mmdisplay', `popup,left=${ext.availLeft},top=${ext.availTop},width=${ext.availWidth},height=${ext.availHeight}`); if (w2) { toast('เปิดจอลูกค้าบนจอที่สองแล้ว — คลิกที่จอลูกค้า 1 ครั้งเพื่อเต็มจอ'); return; } } } } catch (e) { }
@@ -272,5 +348,67 @@ VIEWS.displayset = el => {
     $('#lgf', el).onchange = async e => { const f = e.target.files[0]; if (!f) return; const im = await loadImg(URL.createObjectURL(f)); const h = Math.min(120, im.height), w = Math.round(im.width * h / im.height), cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(im, 0, 0, w, h); lgImg = cv.toDataURL('image/png'); if (lgImg.length > 60000) lgImg = cv.toDataURL('image/webp', .85); pv(); };
     pv();
   }
+  const adc = $('#adc', el); if (adc) adSettings(adc);
   const sv = $('#sv', el); if (sv) sv.onclick = async () => { try { busy(1); await saveSetting('displayCfg', { welcome: $('#wc', el).value, promo: $('#pm', el).value, logoMode: ($('[name=lgm]:checked', el) || {}).value || 'mark', logo: lgImg }); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
 };
+
+// ตั้งค่าโฆษณาฝั่งขวาของจอลูกค้า (เจ้าของร้าน) — เปลี่ยนแล้วบันทึกทันที
+function adSettings(box) {
+  const A = { ...ADS_DEF, ...cfg('displayAds', ADS_DEF) }; A.items = (A.items || []).slice();
+  const save = async (msg) => { await saveSetting('displayAds', A); if (Display.last) Display.push({ ...Display.last }); if (msg) toast(msg); };
+  const render = () => {
+    box.innerHTML = `<h3 style="margin-bottom:4px">โฆษณาบนจอลูกค้า (พื้นที่ฝั่งขวา)</h3>
+     <div class="small muted" style="margin-bottom:8px">ตอนสแกนสินค้า ฝั่งขวาจะเล่นรูป/วิดีโอวนไป ยอดรวมย้ายไปอยู่ใต้รายการ · ตอนรับชำระเงินหรือแสดง QR จะกลับเป็นยอดเงินตัวใหญ่เหมือนเดิม</div>
+     <label class="row" style="margin-bottom:6px"><input type="checkbox" id="a_on" ${A.on ? 'checked' : ''}> <b>เปิดแสดงโฆษณา</b></label>
+     <label class="row small" style="margin-bottom:6px"><input type="checkbox" id="a_idle" ${A.idle !== false ? 'checked' : ''}> แสดงตอนจอว่าง (ยังไม่มีลูกค้า) ด้วย</label>
+     <div class="row small" style="gap:14px;margin-bottom:10px;flex-wrap:wrap"><label class="row"><input type="radio" name="a_fit" value="contain" ${A.fit !== 'cover' ? 'checked' : ''}> แสดงทั้งภาพ (ไม่ตัดขอบ)</label><label class="row"><input type="radio" name="a_fit" value="cover" ${A.fit === 'cover' ? 'checked' : ''}> เต็มกรอบ (ตัดขอบเกินออก)</label></div>
+     <div id="a_list">${A.items.length ? A.items.map((x, i) => `<div class="row" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+        <div data-th="${i}" style="width:48px;height:64px;border-radius:6px;background:var(--red);overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">${x.t === 'v' ? '▶' : ''}</div>
+        <div class="grow" style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.t === 'v' ? '🎬 ' : '🖼 '}${esc(x.name || 'ไฟล์')}</div><div class="tiny muted">${x.kb ? x.kb.toLocaleString() + ' KB' : ''}${x.t === 'v' ? ' · เล่นจนจบแล้วต่อรายการถัดไป' : ''}</div>
+          ${x.t !== 'v' ? `<label class="tiny row" style="gap:4px;margin-top:2px">แสดง <input class="in" type="number" min="3" max="60" data-s="${i}" value="${x.s || 8}" style="width:56px;min-height:30px;padding:2px 6px"> วินาที</label>` : ''}</div>
+        <button class="btn ghost sm" data-up="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost sm" data-dn="${i}" ${i < A.items.length - 1 ? '' : 'disabled'}>▼</button>
+        <button class="btn ghost sm" data-rm="${i}" style="color:var(--red)">${I(IC.trash, 16)}</button></div>`).join('') : '<div class="small muted center" style="padding:10px">ยังไม่มีรูป/วิดีโอ</div>'}</div>
+     <div class="row" style="gap:8px;margin-top:10px"><label class="btn ghost grow" ${A.items.length >= 10 ? 'style="opacity:.5;pointer-events:none"' : ''}>+ เพิ่มรูปภาพ<input type="file" accept="image/*" id="a_img" hidden multiple></label><label class="btn ghost grow" ${A.items.length >= 10 ? 'style="opacity:.5;pointer-events:none"' : ''}>+ เพิ่มวิดีโอ<input type="file" accept="video/mp4,video/webm" id="a_vid" hidden></label></div>
+     <div style="display:block;margin-top:10px;background:#F4F7FB;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55">
+      <b>ขนาดที่แนะนำ</b> (จอลูกค้าไม่เกิน 11 นิ้ว)<br>
+      • <b>รูปภาพ</b>: แนวตั้ง สัดส่วน 2:3 เช่น <b>800×1200 px</b> (JPG/PNG) — ระบบย่อให้อัตโนมัติ เหลือไฟล์ละประมาณ 100–250 KB<br>
+      • <b>วิดีโอ</b>: MP4 (H.264) แนวตั้ง <b>720×1080</b> ยาว 10–30 วินาที <b>ไม่เกิน 10 MB</b> · จอเล่นแบบปิดเสียง<br>
+      • สูงสุด 10 รายการ · ช่องโฆษณากว้างประมาณ 1/3 ของจอ สัดส่วนจริงต่างกันไปตามจอ ถ้าเลือก “แสดงทั้งภาพ” จะไม่ถูกตัดขอบ<br>
+      • ไฟล์เก็บใน Google Drive (โฟลเดอร์ “โฆษณาจอลูกค้า”) ไม่ได้เก็บใน Google Sheet จึงไม่ทำให้ฐานข้อมูลหนัก · จอลูกค้าโหลดครั้งเดียวแล้วเก็บไว้ในเครื่อง</div>`;
+    A.items.forEach((x, i) => { if (x.t !== 'v') AdFiles.url(x.id).then(u => { const t = $(`[data-th="${i}"]`, box); if (t) t.innerHTML = `<img src="${u}" style="width:100%;height:100%;object-fit:cover">`; }).catch(() => { }); });
+    $('#a_on', box).onchange = e => { A.on = e.target.checked; save(A.on ? (A.items.length ? 'เปิดโฆษณาแล้ว' : 'เปิดแล้ว — เพิ่มรูปหรือวิดีโอด้านล่าง') : 'ปิดโฆษณาแล้ว').catch(er => toast(er.message, 1)); };
+    $('#a_idle', box).onchange = e => { A.idle = e.target.checked; save().catch(er => toast(er.message, 1)); };
+    $$('[name=a_fit]', box).forEach(r => r.onchange = () => { A.fit = r.value; save().catch(er => toast(er.message, 1)); });
+    $$('[data-s]', box).forEach(n => n.onchange = () => { A.items[+n.dataset.s].s = Math.max(3, Math.min(60, +n.value || 8)); save().catch(er => toast(er.message, 1)); });
+    const mv = (i, j) => { [A.items[i], A.items[j]] = [A.items[j], A.items[i]]; render(); save().catch(er => toast(er.message, 1)); };
+    $$('[data-up]', box).forEach(b => b.onclick = () => mv(+b.dataset.up, +b.dataset.up - 1));
+    $$('[data-dn]', box).forEach(b => b.onclick = () => mv(+b.dataset.dn, +b.dataset.dn + 1));
+    $$('[data-rm]', box).forEach(b => b.onclick = async () => {
+      const i = +b.dataset.rm, x = A.items[i]; if (!(await confirmDlg(`ลบ “${esc(x.name || 'ไฟล์นี้')}” ออกจากโฆษณา?`, 'ลบ', true))) return;
+      try { busy(1); A.items.splice(i, 1); await save(); api('adDelete', { id: x.id }).catch(() => { }); AdFiles.drop(x.id); busy(0); render(); toast('ลบแล้ว'); } catch (e) { busy(0); toast(e.message, 1); }
+    });
+    const add = async (files, kind) => {
+      for (const f of files) {
+        if (A.items.length >= 10) { toast('ใส่ได้สูงสุด 10 รายการ', 1); break; }
+        try {
+          let du, mime, t = kind;
+          if (kind === 'i') { const r = await compressImage(f, 1280, .82); du = r.dataUrl; mime = r.mime; }
+          else {
+            if (f.size > 10 * 1024 * 1024) { toast(`วิดีโอ ${(f.size / 1048576).toFixed(1)} MB ใหญ่เกิน 10 MB — ย่อขนาดก่อน (แนะนำ 720×1080 ยาวไม่เกิน 30 วินาที)`, 1, 6000); continue; }
+            mime = f.type || 'video/mp4'; du = await fileToDataURL(f);
+          }
+          busy(1, `กำลังอัปโหลด ${f.name}...`);
+          const up = await api('upload', { kind: 'ad', name: f.name, mime, base64: du });
+          await AdFiles.put(up.fileId, du);
+          A.items.push({ id: up.fileId, t, s: 8, name: f.name, kb: Math.round(du.length * .75 / 1024) });
+          await save(); busy(0);
+        } catch (e) { busy(0); toast('อัปโหลดไม่สำเร็จ: ' + e.message, 1); }
+      }
+      if (!A.on && A.items.length) toast('เพิ่มแล้ว — ติ๊ก “เปิดแสดงโฆษณา” เพื่อเริ่มแสดง'); else toast('เพิ่มแล้ว');
+      render();
+    };
+    $('#a_img', box).onchange = e => add([...e.target.files], 'i');
+    $('#a_vid', box).onchange = e => add([...e.target.files], 'v');
+  };
+  render();
+}
