@@ -400,6 +400,49 @@ var Logic = (function () {
     return days;
   }
 
+  // ---------- นำเข้าใบเสร็จรับเงินย้อนหลัง (เช่น จาก Loyverse หรือไฟล์ที่ส่งออกจากระบบนี้) ----------
+  // ไม่ตัดสต็อก ไม่คิดแต้ม/เงินเชื่อ (เป็นประวัติการขาย) · เลขที่ใบเสร็จซ้ำกับที่มีอยู่แล้ว หรือซ้ำกันเองในไฟล์ = ข้าม
+  // dry = ตรวจอย่างเดียว ยังไม่บันทึก
+  function importOrders(db, u, rows, dry) {
+    need(db, u, 'owner');
+    rows = rows || [];
+    var ids = rows.map(function (o) { return String(o && o.id || ''); }).filter(function (x) { return x; });
+    var have = {}; if (ids.length) db.read('Orders', { ids: ids }).forEach(function (o) { have[o.id] = 1; });
+    var seen = {}, dup = [], bad = [], fresh = [], now = db.now();
+    rows.forEach(function (o, i) {
+      var id = String(o && o.id || '');
+      if (!id || !/^\d{4}-\d\d-\d\d/.test(String(o.date || ''))) { bad.push(id || ('แถว ' + (i + 1))); return; }
+      if (have[id] || seen[id]) { dup.push(id); return; }
+      seen[id] = 1;
+      var c = clean('Orders', o); c.status = c.status || 'sale'; c.syncedAt = now; fresh.push(c);
+    });
+    if (!dry && fresh.length) { db.append('Orders', fresh); db.log(u, 'importOrders', fresh.length + ' บิล · ซ้ำ ' + dup.length); }
+    return { fresh: fresh.length, added: dry ? 0 : fresh.length, dup: dup.length, dupIds: dup.slice(0, 30), bad: bad.length, badIds: bad.slice(0, 10) };
+  }
+
+  // ---------- สำรอง / กู้คืนข้อมูลทั้งระบบ (เจ้าของเท่านั้น) ----------
+  function backupTable(db, u, t, offset, limit) {
+    need(db, u, 'owner'); if (!SCHEMA[t]) err('ไม่พบตาราง ' + t);
+    var rows = db.read(t, {}), off = Math.max(0, n(offset)), lim = Math.max(1, n(limit) || 5000);
+    return { table: t, total: rows.length, rows: rows.slice(off, off + lim) };
+  }
+  // กู้คืนแบบรวม: แถวที่มีอยู่แล้ว (key ตรงกัน) = เขียนทับ · แถวใหม่ = เพิ่ม · ไม่ลบข้อมูลที่ไม่มีในไฟล์
+  function restoreTable(db, u, t, rows, dry) {
+    need(db, u, 'owner');
+    var sc = SCHEMA[t]; if (!sc || t === 'Log') err('ไม่รองรับการกู้คืนตาราง ' + t);
+    var list = (rows || []).map(function (r) { return clean(t, r || {}); }).filter(function (c) { return c[sc.key]; });
+    var old = {}; db.read(t, {}).forEach(function (r) { old[String(r[sc.key])] = r; });
+    var add = 0, upd = 0, same = 0;
+    list.forEach(function (c) {
+      var o = old[String(c[sc.key])];
+      if (!o) { add++; return; }
+      var diff = sc.cols.some(function (k) { return k in c && String(o[k] == null ? '' : o[k]) !== c[k]; });
+      if (diff) upd++; else same++;
+    });
+    if (!dry && list.length) { db.upsert(t, list); db.log(u, 'restore ' + t, 'เพิ่ม ' + add + ' · แทนที่ ' + upd); }
+    return { table: t, rows: list.length, add: add, upd: upd, same: same };
+  }
+
   // ---------- customers ----------
   function customerPay(db, u, id, amount, note) {
     need(db, u, 'credit');
@@ -498,6 +541,9 @@ var Logic = (function () {
       case 'getOrder': return { order: getOrder(db, u, p.id) };
       case 'refund': return refund(db, u, p.id, p.reason);
       case 'salesMonthly': return salesMonthly(db, u, p.year);
+      case 'importOrders': return importOrders(db, u, p.rows, p.dry);
+      case 'backupTable': return backupTable(db, u, p.table, p.offset, p.limit);
+      case 'restoreTable': return restoreTable(db, u, p.table, p.rows, p.dry);
       case 'customerPay': return customerPay(db, u, p.id, p.amount, p.note);
       case 'adjustPoints': return adjustPoints(db, u, p.id, p.points, p.note);
       case 'clockIn': return clockIn(db, u, p.deviceId, p.at);

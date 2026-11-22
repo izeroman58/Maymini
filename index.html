@@ -191,7 +191,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.24';
+const APP_VER = '2.6.25';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -700,7 +700,9 @@ const PAPERS = [
 ];
 const HEAD_DOTS = 384; // หัวพิมพ์ NIIMBOT B1/B21 กว้าง 48 มม. (384 จุด)
 // เลย์เอาต์ฉลากราคา (ปรับได้): ค่าเป็น % ของความสูงช่อง · w = % ของความกว้าง
-const LBL_LAYOUT_DEF = { shop: false, name: { y: 4, s: 15, lines: 2 }, price: { y: 30, s: 36, align: 'right' }, code: { y: 64, h: 24, w: 100, txt: 1 }, ox: 0, oy: 0 };
+// ตำแหน่ง/ขนาดเป็น % ของช่องฉลาก (ลากย้าย/ย่อขยายบนตัวอย่างได้) · name/shop: x,y มุมซ้ายบน · price: r = ขอบขวา · code: กล่องบาร์โค้ด
+const LBL_LAYOUT_DEF = { v: 2, shop: false, sh: { x: 4, y: 3, s: 9 }, name: { x: 4, y: 4, w: 92, s: 15, lines: 2 }, price: { r: 96, y: 30, s: 36 }, code: { x: 4, y: 64, w: 92, h: 24, txt: 1 }, ox: 0, oy: 0 };
+const lblLayout = L0 => { const D = JSON.parse(JSON.stringify(LBL_LAYOUT_DEF)); if (!L0 || L0.v !== 2) return Object.assign(D, L0 ? { shop: !!L0.shop, ox: num(L0.ox), oy: num(L0.oy) } : {}); ['sh', 'name', 'price', 'code'].forEach(k => D[k] = { ...D[k], ...(L0[k] || {}) }); return { ...L0, ...D, sh: D.sh, name: D.name, price: D.price, code: D.code }; };
 const TEMPLATES = [
   { id: 'price', name: 'ราคา + บาร์โค้ด' }, { id: 'price2', name: '2 ชุดใน 1 ดวง (ตัดแบ่งครึ่ง)' }, { id: 'fresh', name: 'ของสด (วันที่แพ็ค/หมดอายุ)' },
   { id: 'barcode', name: 'บาร์โค้ดอย่างเดียว' }, { id: 'shelf', name: 'ป้ายราคาชั้นวาง' }
@@ -725,20 +727,20 @@ function labelSize(o) {
   return { w, h };
 }
 // ฉลากราคาตามเลย์เอาต์ที่ปรับได้ (ใช้กับแบบ 1 ชุด และ 2 ชุดใน 1 ดวง)
-function drawPriceCell(c, x0, y0, CW, CH, p, price, code, L, F) {
-  const pad = Math.round(Math.min(CW, CH) * .04) + 4, iw = CW - pad * 2, P = v => Math.round(CH * v / 100);
-  c.save(); c.beginPath(); c.rect(x0, y0, CW, CH); c.clip(); c.fillStyle = '#000';
-  let top = 0;
-  if (L.shop) { const ss = Math.max(12, P(L.name.s * .6)); c.font = F(600, ss); c.textAlign = 'left'; c.textBaseline = 'top'; c.fillText(S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', x0 + pad, y0 + P(L.name.y)); top = ss * 1.1; }
-  const ns = Math.max(12, P(L.name.s)); c.font = F(600, ns); c.textAlign = 'left'; c.textBaseline = 'top';
-  wrapText(c, p.name || '', iw, Math.max(1, L.name.lines || 1)).forEach((l, i) => c.fillText(l, x0 + pad, y0 + P(L.name.y) + top + i * ns * 1.08));
-  const ps = Math.max(14, P(L.price.s)), pTxt = money(price, price % 1 ? 2 : 0);
-  c.font = F(800, ps); c.textBaseline = 'alphabetic'; const pw = c.measureText(pTxt).width; const cs = Math.max(11, Math.round(ps * .3));
-  c.font = F(600, cs); const cw = c.measureText('฿').width + 4;
-  const total = pw + cw, base = y0 + P(L.price.y) + ps * .9;
-  const px = L.price.align === 'left' ? x0 + pad + cw : L.price.align === 'center' ? x0 + (CW - total) / 2 + cw : x0 + CW - pad - pw;
-  c.textAlign = 'left'; c.fillText('฿', px - cw, base); c.font = F(800, ps); c.fillText(pTxt, px, base);
-  if (code) { const bw = Math.round(iw * Math.min(100, L.code.w) / 100), bh = Math.max(20, P(L.code.h)); drawBarcode(c, code, x0 + Math.round((CW - bw) / 2), y0 + P(L.code.y), bw, bh, !!L.code.txt, Math.max(15, Math.round(bh * .24))); }
+function drawPriceCell(c, x0, y0, CW, CH, p, price, code, L, F, boxes) {
+  const X = v => x0 + Math.round(CW * v / 100), Y = v => y0 + Math.round(CH * v / 100), P = v => Math.max(8, Math.round(CH * v / 100));
+  const box = (k, x, y, w, h) => boxes && boxes.push({ k, x, y, w, h, cell: { x0, y0, CW, CH } });
+  c.save(); c.beginPath(); c.rect(x0, y0, CW, CH); c.clip(); c.fillStyle = '#000'; c.textAlign = 'left'; c.textBaseline = 'top';
+  if (L.shop) { const ss = P(L.sh.s), t = S.settings.shopName || 'ร้านเมย์ มินิมาร์ท'; c.font = F(600, ss); c.fillText(t, X(L.sh.x), Y(L.sh.y)); box('sh', X(L.sh.x), Y(L.sh.y), c.measureText(t).width, ss * 1.15); }
+  const ns = P(L.name.s), nw = Math.round(CW * L.name.w / 100); c.font = F(600, ns);
+  const lines = wrapText(c, p.name || '', nw, Math.max(1, L.name.lines || 1)); lines.forEach((l, i) => c.fillText(l, X(L.name.x), Y(L.name.y) + i * ns * 1.08));
+  box('name', X(L.name.x), Y(L.name.y), nw, ns * 1.08 * Math.max(1, L.name.lines || 1));
+  const ps = P(L.price.s), pTxt = money(price, price % 1 ? 2 : 0), cs = Math.max(10, Math.round(ps * .3));
+  c.font = F(800, ps); const pw = c.measureText(pTxt).width; c.font = F(600, cs); const cw = c.measureText('฿').width + 4;
+  const right = X(L.price.r), top = Y(L.price.y), base = top + ps * .9;
+  c.textBaseline = 'alphabetic'; c.fillText('฿', right - pw - cw, base); c.font = F(800, ps); c.fillText(pTxt, right - pw, base);
+  box('price', right - pw - cw, top + ps * .12, pw + cw, ps * .82);
+  if (code) { const bw = Math.max(40, Math.round(CW * L.code.w / 100)), bh = Math.max(16, P(L.code.h)); drawBarcode(c, code, X(L.code.x), Y(L.code.y), bw, bh, !!L.code.txt, Math.max(12, Math.round(bh * .24))); box('code', X(L.code.x), Y(L.code.y), bw, bh); }
   c.restore();
 }
 function renderLabel(cv, o) {
@@ -757,14 +759,14 @@ function renderLabel(cv, o) {
   const small = Math.max(14, Math.round(H * .085));
   let y = pad;
   if (o.tpl === 'price' || o.tpl === 'price2') {
-    const L = { ...LBL_LAYOUT_DEF, ...L0, name: { ...LBL_LAYOUT_DEF.name, ...(L0.name || {}) }, price: { ...LBL_LAYOUT_DEF.price, ...(L0.price || {}) }, code: { ...LBL_LAYOUT_DEF.code, ...(L0.code || {}) } };
-    if (o.tpl === 'price') { drawPriceCell(c, 0, 0, W, H, p, price, code, L, F); return { code, W, H }; }
+    const L = lblLayout(L0), boxes = [];
+    if (o.tpl === 'price') { drawPriceCell(c, 0, 0, W, H, p, price, code, L, F, boxes); return { code, W, H, boxes, ox, oy }; }
     // 2 ชุดใน 1 ดวง: แบ่งตามด้านที่ยาวกว่า + เส้นประสำหรับตัด
     const vert = H >= W * .8;
     const cw = vert ? W : Math.floor(W / 2), ch = vert ? Math.floor(H / 2) : H;
-    drawPriceCell(c, 0, 0, cw, ch, p, price, code, L, F); drawPriceCell(c, vert ? 0 : cw, vert ? ch : 0, cw, ch, p, price, code, L, F);
+    drawPriceCell(c, 0, 0, cw, ch, p, price, code, L, F, boxes); drawPriceCell(c, vert ? 0 : cw, vert ? ch : 0, cw, ch, p, price, code, L, F, boxes);
     c.save(); c.setLineDash([6, 5]); c.lineWidth = 2; c.strokeStyle = '#000'; c.beginPath(); if (vert) { c.moveTo(0, ch); c.lineTo(W, ch); } else { c.moveTo(cw, 0); c.lineTo(cw, H); } c.stroke(); c.restore();
-    return { code, W, H, split: vert ? 'h' : 'v' };
+    return { code, W, H, split: vert ? 'h' : 'v', boxes, ox, oy };
   }
   if (o.tpl === 'test') { // ทดสอบตำแหน่ง: กรอบขอบฉลาก + เส้นกึ่งกลาง + ขีดทุก 5 มม.
     c.lineWidth = 2; c.strokeRect(1, 1, W - 2, H - 2); c.beginPath(); c.moveTo(W / 2, 0); c.lineTo(W / 2, H); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
@@ -1446,7 +1448,7 @@ let LQ = [];
 VIEWS.labels = (el, items) => {
   if (Array.isArray(items)) items.forEach(p => { if (!LQ.some(x => x.p.sku === p.sku)) LQ.push({ p, copies: 1 }); });
   const cfg = LS.get('labelCfg', { paper: '40x30', tpl: 'price', density: 3, labelType: 1, rotate: false, model: LS.get('printerModel', 'B1') });
-  cfg.layout = { ...JSON.parse(JSON.stringify(LBL_LAYOUT_DEF)), ...(cfg.layout || {}) }; const LY = cfg.layout; ['name', 'price', 'code'].forEach(k => LY[k] = { ...LBL_LAYOUT_DEF[k], ...(LY[k] || {}) });
+  const LY = cfg.layout = lblLayout(cfg.layout);
   el.innerHTML = vhead('พิมพ์ฉลาก / บาร์โค้ด', '', 'more') + `
    <div class="card"><div class="row"><div class="grow"><b>เครื่องพิมพ์ NIIMBOT</b><div class="small muted" id="pst"></div></div><button class="btn sm" id="con">${I(IC.bt, 18)} เชื่อมต่อ</button></div>
      <div class="row small" style="margin-top:8px"><button class="btn ghost sm" id="rp">อ่านกระดาษอัตโนมัติ</button><span class="muted grow" id="pinfo"></span></div></div>
@@ -1459,42 +1461,38 @@ VIEWS.labels = (el, items) => {
      <div id="cust" class="grid2" style="margin-top:6px"><label class="f"><span>กว้าง (มม.)</span><input class="in" type="number" id="cw" min="15" max="80" value="${cfg.cw || 50}"></label><label class="f"><span>สูง (มม.)</span><input class="in" type="number" id="ch" min="10" max="120" value="${cfg.ch || 50}"></label></div>
      <div id="lw" class="small" style="margin:6px 0 2px"></div>
      <label class="row small"><input type="checkbox" id="rotate"> หมุนภาพ 90° (ถ้าพิมพ์ออกมาตะแคง)</label>
-     <label class="row small"><input type="checkbox" id="lshop" ${LY.shop ? 'checked' : ''}> แสดงชื่อร้านบนฉลาก</label>
-     <details id="lay" style="margin-top:8px" open><summary style="font-weight:600;cursor:pointer">ปรับตำแหน่ง/ขนาด ชื่อ · ราคา · บาร์โค้ด</summary>
-       <div class="grid2" style="margin-top:8px;gap:6px 14px">
-        <label class="f" style="margin:0"><span>ชื่อ: ขนาด <b id="v_n_s"></b></span><input type="range" style="width:100%" id="n_s" min="6" max="40" step="1" value="${LY.name.s}"></label><label class="f" style="margin:0"><span>ชื่อ: ระยะจากบน <b id="v_n_y"></b></span><input type="range" style="width:100%" id="n_y" min="0" max="80" step="1" value="${LY.name.y}"></label>
-        <label class="f" style="margin:0"><span>ชื่อ: จำนวนบรรทัด</span><select class="in" id="n_l"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label><span></span>
-        <label class="f" style="margin:0"><span>ราคา: ขนาด <b id="v_p_s"></b></span><input type="range" style="width:100%" id="p_s" min="10" max="70" step="1" value="${LY.price.s}"></label><label class="f" style="margin:0"><span>ราคา: ระยะจากบน <b id="v_p_y"></b></span><input type="range" style="width:100%" id="p_y" min="0" max="85" step="1" value="${LY.price.y}"></label>
-        <label class="f" style="margin:0"><span>ราคา: ตำแหน่ง</span><select class="in" id="p_a"><option value="left">ซ้าย</option><option value="center">กลาง</option><option value="right">ขวา</option></select></label><span></span>
-        <label class="f" style="margin:0"><span>บาร์โค้ด: ระยะจากบน <b id="v_c_y"></b></span><input type="range" style="width:100%" id="c_y" min="0" max="90" step="1" value="${LY.code.y}"></label><label class="f" style="margin:0"><span>บาร์โค้ด: ความสูง <b id="v_c_h"></b></span><input type="range" style="width:100%" id="c_h" min="10" max="70" step="1" value="${LY.code.h}"></label>
-        <label class="f" style="margin:0"><span>บาร์โค้ด: ความกว้าง % <b id="v_c_w"></b></span><input type="range" style="width:100%" id="c_w" min="50" max="100" step="1" value="${LY.code.w}"></label><label class="row small" style="align-self:end"><input type="checkbox" id="c_t" ${LY.code.txt ? 'checked' : ''}> แสดงตัวเลขใต้บาร์โค้ด</label>
-       </div>
-       <div class="row" style="gap:8px;margin-top:6px"><button class="btn ghost sm" id="lrs">ค่าเริ่มต้น</button></div></details>
-     <details style="margin-top:8px"><summary style="font-weight:600;cursor:pointer">ปรับตำแหน่งการพิมพ์ให้ตรงสติ๊กเกอร์ (เลื่อนทั้งภาพ)</summary>
-       <div class="grid2" style="margin-top:8px;gap:6px 14px"><label class="f" style="margin:0"><span>เลื่อนซ้าย/ขวา (มม.) <b id="v_ox"></b></span><input type="range" style="width:100%" id="ox" min="-6" max="6" step="0.5" value="${LY.ox}"></label><label class="f" style="margin:0"><span>เลื่อนขึ้น/ลง (มม.) <b id="v_oy"></b></span><input type="range" style="width:100%" id="oy" min="-6" max="6" step="0.5" value="${LY.oy}"></label></div>
-       <div class="small muted">พิมพ์ "ทดสอบตำแหน่ง" แล้วดูกรอบ: ถ้าเส้นกรอบเลยขอบบน → เลื่อนลง (+) · เลยขอบซ้าย → เลื่อนขวา (+)</div>
-       <button class="btn ghost sm" id="tst" style="margin-top:6px">พิมพ์ทดสอบตำแหน่ง 1 ดวง</button></details>
      <div id="freshOpt" class="grid3" style="margin-top:10px"><label class="f"><span>วันที่แพ็ค</span><input class="in" type="date" id="packDate" value="${todayISO()}"></label><label class="f"><span>อายุ (วัน)</span><input class="in" type="number" id="shelfDays" placeholder="ตามสินค้า"></label><label class="f"><span>น้ำหนัก กก.</span><input class="in" type="number" step="any" id="weight"></label></div>
      <label class="row small" id="embedRow"><input type="checkbox" id="embedPrice"> ฝังราคาในบาร์โค้ด (ขึ้นต้น 20 สำหรับ POS ที่รองรับ)</label>
    </div>
    <div class="card"><div class="row" style="margin-bottom:8px"><h3 class="grow">รายการที่จะพิมพ์</h3><button class="btn ghost sm" id="addp">${I(IC.plus, 16)} เลือกสินค้า</button><button class="btn ghost sm" id="adds">${I(IC.scan, 16)}</button></div><div id="queue"></div></div>
-   <div class="card center"><div class="small muted" style="margin-bottom:8px">ตัวอย่าง (ขนาดจริง 8 จุด/มม.)</div><canvas class="lbl" id="pv"></canvas></div>
+   <div class="card center"><div class="small muted" style="margin-bottom:6px" id="pvt">ตัวอย่าง (สัดส่วนจริง)</div>
+     <div id="lay" class="small" style="margin-bottom:8px;color:var(--ink2)">แตะ <b>ชื่อ · ราคา · บาร์โค้ด</b> บนฉลากแล้ว<b>ลากเพื่อย้าย</b> · ลาก<b>จุดมุมขวาล่าง</b>เพื่อย่อ/ขยาย (หรือใช้ 2 นิ้วถ่าง)</div>
+     <div id="pvw" style="position:relative;display:inline-block;line-height:0;max-width:100%"><canvas class="lbl" id="pv" style="touch-action:none;max-width:100%"></canvas><div id="pvs" style="position:absolute;pointer-events:none;border:2px dashed #1a73e8;display:none"><i style="position:absolute;right:-11px;bottom:-11px;width:20px;height:20px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 1px 4px #0005"></i></div></div>
+     <div id="lay2" style="text-align:left;margin-top:10px">
+       <div class="row small" style="gap:6px 16px;flex-wrap:wrap"><label class="row"><input type="checkbox" id="lshop" ${LY.shop ? 'checked' : ''}> แสดงชื่อร้าน</label><label class="row"><input type="checkbox" id="c_t" ${LY.code.txt ? 'checked' : ''}> ตัวเลขใต้บาร์โค้ด</label>
+         <label class="row">ชื่อสินค้า <select class="in" id="n_l" style="min-height:34px;width:auto;padding:2px 8px"><option value="1">1 บรรทัด</option><option value="2">2 บรรทัด</option><option value="3">3 บรรทัด</option></select></label>
+         <button class="btn ghost sm" id="lrs">ค่าเริ่มต้น</button></div>
+     </div>
+     <details style="margin-top:10px;text-align:left"><summary style="font-weight:600;cursor:pointer">ปรับตำแหน่งการพิมพ์ให้ตรงสติ๊กเกอร์ (เลื่อนทั้งภาพ)</summary>
+       <div class="small muted" style="margin:6px 0">กด "พิมพ์ทดสอบ" แล้วดูกรอบบนสติ๊กเกอร์ ถ้าไม่ตรงขอบ กดลูกศรเลื่อนทีละ 0.5 มม. แล้วพิมพ์ทดสอบซ้ำ</div>
+       <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center"><button class="btn ghost sm" data-off="x,-0.5">◀</button><button class="btn ghost sm" data-off="x,0.5">▶</button><span class="small" style="min-width:92px">ซ้าย/ขวา <b id="v_ox"></b> มม.</span>
+         <button class="btn ghost sm" data-off="y,-0.5">▲</button><button class="btn ghost sm" data-off="y,0.5">▼</button><span class="small" style="min-width:92px">ขึ้น/ลง <b id="v_oy"></b> มม.</span></div>
+       <button class="btn ghost sm" id="tst" style="margin-top:8px">พิมพ์ทดสอบตำแหน่ง 1 ดวง</button></details></div>
    <div class="row" style="gap:8px"><button class="btn ghost grow" id="png">บันทึกรูป PNG</button><button class="btn grow" id="pr" style="min-height:52px">${I(IC.print)} พิมพ์ทั้งหมด</button></div>`;
-  ['paper', 'tpl', 'model', 'density', 'labelType'].forEach(k => $('#' + k, el).value = cfg[k]); $('#rotate', el).checked = !!cfg.rotate; $('#n_l', el).value = LY.name.lines; $('#p_a', el).value = LY.price.align;
+  ['paper', 'tpl', 'model', 'density', 'labelType'].forEach(k => $('#' + k, el).value = cfg[k]); $('#rotate', el).checked = !!cfg.rotate; $('#n_l', el).value = LY.name.lines;
   const save = () => { ['paper', 'tpl', 'model'].forEach(k => cfg[k] = $('#' + k, el).value); cfg.density = +$('#density', el).value; cfg.labelType = +$('#labelType', el).value; cfg.rotate = $('#rotate', el).checked;
     cfg.cw = +$('#cw', el).value || 50; cfg.ch = +$('#ch', el).value || 50; LY.shop = $('#lshop', el).checked;
-    LY.name.s = +$('#n_s', el).value; LY.name.y = +$('#n_y', el).value; LY.name.lines = +$('#n_l', el).value; LY.price.s = +$('#p_s', el).value; LY.price.y = +$('#p_y', el).value; LY.price.align = $('#p_a', el).value;
-    LY.code.y = +$('#c_y', el).value; LY.code.h = +$('#c_h', el).value; LY.code.w = +$('#c_w', el).value; LY.code.txt = $('#c_t', el).checked ? 1 : 0; LY.ox = +$('#ox', el).value; LY.oy = +$('#oy', el).value;
-    $$('input[type=range]', el).forEach(r => { const v = $('#v_' + r.id, el); if (v) v.textContent = r.value; }); LS.set('labelCfg', cfg); LS.set('printerModel', cfg.model); };
+    LY.name.lines = +$('#n_l', el).value; LY.code.txt = $('#c_t', el).checked ? 1 : 0;
+    $('#v_ox', el).textContent = (LY.ox > 0 ? '+' : '') + LY.ox; $('#v_oy', el).textContent = (LY.oy > 0 ? '+' : '') + LY.oy; LS.set('labelCfg', cfg); LS.set('printerModel', cfg.model); };
   const opts = it => ({ paper: cfg.paper, cw: cfg.cw, ch: cfg.ch, layout: LY, rotate: cfg.rotate, tpl: cfg.tpl, product: it.p, price: it.price, packDate: $('#packDate', el).value, shelfDays: $('#shelfDays', el).value, weight: $('#weight', el).value || it.weight, embedPrice: $('#embedPrice', el).checked });
   const preview = () => {
     save(); $('#freshOpt', el).style.display = cfg.tpl === 'fresh' ? '' : 'none'; $('#embedRow', el).style.display = cfg.tpl === 'fresh' || cfg.tpl === 'price' || cfg.tpl === 'price2' ? '' : 'none';
-    $('#cust', el).style.display = cfg.paper === 'custom' ? '' : 'none'; $('#lay', el).style.display = cfg.tpl === 'price' || cfg.tpl === 'price2' ? '' : 'none';
+    $('#cust', el).style.display = cfg.paper === 'custom' ? '' : 'none'; const editable = cfg.tpl === 'price' || cfg.tpl === 'price2'; $('#lay', el).style.display = $('#lay2', el).style.display = editable ? '' : 'none';
     const sz = labelSize({ paper: cfg.paper, cw: cfg.cw, ch: cfg.ch });
     $('#lw', el).innerHTML = (cfg.labelType === 3 ? '<span style="color:var(--red)">⚠ เลือก "ต่อเนื่อง" อยู่ — ถ้าสติ๊กเกอร์เป็นดวงมีช่องว่างระหว่างดวง ให้เลือก "มีช่องว่าง" ไม่งั้นตำแหน่งพิมพ์จะเลื่อน</span><br>' : '') + `ฉลาก ${sz.w}×${sz.h} มม.${sz.w > 48 && !cfg.rotate ? ' · พิมพ์ได้กว้างสุด 48 มม. (ขอบซ้าย-ขวาเว้น ' + ((sz.w - 48) / 2) + ' มม.)' : ''} — วัดขนาดสติ๊กเกอร์จริงด้วยไม้บรรทัดแล้วเลือกให้ตรง`;
     const it = LQ[0] || { p: { name: 'ตัวอย่างสินค้า ผักกาดขาว', price: '25', sku: '10001', barcode: internalBarcode('10001') } };
-    const r = renderLabel($('#pv', el), opts(it)); $('#pv', el).style.width = Math.min(r.W * 1.0, 340) + 'px';
-    if (cfg.model === 'B21' && r.W > 384 && !cfg.rotate) $('#pinfo', el).textContent = '⚠ กว้างเกินหัวพิมพ์ 48 มม. ระบบจะย่อให้พอดี';
+    const r = PV.r = renderLabel($('#pv', el), opts(it)); $('#pv', el).style.width = Math.min(r.W, Math.max(260, Math.min(460, el.clientWidth - 60))) + 'px';
+    $('#pvt', el).textContent = `ตัวอย่าง ${sz.w}×${sz.h} มม. (สัดส่วนจริง)`; selBox();
   };
   const drawQ = () => {
     $('#queue', el).innerHTML = LQ.length ? LQ.map((it, i) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="grow"><div style="font-weight:600;line-height:1.3">${esc(it.p.name)}</div><div class="tiny muted">${esc(it.p.barcode || 'ยังไม่มีบาร์โค้ด')} · ${baht(it.p.price)}</div></div>
@@ -1504,8 +1502,49 @@ VIEWS.labels = (el, items) => {
     $$('[data-gen]', el).forEach(b => b.onclick = async () => { const it = LQ[+b.dataset.gen]; const code = internalBarcode(it.p.sku); try { busy(1); await saveProducts([{ ...it.p, barcode: code }]); it.p = IDX.bySku[it.p.sku]; busy(0); toast('บันทึกบาร์โค้ด ' + code + ' ให้สินค้าแล้ว'); drawQ(); preview(); } catch (e) { busy(0); toast(e.message, 1); } });
   };
   $$('select,input', el).forEach(i => i.addEventListener('change', preview));
-  $$('input[type=range]', el).forEach(i => i.addEventListener('input', preview));
-  $('#lrs', el).onclick = () => { const d = JSON.parse(JSON.stringify(LBL_LAYOUT_DEF)); Object.assign(LY, d, { ox: LY.ox, oy: LY.oy }); go('labels'); };
+  $('#lrs', el).onclick = () => { const d = lblLayout(null); ['sh', 'name', 'price', 'code'].forEach(k => LY[k] = d[k]); PV.sel = null; $('#n_l', el).value = LY.name.lines; $('#c_t', el).checked = true; LY.code.txt = 1; preview(); };
+  $$('[data-off]', el).forEach(b => b.onclick = () => { const [ax, d] = b.dataset.off.split(','), k = ax === 'x' ? 'ox' : 'oy'; LY[k] = Math.max(-6, Math.min(6, Math.round((num(LY[k]) + +d) * 2) / 2)); preview(); });
+  // ลากย้าย/ย่อขยายบนตัวอย่าง: แตะเลือก → ลากตัว = ย้าย · ลากจุดมุมขวาล่าง (หรือ 2 นิ้วถ่าง) = ย่อ/ขยาย
+  const PV = { r: null, sel: null, drag: null, pts: new Map(), raf: 0 };
+  const cvs = $('#pv', el), k2c = () => cvs.width / cvs.getBoundingClientRect().width;
+  const ptC = e => { const b = cvs.getBoundingClientRect(), k = cvs.width / b.width; return { x: (e.clientX - b.left) * k, y: (e.clientY - b.top) * k }; };
+  const boxAt = (pt, k) => { const bs = (PV.r && PV.r.boxes) || [], pad = 6 * k; for (const order of ['price', 'code', 'name', 'sh']) for (const b of bs) if (b.k === order && pt.x >= b.x + PV.r.ox - pad && pt.x <= b.x + PV.r.ox + b.w + pad && pt.y >= b.y + PV.r.oy - pad && pt.y <= b.y + PV.r.oy + b.h + pad) return b; return null; };
+  function selBox() {
+    const sb = $('#pvs', el), bs = (PV.r && PV.r.boxes) || [], b = PV.sel && bs.find(x => x.k === PV.sel); if (!b) { sb.style.display = 'none'; return; }
+    const kk = cvs.getBoundingClientRect().width / cvs.width || 1;
+    Object.assign(sb.style, { display: '', left: ((b.x + PV.r.ox) * kk - 3) + 'px', top: ((b.y + PV.r.oy) * kk - 3) + 'px', width: (b.w * kk + 6) + 'px', height: (b.h * kk + 6) + 'px' });
+  }
+  const redraw = () => { if (PV.raf) return; PV.raf = requestAnimationFrame(() => { PV.raf = 0; preview(); }); };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // ปรับขนาด: ชื่อ = ขนาดตัวอักษร (ลากลง) + ความกว้างบรรทัด (ลากขวา) · ราคา/ชื่อร้าน = ขนาดตัวอักษร · บาร์โค้ด = กว้าง × สูง
+  const resize = (k, st, dxp, dyp, f) => {
+    const E = LY[k], s0 = st.E;
+    if (k === 'code') { E.w = clamp(Math.round(f ? s0.w * f : s0.w + dxp), 20, 100); E.h = clamp(Math.round(f ? s0.h * f : s0.h + dyp), 8, 90); }
+    else if (k === 'name') { E.s = clamp(Math.round((f ? s0.s * f : s0.s + dyp / Math.max(1, E.lines)) * 2) / 2, 5, 45); if (!f) E.w = clamp(Math.round(s0.w + dxp), 20, 100); }
+    else { const g = f || 1 + Math.max(dyp / Math.max(4, s0.s), dxp / 40); E.s = clamp(Math.round(s0.s * g * 2) / 2, k === 'sh' ? 4 : 8, 80); }
+  };
+  cvs.addEventListener('pointerdown', e => {
+    if (!PV.r || !PV.r.boxes) return; cvs.setPointerCapture(e.pointerId); PV.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (PV.pts.size === 2 && PV.sel) { const [a, b] = [...PV.pts.values()]; PV.drag = { mode: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, E: { ...LY[PV.sel] } }; return; }
+    const k = k2c(), pt = ptC(e), cur = PV.sel && PV.r.boxes.find(x => x.k === PV.sel);
+    const onHandle = cur && Math.hypot(pt.x - (cur.x + PV.r.ox + cur.w), pt.y - (cur.y + PV.r.oy + cur.h)) <= 22 * k;
+    const b = onHandle ? cur : boxAt(pt, k);
+    PV.sel = b ? b.k : null; selBox(); if (!b) { PV.drag = null; return; }
+    PV.drag = { mode: onHandle ? 'size' : 'move', p0: pt, cell: b.cell, E: { ...LY[b.k] } };
+    e.preventDefault();
+  });
+  cvs.addEventListener('pointermove', e => {
+    if (!PV.pts.has(e.pointerId)) return; PV.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const D = PV.drag; if (!D || !PV.sel) return; e.preventDefault();
+    if (D.mode === 'pinch') { if (PV.pts.size < 2) return; const [a, b] = [...PV.pts.values()]; resize(PV.sel, D, 0, 0, clamp(Math.hypot(a.x - b.x, a.y - b.y) / D.d0, .3, 4)); return redraw(); }
+    const pt = ptC(e), dxp = (pt.x - D.p0.x) / D.cell.CW * 100, dyp = (pt.y - D.p0.y) / D.cell.CH * 100, E = LY[PV.sel];
+    if (D.mode === 'size') resize(PV.sel, D, dxp, dyp);
+    else if (PV.sel === 'price') { E.r = clamp(Math.round((D.E.r + dxp) * 2) / 2, 10, 100); E.y = clamp(Math.round((D.E.y + dyp) * 2) / 2, -5, 95); }
+    else { E.x = clamp(Math.round((D.E.x + dxp) * 2) / 2, -5, 95); E.y = clamp(Math.round((D.E.y + dyp) * 2) / 2, -5, 95); }
+    redraw();
+  });
+  const up = e => { PV.pts.delete(e.pointerId); if (PV.pts.size < 2 && PV.drag && PV.drag.mode === 'pinch') PV.drag = null; if (!PV.pts.size) { PV.drag = null; save(); } };
+  cvs.addEventListener('pointerup', up); cvs.addEventListener('pointercancel', up);
   $('#addp', el).onclick = () => pickProducts(ps => { ps.forEach(p => LQ.push({ p, copies: 1 })); drawQ(); preview(); });
   Scanner.on('labels', code => { const f = findByCode(code); if (f) { beep(); LQ.push({ p: f.p, copies: 1 }); drawQ(); preview(); toast('เพิ่มเข้าคิว: ' + f.p.name); } else { Scanner.err(); toast('ไม่พบ ' + code, 1); } });
   $('#adds', el).onclick = () => openScanner((code, ctx) => { const f = findByCode(code); if (f) { LQ.push({ p: f.p, copies: 1 }); ctx.showLast(`<b>${esc(f.p.name)}</b> เพิ่มแล้ว (${LQ.length})`); drawQ(); preview(); } else ctx.showLast('ไม่พบ ' + esc(code)); return ''; }, { continuous: true, title: 'สแกนเพิ่มเข้าคิว' });
@@ -2004,7 +2043,19 @@ VIEWS.io = el => {
    <div class="card"><h3>ส่งออก</h3>
     <button class="btn ghost block" id="e1" style="margin-bottom:8px">สินค้า → CSV (รูปแบบ Loyverse นำกลับเข้า POS ได้)</button>
     <button class="btn ghost block" id="e2" style="margin-bottom:8px">สินค้า → Excel (.xlsx)</button>
-    <button class="btn ghost block" id="e3">สำรองข้อมูลทั้งหมด (JSON)</button></div>`;
+    </div>
+   <div class="card"><h3>สำรอง / กู้คืนข้อมูลทั้งระบบ</h3>
+    <div class="small muted" style="margin:-4px 0 8px">ทุกตาราง: สินค้า หมวดหมู่ ใบเสร็จรับเงิน ลูกค้า พนักงาน เวลาเข้างาน สต็อก ใบสั่งซื้อ ภาษี ตั้งค่า ฯลฯ → ไฟล์ .json เก็บในเครื่อง/อัปโหลดเก็บใน Google Drive</div>
+    <div id="lb" class="small" style="margin-bottom:8px"></div>
+    <label class="row small" style="margin-bottom:8px"><input type="checkbox" id="bimg"> รวมรูปสินค้าด้วย (ไฟล์ใหญ่ขึ้นและนานขึ้น)</label>
+    <button class="btn block" id="e3" style="margin-bottom:8px">${I(IC.io, 18)} สำรองข้อมูลทั้งระบบ</button>
+    <label class="btn ghost block">กู้คืนจากไฟล์สำรอง (.json)<input type="file" id="ri" accept=".json,application/json" hidden></label></div>
+   <div class="card"><h3>ประวัติ นำเข้า / ส่งออก / สำรอง</h3><div id="hist" class="small"></div></div>`;
+  const hist = () => { const L = cfg('ioHistory', { list: [] }).list || []; const K = { import: '⬇ นำเข้า', export: '⬆ ส่งออก', backup: '💾 สำรอง', restore: '♻ กู้คืน' };
+    $('#hist', el).innerHTML = L.length ? L.slice(0, 20).map(x => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="row" style="gap:6px"><b>${K[x.kind] || x.kind}</b><span class="tiny muted grow">${esc(new Date(x.at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }))}${x.by ? ' · ' + esc(x.by) : ''}</span></div><div class="tiny">${esc(x.text)}</div></div>`).join('') : '<div class="muted">ยังไม่มีประวัติ</div>';
+    const lb = cfg('lastBackup', {}); $('#lb', el).innerHTML = lb.at ? `สำรองล่าสุด <b>${esc(new Date(lb.at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }))}</b> · ${(lb.total || 0).toLocaleString()} แถว ${lb.tables || 0} ตาราง${lb.img ? ' (รวมรูป)' : ''}` : '<span style="color:var(--red)">ยังไม่เคยสำรองข้อมูลทั้งระบบ</span>'; };
+  hist();
+  const done = (t, lines, kind) => { ioReport(t, lines, kind); setTimeout(hist, 800); };
   $('#fi', el).onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     try {
@@ -2012,11 +2063,11 @@ VIEWS.io = el => {
       if (/\.xlsx?$/i.test(f.name)) { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
       else rows = parseCSV(await f.text());
       if (!S.products.length) await loadProducts(true).catch(() => { });
-      const list = rowsToProducts(rows); busy(0);
+      const list = rowsToProducts(rows); busy(0); const skipped = Math.max(0, rows.length - 1 - list.length);
       const exist = list.filter(p => IDX.bySku[p.sku]).length;
       const dupBar = {}; list.forEach(p => p.barcode && (dupBar[p.barcode] = (dupBar[p.barcode] || 0) + 1));
       const dups = Object.values(dupBar).filter(n => n > 1).length;
-      $('#pv', el).innerHTML = `<div class="alert blue">${I(IC.check, 18)}<div>พบ <b>${list.length.toLocaleString()}</b> รายการ · มีอยู่แล้ว ${exist} · ใหม่ ${list.length - exist}${dups ? ` · <b>บาร์โค้ดซ้ำในไฟล์ ${dups} ชุด</b>` : ''}</div></div>
+      $('#pv', el).innerHTML = `<div class="alert blue">${I(IC.check, 18)}<div>พบ <b>${list.length.toLocaleString()}</b> รายการ · มีอยู่แล้ว ${exist} · ใหม่ ${list.length - exist}${skipped ? ` · ข้าม ${skipped} แถว (ไม่มี SKU)` : ''}${dups ? ` · <b>บาร์โค้ดซ้ำในไฟล์ ${dups} ชุด</b>` : ''}</div></div>
         <div class="scroll-x"><table class="t"><tr><th>SKU</th><th>ชื่อ</th><th>บาร์โค้ด</th><th class="right">ทุน</th><th class="right">ราคา</th></tr>${list.slice(0, 8).map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.barcode)}</td><td class="right">${esc(p.cost)}</td><td class="right">${esc(p.price)}</td></tr>`).join('')}</table></div>
         <div class="seg" id="md" style="margin:10px 0"><button class="on" data-m="merge">รวม/อัปเดตตาม SKU</button><button data-m="replace">แทนที่ทั้งหมด</button></div>
         <button class="btn green block" id="go">นำเข้า ${list.length.toLocaleString()} รายการ</button>`;
@@ -2026,17 +2077,62 @@ VIEWS.io = el => {
         try {
           const CH = 800;
           for (let i = 0; i < list.length; i += CH) { busy(1, `กำลังนำเข้า ${Math.min(i + CH, list.length)}/${list.length}...`); await api('importProducts', { rows: list.slice(i, i + CH), mode: i === 0 ? mode : 'merge' }); }
-          await loadProducts(true); busy(0); toast('นำเข้าสำเร็จ ' + list.length + ' รายการ'); $('#pv', el).innerHTML = '';
+          await loadProducts(true); busy(0); $('#pv', el).innerHTML = '';
+          done('นำเข้าสินค้าแล้ว', [['ไฟล์', esc(f.name)], ['นำเข้าทั้งหมด', list.length.toLocaleString() + ' รายการ'], ['สินค้าใหม่', (mode === 'replace' ? list.length : list.length - exist).toLocaleString() + ' รายการ'], ['อัปเดตของเดิม', (mode === 'replace' ? 0 : exist).toLocaleString() + ' รายการ'], ...(skipped ? [['ข้าม (ไม่มีรหัส SKU/ชื่อ)', skipped + ' แถว']] : []), ['วิธีนำเข้า', mode === 'replace' ? 'แทนที่ทั้งหมด' : 'รวม/อัปเดตตาม SKU'], ['สินค้าในระบบตอนนี้', S.products.length.toLocaleString() + ' รายการ']], 'import');
         } catch (err) { busy(0); toast(err.message, 1); }
       };
     } catch (err) { busy(0); toast(err.message, 1); }
     e.target.value = '';
   };
   const stamp = todayISO().replace(/-/g, '');
-  $('#e1', el).onclick = async () => { await loadProducts(true); download(`May_MiniMart_items_${stamp}.csv`, toCSV(productsToLoyverseRows(S.products))); };
-  $('#e2', el).onclick = async () => { try { busy(1); await loadProducts(true); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const ws = XLSX.utils.aoa_to_sheet(productsToLoyverseRows(S.products)); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Items'); download(`May_MiniMart_items_${stamp}.xlsx`, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })); busy(0); } catch (e) { busy(0); toast(e.message, 1); } };
-  $('#e3', el).onclick = async () => { try { busy(1); const out = {}; for (const t of ['Products', 'Receipts', 'Sales', 'Licenses', 'Settings']) out[t] = await loadTable(t); busy(0); download(`May_MiniMart_backup_${stamp}.json`, JSON.stringify(out), 'application/json'); } catch (e) { busy(0); toast(e.message, 1); } };
+  const expDone = (name) => done('ส่งออกสินค้าแล้ว', [['จำนวน', S.products.length.toLocaleString() + ' รายการ'], ['หมวดหมู่', new Set(S.products.map(p => p.category).filter(Boolean)).size + ' หมวด'], ['ไฟล์', name]], 'export');
+  $('#e1', el).onclick = async () => { try { busy(1); await loadProducts(true); busy(0); const n = `May_MiniMart_items_${stamp}.csv`; download(n, toCSV(productsToLoyverseRows(S.products))); expDone(n); } catch (e) { busy(0); toast(e.message, 1); } };
+  $('#e2', el).onclick = async () => { try { busy(1); await loadProducts(true); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const ws = XLSX.utils.aoa_to_sheet(productsToLoyverseRows(S.products)); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Items'); const n = `May_MiniMart_items_${stamp}.xlsx`; download(n, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })); busy(0); expDone(n); } catch (e) { busy(0); toast(e.message, 1); } };
+  // สำรองทั้งระบบ: ดึงทีละตาราง (ตารางใหญ่ดึงเป็นช่วง) แล้วรวมเป็นไฟล์เดียว + รายงานจำนวนแถวแต่ละตาราง
+  $('#e3', el).onclick = async () => {
+    const withImg = $('#bimg', el).checked, tabs = Object.keys(Logic.SCHEMA).filter(t => withImg || t !== 'Images'), out = {}, counts = {};
+    try {
+      for (const t of tabs) {
+        const lim = t === 'Images' ? 80 : 4000; let off = 0, total = 1; out[t] = [];
+        while (off < total) { busy(1, `กำลังสำรอง ${TBL_TH[t] || t} ${off ? off.toLocaleString() : ''}...`); const r = await api('backupTable', { table: t, offset: off, limit: lim }); total = r.total; out[t] = out[t].concat(r.rows); off += lim; if (!r.rows.length) break; }
+        counts[t] = out[t].length;
+      }
+      const at = new Date(), name = `May_MiniMart_backup_${stamp}_${String(at.getHours()).padStart(2, '0')}${String(at.getMinutes()).padStart(2, '0')}.json`;
+      const json = JSON.stringify({ app: 'MayMiniMart', version: APP_VER, at: at.toISOString(), by: S.user.name, counts, tables: out });
+      download(name, json, 'application/json'); busy(0);
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      saveSetting('lastBackup', { at: at.toISOString(), total, tables: tabs.length, img: withImg, size: json.length, counts }).catch(() => { });
+      done('สำรองข้อมูลทั้งระบบแล้ว', [['ไฟล์', name], ['ขนาด', (json.length / 1048576).toFixed(json.length > 1048576 ? 1 : 2) + ' MB'], ...tabs.map(t => [TBL_TH[t] || t, counts[t].toLocaleString() + ' แถว']), ['รวม', total.toLocaleString() + ' แถว · ' + tabs.length + ' ตาราง'],
+        withImg ? 'รวมรูปสินค้าแล้ว' : 'ไม่รวมรูปสินค้า (ติ๊ก "รวมรูปสินค้าด้วย" ถ้าต้องการ)', 'ไฟล์มีข้อมูลรหัสพนักงาน (เข้ารหัสแล้ว) ยอดขาย และลูกค้า — เก็บไว้ในที่ปลอดภัย เช่น Google Drive ของร้าน'], 'backup');
+    } catch (e) { busy(0); toast('สำรองไม่สำเร็จ: ' + e.message, 1); }
+  };
+  // กู้คืน: ตรวจก่อนว่าแต่ละตารางจะเพิ่ม/แทนที่กี่แถว แล้วค่อยยืนยัน · ไม่ลบข้อมูลที่ไม่มีในไฟล์
+  $('#ri', el).onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      busy(1, 'กำลังอ่านไฟล์สำรอง...'); const B = JSON.parse(await f.text()); const T = B.tables || B; if (Array.isArray(T.Settings)) T.Settings = T.Settings.filter(r => !['ioHistory', 'lastBackup'].includes(r.key));
+      const tabs = Object.keys(Logic.SCHEMA).filter(t => t !== 'Log' && Array.isArray(T[t]) && T[t].length);
+      if (!tabs.length) throw new Error('ไม่ใช่ไฟล์สำรองของระบบนี้');
+      const CH = t => t === 'Images' ? 60 : 1500, plan = [];
+      for (const t of tabs) { let a = 0, u = 0, same = 0; for (let i = 0; i < T[t].length; i += CH(t)) { busy(1, `กำลังตรวจ ${TBL_TH[t] || t}...`); const r = await api('restoreTable', { table: t, rows: T[t].slice(i, i + CH(t)), dry: true }); a += r.add; u += r.upd; same += r.same; } plan.push({ t, n: T[t].length, a, u, same }); }
+      busy(0);
+      const ov = sheet('กู้คืนข้อมูลจากไฟล์สำรอง', `<div class="small muted" style="margin-bottom:8px">ไฟล์ ${esc(f.name)}${B.at ? ' · สำรองเมื่อ ' + esc(new Date(B.at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })) : ''}${B.by ? ' โดย ' + esc(B.by) : ''}</div>
+        <div class="scroll-x"><table class="t"><tr><th>ข้อมูล</th><th class="right">ในไฟล์</th><th class="right">เพิ่มใหม่</th><th class="right">แทนที่</th><th class="right">เหมือนเดิม</th></tr>${plan.map(p => `<tr><td>${TBL_TH[p.t] || p.t}</td><td class="right">${p.n.toLocaleString()}</td><td class="right" style="color:var(--green)">${p.a.toLocaleString()}</td><td class="right" style="color:var(--amber,#b26a00)">${p.u.toLocaleString()}</td><td class="right muted">${p.same.toLocaleString()}</td></tr>`).join('')}</table></div>
+        <div class="tiny muted" style="margin-top:8px">“แทนที่” = ข้อมูลในระบบตอนนี้จะถูกเขียนทับด้วยค่าในไฟล์ · ข้อมูลที่ไม่มีในไฟล์จะไม่ถูกลบ</div>`,
+        `<button class="btn block" id="go">กู้คืน ${plan.reduce((a, p) => a + p.a + p.u, 0).toLocaleString()} แถว</button>`);
+      $('#go', ov).onclick = async () => {
+        if (!(await confirmDlg('ยืนยันกู้คืนข้อมูล? ข้อมูลที่ “แทนที่” จะถูกเขียนทับ', 'กู้คืน', true))) return;
+        const res = [];
+        try {
+          for (const p of plan) { if (!p.a && !p.u) { res.push([TBL_TH[p.t] || p.t, 'เหมือนเดิม']); continue; } for (let i = 0; i < T[p.t].length; i += CH(p.t)) { busy(1, `กำลังกู้คืน ${TBL_TH[p.t] || p.t}...`); await api('restoreTable', { table: p.t, rows: T[p.t].slice(i, i + CH(p.t)) }); } res.push([TBL_TH[p.t] || p.t, `เพิ่ม ${p.a.toLocaleString()} · แทนที่ ${p.u.toLocaleString()}`]); }
+          busy(0); ov.remove(); Cache.staleBefore = Date.now(); await loadProducts(true).catch(() => { });
+          done('กู้คืนข้อมูลแล้ว', [['ไฟล์', esc(f.name)], ...res, 'ปิดแล้วเปิดแอปใหม่บนเครื่องอื่น ๆ เพื่อโหลดข้อมูลล่าสุด'], 'restore');
+        } catch (err) { busy(0); toast('กู้คืนไม่สำเร็จ: ' + err.message + (res.length ? ` (ทำเสร็จแล้ว ${res.length} ตาราง)` : ''), 1, 8000); }
+      };
+    } catch (err) { busy(0); toast(err.message, 1); }
+  };
 };
+const TBL_TH = { Products: 'สินค้า', Categories: 'หมวดหมู่', Images: 'รูปสินค้า', Receipts: 'ใบเสร็จร้านส่ง/ค่าใช้จ่าย', SalesDaily: 'ยอดขายรายวัน (นำเข้า)', TaxFilings: 'บันทึกการยื่นภาษี', Sales: 'ยอดขายรายเดือน (นำเข้า)', Orders: 'ใบเสร็จรับเงิน (บิลขาย)', Customers: 'ลูกค้า', CustomerTx: 'ประวัติแต้ม/เงินเชื่อ', Shifts: 'เวลาเข้า-ออกงาน', Devices: 'อุปกรณ์', StockCounts: 'การนับสต็อก', POs: 'ใบสั่งซื้อ', Licenses: 'ใบอนุญาต', Users: 'ผู้ใช้/พนักงาน', Settings: 'ตั้งค่า', Log: 'บันทึกการใช้งาน' };
 
 /* ---------- USERS ---------- */
 VIEWS.users = async el => {
@@ -2144,20 +2240,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.24"></script>
-<script src="logic.js?v=2.6.24"></script>
-<script src="cache.js?v=2.6.24"></script>
-<script src="offline.js?v=2.6.24"></script>
-<script src="scanner.js?v=2.6.24"></script>
-<script src="printer.js?v=2.6.24"></script>
-<script src="pos.js?v=2.6.24"></script>
-<script src="display.js?v=2.6.24"></script>
-<script src="reports.js?v=2.6.24"></script>
-<script src="inventory.js?v=2.6.24"></script>
-<script src="people.js?v=2.6.24"></script>
-<script src="quality.js?v=2.6.24"></script>
-<script src="services.js?v=2.6.24"></script>
-<script src="owner.js?v=2.6.24"></script>
+<script src="qr.js?v=2.6.25"></script>
+<script src="logic.js?v=2.6.25"></script>
+<script src="cache.js?v=2.6.25"></script>
+<script src="offline.js?v=2.6.25"></script>
+<script src="scanner.js?v=2.6.25"></script>
+<script src="printer.js?v=2.6.25"></script>
+<script src="pos.js?v=2.6.25"></script>
+<script src="display.js?v=2.6.25"></script>
+<script src="reports.js?v=2.6.25"></script>
+<script src="inventory.js?v=2.6.25"></script>
+<script src="people.js?v=2.6.25"></script>
+<script src="quality.js?v=2.6.25"></script>
+<script src="services.js?v=2.6.25"></script>
+<script src="owner.js?v=2.6.25"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

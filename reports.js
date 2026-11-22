@@ -131,7 +131,7 @@ const RR = { r: 'today', from: todayISO(), to: todayISO(), q: '' };
 VIEWS.salesreceipts = el => {
   const limited = !seesSales();
   if (limited) { RR.r = 'today'; RR.from = RR.to = todayISO(); }
-  el.innerHTML = vhead(limited ? 'บิลของฉันวันนี้' : 'ใบเสร็จรับเงิน', '', 'more') + `<div id="rp"></div>
+  el.innerHTML = vhead(limited ? 'บิลของฉันวันนี้' : 'ใบเสร็จรับเงิน', isOwner() ? `<button class="btn ghost sm" id="rx">${I(IC.io, 18)} ส่งออก / นำเข้า</button>` : '', 'more') + `<div id="rp"></div>
     <div class="grid3" id="sm" style="margin-bottom:10px"></div>
     <div class="search" style="margin-bottom:10px"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาเลขที่ / ลูกค้า / พนักงาน" value="${esc(RR.q)}"><button class="scanbtn" id="sc">${I(IC.scan, 20)}</button></div>
     <div class="list" id="ls"><div class="empty"><span class="spin dark"></span></div></div>`;
@@ -148,13 +148,14 @@ VIEWS.salesreceipts = el => {
   $('#q', el).oninput = e => { RR.q = e.target.value; draw(); };
   $('#sc', el).onclick = () => openScanner(code => { $('#q', el).value = RR.q = code; draw(); const o = rows.find(x => x.id === code); if (o) orderDetail(o, () => load(true)); return 'close'; });
   if (!limited) rangePicker($('#rp', el), RR, () => load());
+  const rx = $('#rx', el); if (rx) rx.onclick = () => receiptsIO(rows.filter(o => !o._pending), () => load(true));
   load();
 };
 function orderDetail(o, onChange) {
   const isR = o.status === 'refund';
   const ov = sheet(`${isR ? 'ใบคืนเงิน' : 'ใบเสร็จ'} ${esc(o.id)}`, `
     <div class="card"><div class="kv"><span class="muted">วันที่</span><span>${esc(String(o.date).replace('T', ' ').slice(0, 16))}</span></div><div class="kv"><span class="muted">พนักงาน</span><span>${esc(o.cashierName || o.cashier)}</span></div>${o.deviceName ? `<div class="kv"><span class="muted">เครื่อง</span><span>${esc(o.deviceName)}</span></div>` : ''}${o.customerName ? `<div class="kv"><span class="muted">ลูกค้า</span><span>${esc(o.customerName)}</span></div>` : ''}${o.refundOf ? `<div class="kv"><span class="muted">อ้างอิง</span><span>${esc(o.refundOf)}</span></div>` : ''}${o.note ? `<div class="kv"><span class="muted">หมายเหตุ</span><span>${esc(o.note)}</span></div>` : ''}</div>
-    <div class="card">${o._items.map(it => `<div class="kv"><span>${esc(it.name)} <span class="muted">× ${num(it.qty)}</span></span><span>${money(num(it.qty) * num(it.price))}</span></div>`).join('')}
+    <div class="card">${o._items.map(it => `<div class="kv"><span>${esc(it.name)} <span class="muted">× ${num(it.qty)}</span></span><span>${it.price === '' || it.price == null ? '' : money(num(it.qty) * num(it.price))}</span></div>`).join('')}
       ${num(o.discount) ? `<div class="kv"><span>ส่วนลด</span><span>-${money(Math.abs(num(o.discount)))}</span></div>` : ''}<div class="kv" style="font-weight:700;font-size:17px"><span>รวม</span><span>${baht(o.total)}</span></div>
       ${o._pays.map(p => `<div class="kv small"><span>${PAYNAME[p.type] || p.type}</span><span>${money(p.amount)}</span></div>`).join('')}${num(o.change) ? `<div class="kv small"><span>รับเงิน / ทอน</span><span>${money(o.cash)} / ${money(o.change)}</span></div>` : ''}
       ${can('viewCost') && o.cost !== '' ? `<div class="kv small muted"><span>ต้นทุน / กำไร</span><span>${money(o.cost)} / ${money(num(o.total) - num(o.cost))}</span></div>` : ''}</div>`,
@@ -184,3 +185,132 @@ async function homeToday(el) {
   catch (e) { $('#tn', el).textContent = '-'; $('#tb', el).textContent = e.message; }
 }
 window.homeToday = homeToday;
+
+/* ---------- ส่งออก / นำเข้าใบเสร็จรับเงิน (เจ้าของ) ----------
+   ส่งออก: CSV / Excel ตามช่วงวันที่ที่เลือก (มีคอลัมน์ JSON ไว้นำกลับเข้าระบบได้ครบ)
+   นำเข้า: ไฟล์ที่ส่งออกจากระบบนี้ หรือไฟล์ "ใบเสร็จ" ที่ส่งออกจาก Loyverse (ไทย/อังกฤษ) · ตรวจเลขที่ใบเสร็จซ้ำก่อนบันทึก */
+const RX_HEAD = ['วันที่', 'เลขที่ใบเสร็จ', 'ประเภท', 'ยอดขายรวม', 'ส่วนลด', 'ยอดขายสุทธิ', 'ต้นทุน', 'กำไร', 'การชำระเงิน', 'รายการ', 'เครื่อง', 'พนักงาน', 'ลูกค้า', 'สถานะ', 'อ้างอิงคืนเงิน', 'หมายเหตุ', 'ข้อมูลรายการ (JSON)', 'ข้อมูลการชำระ (JSON)', 'รหัสพนักงาน', 'รหัสลูกค้า'];
+function ordersToSheet(rows) {
+  const list = rows.slice().sort((a, b) => String(a.date).localeCompare(b.date));
+  return [RX_HEAD].concat(list.map(o => {
+    const its = o._items || Logic.J(o.items, []), ps = o._pays || Logic.J(o.payments, []);
+    return [String(o.date).replace('T', ' ').slice(0, 19), o.id, o.status === 'refund' ? 'คืนเงิน' : 'ขาย', num(o.subtotal) || num(o.total), num(o.discount), num(o.total), o.cost === '' ? '' : num(o.cost), o.cost === '' ? '' : Math.round((num(o.total) - num(o.cost)) * 100) / 100,
+      ps.map(p => PAYNAME[p.type] || p.type).join(', '), its.map(i => `${num(i.qty)} x ${i.name}`).join(', '), o.deviceName || '', o.cashierName || o.cashier || '', o.customerName || '',
+      o.status === 'refunded' ? 'คืนเงินแล้ว' : o.status === 'refund' ? 'ใบคืนเงิน' : 'ปกติ', o.refundOf || '', o.note || '', JSON.stringify(its), JSON.stringify(ps), o.cashier || '', o.customerId || ''];
+  }));
+}
+// วันที่หลายรูปแบบ: 2026-11-22 13:06 · 22/11/26 13:06 (Loyverse ไทย) · 11/22/2026 1:06 PM · ปี พ.ศ.
+function rxDateOrder(vals) { let dmy = 0, mdy = 0; vals.forEach(v => { const m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-]\d{2,4}/.exec(String(v).trim()); if (m) { if (+m[1] > 12) dmy++; if (+m[2] > 12) mdy++; } }); return mdy > dmy ? 'mdy' : 'dmy'; }
+function rxDate(v, order) {
+  v = String(v || '').trim(); let m = /^(\d{4})-(\d\d)-(\d\d)(?:[ T](\d{1,2}):(\d\d)(?::(\d\d))?)?/.exec(v), y, mo, d, h = 0, mi = 0, se = 0;
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; h = +(m[4] || 0); mi = +(m[5] || 0); se = +(m[6] || 0); }
+  else {
+    m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:,?\s+(\d{1,2}):(\d\d)(?::(\d\d))?\s*(AM|PM|am|pm)?)?/.exec(v); if (!m) return '';
+    [d, mo] = order === 'mdy' ? [+m[2], +m[1]] : [+m[1], +m[2]]; y = +m[3]; h = +(m[4] || 0); mi = +(m[5] || 0); se = +(m[6] || 0);
+    if (m[7]) { const pm = /pm/i.test(m[7]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
+  }
+  if (y < 100) y = y >= 50 ? 2500 + y - 543 : 2000 + y; else if (y > 2400) y -= 543;
+  if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return '';
+  const p = x => String(x).padStart(2, '0'); return `${y}-${p(mo)}-${p(d)}T${p(h)}:${p(mi)}:${p(se)}`;
+}
+const RX_PAY = t => { t = String(t || '').trim(); return /เงินสด|^cash$/i.test(t) ? 'cash' : /โอน|สแกน|พร้อมเพย์|transfer|qr|promptpay/i.test(t) ? 'transfer' : /สวัสดิการ|welfare/i.test(t) ? 'welfare' : /เซ็น|เชื่อ|credit/i.test(t) ? 'credit' : (Object.keys(PAYNAME).find(k => PAYNAME[k] === t) || t || 'cash'); };
+function rxParse(aoa) {
+  const head = (aoa[0] || []).map(h => String(h).replace(/^﻿/, '').trim()), body = aoa.slice(1);
+  const F = {}, used = new Set(), find = (k, re) => { const i = head.findIndex((h, j) => !used.has(j) && re.test(h)); if (i >= 0) { F[k] = i; used.add(i); } };
+  find('itemsJ', /^ข้อมูลรายการ/); find('paysJ', /^ข้อมูลการชำระ/); find('cashierId', /^รหัสพนักงาน$/); find('custId', /^รหัสลูกค้า$/);
+  find('date', /^(วันที่|date)$/i); find('id', /^(เลขที่ใบเสร็จ|receipt number|receipt #)$/i); find('pay', /^(ประเภทการชำระเงิน|การชำระเงิน|payment type)$/i); find('type', /^(ประเภทใบเสร็จ|ประเภท|receipt type)$/i);
+  find('gross', /^(ยอดขายรวม|gross sales)$/i); find('disc', /^(ส่วนลด|discounts?)$/i); find('net', /^(ยอดขายสุทธิ|net sales)$/i); find('coll', /^(ยอดที่เก็บรวบรวม|total collected)$/i);
+  find('cost', /^(ต้นทุนของสินค้า|ต้นทุน|cost of goods)$/i); find('desc', /^(คำอธิบาย|รายการ|description)$/i); find('pos', /^(ระบบขายหน้าร้าน|เครื่อง|pos)$/i);
+  find('cashier', /^(ชื่อแคชเชียร์|พนักงาน|cashier name)$/i); find('cust', /^(ชื่อลูกค้า|ลูกค้า|customer name)$/i); find('status', /^(สถานะ|status)$/i); find('ref', /^อ้างอิงคืนเงิน$/); find('note', /^(หมายเหตุ|note)$/i);
+  if (F.id == null || F.date == null || (F.net == null && F.itemsJ == null)) throw new Error('ไม่พบคอลัมน์ "วันที่" "เลขที่ใบเสร็จ" "ยอดขายสุทธิ" — ใช้ไฟล์ใบเสร็จที่ส่งออกจากระบบนี้หรือจาก Loyverse');
+  const own = F.itemsJ != null, src = own ? 'ไฟล์ส่งออกจากระบบนี้' : 'ไฟล์ใบเสร็จจาก Loyverse', order = rxDateOrder(body.map(r => r[F.date]));
+  const g = (r, k) => F[k] == null ? '' : String(r[F[k]] == null ? '' : r[F[k]]).trim(), N = v => num(String(v).replace(/[฿,\s]/g, ''));
+  const out = [], cancelled = [], bad = [];
+  body.forEach((r, i) => {
+    const rid = g(r, 'id'), date = rxDate(g(r, 'date'), order);
+    if (!rid || !date) { bad.push(i + 2); return; }
+    const st = g(r, 'status');
+    if (!own && /ยกเลิก|cancel|void/i.test(st)) { cancelled.push(rid); return; }
+    const refund = /คืน|refund/i.test(g(r, 'type')), sg = refund ? -1 : 1;
+    let items, pays;
+    if (own) { items = Logic.J(g(r, 'itemsJ'), []); pays = Logic.J(g(r, 'paysJ'), []); }
+    else {
+      const net = Math.abs(N(g(r, 'net'))) || Math.abs(N(g(r, 'coll')));
+      items = g(r, 'desc').split(/,\s*(?=\d+(?:\.\d+)?\s*[x×]\s)/).filter(x => x.trim()).map(x => { const m = /^(\d+(?:\.\d+)?)\s*[x×]\s*(.+)$/.exec(x.trim()); return m ? { name: m[2].trim(), qty: +m[1], price: '' } : { name: x.trim(), qty: 1, price: '' }; });
+      if (items.length === 1 && items[0].qty) items[0].price = Math.round(net / items[0].qty * 100) / 100;
+      const types = g(r, 'pay').split(/\s*,\s*/).filter(Boolean).map(RX_PAY);
+      pays = (types.length ? types : ['cash']).map((t, j) => ({ type: t, amount: j ? 0 : sg * net }));
+    }
+    const subtotal = own ? N(g(r, 'gross')) : sg * Math.abs(N(g(r, 'gross')));
+    const total = own ? N(g(r, 'net')) : sg * (Math.abs(N(g(r, 'net'))) || Math.abs(N(g(r, 'coll'))));
+    const cost = g(r, 'cost') === '' ? '' : (own ? N(g(r, 'cost')) : sg * Math.abs(N(g(r, 'cost'))));
+    const stText = g(r, 'status');
+    out.push({
+      id: own ? rid : 'LV-' + rid, date, deviceId: '', deviceName: own ? g(r, 'pos') : 'Loyverse' + (g(r, 'pos') ? ' · ' + g(r, 'pos') : ''),
+      cashier: own ? g(r, 'cashierId') : '', cashierName: g(r, 'cashier'), customerId: own ? g(r, 'custId') : '', customerName: g(r, 'cust'),
+      items: JSON.stringify(items), itemCount: String(items.reduce((a, x) => a + (num(x.qty) || 0), 0)), subtotal: String(subtotal), discount: String(own ? N(g(r, 'disc')) : sg * Math.abs(N(g(r, 'disc')))), total: String(total), cost: String(cost),
+      payments: JSON.stringify(pays), payType: (pays[0] && pays[0].type) || '', status: refund ? 'refund' : (own && /คืนเงินแล้ว/.test(stText) ? 'refunded' : 'sale'), refundOf: g(r, 'ref'),
+      note: own ? g(r, 'note') : 'นำเข้าจาก Loyverse'
+    });
+  });
+  // เลขที่ซ้ำกันเองในไฟล์
+  const seen = new Set(), inFile = [], rows = out.filter(o => { if (seen.has(o.id)) { inFile.push(o.id); return false; } seen.add(o.id); return true; });
+  return { rows, src, cancelled, bad, inFile, order };
+}
+async function readTableFile(f) {
+  if (/\.xlsx?$/i.test(f.name)) { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: false }); return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
+  return parseCSV(await f.text());
+}
+// รายงานผล + บันทึกประวัติ (เก็บในตั้งค่า เห็นได้ทุกเครื่องของเจ้าของ)
+function ioReport(title, lines, kind) {
+  sheet(title, `<div class="card">${lines.map(l => Array.isArray(l) ? `<div class="kv"><span>${l[0]}</span><b>${l[1]}</b></div>` : `<div class="small muted" style="margin-top:6px">${l}</div>`).join('')}</div>`, `<button class="btn block" onclick="this.closest('.ov').remove()">ตกลง</button>`);
+  if (kind) ioLog(kind, title + ' — ' + lines.filter(l => Array.isArray(l) && !/^0 /.test(String(l[1]))).map(l => `${String(l[0]).replace(/<[^>]+>/g, '')} ${String(l[1]).replace(/<[^>]+>/g, '')}`).join(' · '));
+}
+function ioLog(kind, text) {
+  const h = cfg('ioHistory', { list: [] }); h.list = [{ at: new Date().toISOString(), by: (S.user && S.user.name) || '', kind, text }].concat(h.list || []).slice(0, 40);
+  saveSetting('ioHistory', { list: h.list }).catch(() => { });
+}
+window.ioReport = ioReport; window.ioLog = ioLog; window.readTableFile = readTableFile;
+function receiptsIO(rows, reload) {
+  const sales = rows.filter(o => o.status !== 'refund').length, ref = rows.length - sales;
+  const ov = sheet('ส่งออก / นำเข้าใบเสร็จรับเงิน', `
+    <div class="card"><b>ส่งออก</b><div class="small muted" style="margin:4px 0 8px">ช่วงที่เลือก ${esc(thDate(RR.from))} – ${esc(thDate(RR.to))} · ${rows.length.toLocaleString()} ใบ (ขาย ${sales} · คืนเงิน ${ref})</div>
+      <div class="row" style="gap:8px"><button class="btn ghost grow" id="xc" ${rows.length ? '' : 'disabled'}>CSV</button><button class="btn ghost grow" id="xx" ${rows.length ? '' : 'disabled'}>Excel (.xlsx)</button></div></div>
+    <div class="card"><b>นำเข้า</b><div class="small muted" style="margin:4px 0 8px">ไฟล์ใบเสร็จที่ส่งออกจากระบบนี้ หรือไฟล์ "ใบเสร็จ" จาก Loyverse (.csv / .xlsx) · ระบบตรวจเลขที่ใบเสร็จซ้ำให้ก่อน ใบที่มีอยู่แล้วจะไม่บันทึกซ้ำ · ไม่ตัดสต็อก ไม่คิดแต้มลูกค้า</div>
+      <label class="btn block">${I(IC.io, 18)} เลือกไฟล์<input type="file" id="fi" accept=".csv,.xlsx,.xls,text/csv" hidden></label><div id="pv" style="margin-top:10px"></div></div>`);
+  const fname = ext => `receipts_${RR.from}_${RR.to}.${ext}`;
+  const done = ext => { ov.remove(); ioReport('ส่งออกใบเสร็จรับเงินแล้ว', [['จำนวน', rows.length.toLocaleString() + ' ใบ'], ['ขาย / คืนเงิน', `${sales} / ${ref}`], ['ช่วงวันที่', `${thDate(RR.from)} – ${thDate(RR.to)}`], ['ไฟล์', fname(ext)]], 'export'); };
+  $('#xc', ov).onclick = () => { download(fname('csv'), toCSV(ordersToSheet(rows))); done('csv'); };
+  $('#xx', ov).onclick = async () => { try { busy(1); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ordersToSheet(rows)), 'receipts'); download(fname('xlsx'), new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })); busy(0); done('xlsx'); } catch (e) { busy(0); toast(e.message, 1); } };
+  $('#fi', ov).onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const pv = $('#pv', ov);
+    try {
+      busy(1, 'กำลังอ่านไฟล์...'); const P = rxParse(await readTableFile(f));
+      if (!P.rows.length) throw new Error('ไม่พบใบเสร็จในไฟล์');
+      const CH = 400, chunks = []; for (let i = 0; i < P.rows.length; i += CH) chunks.push(P.rows.slice(i, i + CH));
+      let fresh = 0, dup = 0, bad = 0, dupIds = [];
+      for (let i = 0; i < chunks.length; i++) { busy(1, `กำลังตรวจใบเสร็จซ้ำ ${Math.min((i + 1) * CH, P.rows.length)}/${P.rows.length}...`); const r = await api('importOrders', { rows: chunks[i], dry: true }); fresh += r.fresh; dup += r.dup; bad += r.bad; dupIds = dupIds.concat(r.dupIds || []); }
+      busy(0);
+      const ds = P.rows.map(o => o.date).sort(), net = P.rows.reduce((a, o) => a + num(o.total), 0);
+      const sub = [['รูปแบบไฟล์', P.src], ['ใบเสร็จในไฟล์', P.rows.length.toLocaleString() + ' ใบ'], ['ช่วงวันที่', `${thDate(ds[0].slice(0, 10))} – ${thDate(ds[ds.length - 1].slice(0, 10))}`], ['ยอดสุทธิรวม', baht(net)],
+        ['<span style="color:var(--green)">ใหม่ (จะนำเข้า)</span>', `<span style="color:var(--green)">${fresh.toLocaleString()} ใบ</span>`], ['ซ้ำ — มีในระบบแล้ว (ข้าม)', dup.toLocaleString() + ' ใบ']];
+      if (P.inFile.length) sub.push(['ซ้ำกันเองในไฟล์ (ข้าม)', P.inFile.length + ' ใบ']);
+      if (P.cancelled.length) sub.push(['ใบเสร็จที่ยกเลิก (ข้าม)', P.cancelled.length + ' ใบ']);
+      if (P.bad.length + bad) sub.push(['ข้อมูลไม่ครบ (ข้าม)', (P.bad.length + bad) + ' แถว']);
+      pv.innerHTML = `<div class="card" style="margin:0">${sub.map(l => `<div class="kv"><span>${l[0]}</span><b>${l[1]}</b></div>`).join('')}
+        ${dupIds.length ? `<div class="tiny muted" style="margin-top:4px">ตัวอย่างเลขที่ซ้ำ: ${esc(dupIds.slice(0, 6).join(', '))}${dup > 6 ? ' …' : ''}</div>` : ''}
+        <div class="tiny muted" style="margin-top:6px">ใบเสร็จที่นำเข้าจะนับในรายงานยอดขาย · วันที่มีใบเสร็จแล้วระบบใช้ยอดจากใบเสร็จแทนยอดรายวันที่นำเข้า (ไม่นับซ้ำ)${P.src.includes('Loyverse') ? ' · เลขที่จาก Loyverse ขึ้นต้นด้วย LV-' : ''}</div></div>
+        <button class="btn green block" id="go" style="margin-top:10px" ${fresh ? '' : 'disabled'}>${fresh ? `นำเข้า ${fresh.toLocaleString()} ใบ` : 'ไม่มีใบเสร็จใหม่ให้นำเข้า'}</button>`;
+      const go = $('#go', pv); if (go) go.onclick = async () => {
+        let added = 0, dup2 = 0;
+        try {
+          for (let i = 0; i < chunks.length; i++) { busy(1, `กำลังนำเข้า ${Math.min((i + 1) * CH, P.rows.length)}/${P.rows.length}...`); const r = await api('importOrders', { rows: chunks[i] }); added += r.added; dup2 += r.dup; }
+          busy(0); ov.remove(); Cache.staleBefore = Date.now();
+          ioReport('นำเข้าใบเสร็จรับเงินแล้ว', [['ไฟล์', esc(f.name)], ['นำเข้าใหม่', added.toLocaleString() + ' ใบ'], ['ข้าม (ซ้ำ)', (dup2 + P.inFile.length).toLocaleString() + ' ใบ'], ...(P.cancelled.length ? [['ข้าม (ยกเลิก)', P.cancelled.length + ' ใบ']] : []), ...(P.bad.length + bad ? [['ข้าม (ข้อมูลไม่ครบ)', (P.bad.length + bad) + ' แถว']] : []), ['ช่วงวันที่', `${thDate(ds[0].slice(0, 10))} – ${thDate(ds[ds.length - 1].slice(0, 10))}`]], 'import');
+          reload && reload();
+        } catch (err) { busy(0); toast(`นำเข้าได้ ${added} ใบแล้วหยุด: ${err.message} — เลือกไฟล์เดิมอีกครั้งเพื่อทำต่อ (ใบที่เข้าแล้วจะไม่ซ้ำ)`, 1, 8000); }
+      };
+    } catch (err) { busy(0); pv.innerHTML = ''; toast(err.message, 1); }
+  };
+}

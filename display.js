@@ -147,18 +147,20 @@ VIEWS.display = (root, hash) => {
    .dsp .rp .co{font-size:clamp(14px,4vmin,32px)}
    .dsp .rp .qrl{font-size:clamp(13px,3.4vmin,26px);opacity:.95}
    .dsp .rp.hasqr .rv{font-size:clamp(28px,10vmin,110px)}
-   .dsp .gr{display:grid;grid-template-columns:minmax(0,max-content) max-content;column-gap:0;row-gap:0;padding-left:.6ch;align-items:baseline;justify-content:start;line-height:1.22;font-weight:600}
+   .dsp .gr{flex:none;display:grid;grid-template-columns:minmax(0,1fr) max-content;column-gap:0;row-gap:0;padding-left:3.5ch;align-items:baseline;justify-content:stretch;line-height:1.22;font-weight:600;--rp:0px}
    .dsp .gr.m{grid-template-columns:max-content max-content}
-   .dsp .gr>.n{display:flex;align-items:baseline;gap:.45ch;min-width:0;padding:.06em 2.5ch .06em 0;border-bottom:1px solid #00000012}
+   .dsp .gr.wr{align-items:stretch}
+   .dsp .gr.wr>.n>b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+   .dsp .gr>.n{display:flex;align-items:baseline;gap:.45ch;min-width:0;padding:calc(.06em + var(--rp)) 2.5ch calc(.06em + var(--rp)) 0;border-bottom:1px solid #00000012}
    .dsp .gr>.n>s{text-decoration:none;color:#bbb;font-weight:400;flex:none;margin-right:.15ch}
    .dsp .gr>.n>b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
    .dsp .gr>.n>i{font-style:normal;color:#777;font-weight:400;font-size:.8em;white-space:nowrap;flex:none}
-   .dsp .gr>.a{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;padding:.06em 0;border-bottom:1px solid #00000012}
+   .dsp .gr>.a{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;padding:calc(.06em + var(--rp)) 0;border-bottom:1px solid #00000012}
    .dsp .gr>.more{grid-column:1/-1;color:#888;font-size:.72em;font-weight:400;border-bottom:1px dashed #ddd;padding-bottom:.15em;margin-bottom:.1em}
    .dsp .gr>.ln{grid-column:1/-1;height:1px;background:#eee}
-   .dsp .gr>.tl{font-size:1.45em;font-weight:800;border-bottom:none;border-top:3px solid #222;margin-top:.15em;padding-top:.12em;color:#111}
-   .dsp .gr>.n.tl>b{font-weight:800}
-   .dsp .gr>.n.tl>i{font-size:.55em;color:#666;font-weight:500}
+   .dsp .gt{flex:none;margin-top:auto;display:flex;align-items:baseline;justify-content:space-between;gap:2ch;border-top:3px solid #222;padding:.08em 0 0 2.5ch;margin-left:0;font-weight:800;line-height:1.2;color:#111}
+   .dsp .gt b{font-weight:800}.dsp .gt i{font-style:normal;font-size:.5em;color:#666;font-weight:500;margin-left:.4ch}
+   .dsp .gt .a{font-variant-numeric:tabular-nums;white-space:nowrap}
    .dsp .tot{flex:none;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:1.2vmin 3vmin}
    .dsp .tot .l{font-size:clamp(16px,4.2vmin,34px);line-height:1.15}
    .dsp .tot .v{font-size:clamp(34px,12vmin,120px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -195,30 +197,40 @@ VIEWS.display = (root, hash) => {
   const tk = setInterval(tick, 5000); tick();
   let cur = null, lastAt = 0;
   const fit = (box, grid, items, tot) => {
-    // หาขนาดตัวอักษรที่ใหญ่ที่สุดที่แสดงได้ครบ ไม่ล้นจอ; ถ้าเล็กสุดแล้วยังล้น ยุบรายการเก่าเป็น “+N รายการ”
-    const H = box.clientHeight - 4, W = box.clientWidth - 4;
+    // ตัวอักษรใหญ่ที่สุดที่ทุกรายการแสดงครบ (ไม่ล้นจอ ไม่ตัดชื่อ) · แถวรวมชิดขอบล่าง · พื้นที่ที่เหลือกระจายเป็นระยะห่างระหว่างแถว
+    const gt = box.querySelector('.gt'), cs = getComputedStyle(box);
+    const H = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 2, W = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) + 1;
     const minF = Math.max(15, Math.min(22, Math.round(Math.min(innerWidth, innerHeight) / 22)));
-    const maxF = Math.max(minF, Math.min(60, Math.round(H / 3.2)));
+    const maxF = Math.max(minF, Math.min(150, Math.round(H / 3.4)));
+    const TK = 1.4; // แถวรวมใหญ่กว่ารายการ 1.4 เท่า
     const render = (skip, f) => {
       const shown = items.slice(skip), old = items.slice(0, skip);
-      grid.style.fontSize = f + 'px';
+      grid.style.fontSize = f + 'px'; grid.style.setProperty('--rp', '0px');
       grid.innerHTML = (old.length ? `<div class="more">+ ${old.length} รายการก่อนหน้า · ${LB(old.reduce((a, x) => a + num(x.a), 0))}</div>` : '') +
-        shown.map(it => { const q = it.w === 'Y' ? num(it.q).toFixed(3).replace(/\.?0+$/, '') + ' กก.' : (num(it.q) !== 1 ? '×' + num(it.q) : ''); return `<div class="n"><s>-</s><b>${esc(it.n)}</b>${q ? `<i>${q}</i>` : ''}</div><div class="a">${LB(it.a)}</div>`; }).join('') +
-        (tot ? `<div class="n tl"><b>รวม</b><i>${tot.c} ชิ้น</i></div><div class="a tl">${LB(tot.a)}</div>` : '');
+        shown.map(it => { const q = it.w === 'Y' ? num(it.q).toFixed(3).replace(/\.?0+$/, '') + ' กก.' : (num(it.q) !== 1 ? '×' + num(it.q) : ''); return `<div class="n"><s>-</s><b>${esc(it.n)}</b>${q ? `<i>${q}</i>` : ''}</div><div class="a">${LB(it.a)}</div>`; }).join('');
+      if (gt) { gt.style.fontSize = Math.round(f * TK) + 'px'; gt.innerHTML = tot ? `<span><b>รวม</b><i>${tot.c} ชิ้น</i></span><span class="a">${LB(tot.a)}</span>` : ''; }
     };
-    const fitsH = () => grid.scrollHeight <= H;
-    const fitsW = () => { grid.classList.add('m'); const ok = grid.scrollWidth <= W; grid.classList.remove('m'); return ok; };
+    const used = () => grid.scrollHeight + (gt ? gt.offsetHeight + 4 : 0);
+    const fitsH = () => used() <= H;
+    const fitsW = () => { grid.classList.add('m'); const ok = grid.scrollWidth <= grid.clientWidth - 2; grid.classList.remove('m'); return ok && (!gt || gt.scrollWidth <= gt.clientWidth + 1); };
     let skip = 0, lo = minF, hi = maxF, best = minF;
-    render(0, minF);
-    if (!fitsH()) { // ยุบรายการเก่า
+    grid.classList.remove('wr'); render(0, minF);
+    if (!fitsH()) { // เล็กสุดแล้วยังล้น → ยุบรายการเก่า
       while (skip < items.length - 1) { skip++; render(skip, minF); if (fitsH()) break; }
       return;
     }
+    // 1) ชื่อบรรทัดเดียว: ใหญ่สุดที่ไม่ล้นทั้งสูงและกว้าง
     while (lo <= hi) { const m = (lo + hi) >> 1; render(0, m); if (fitsH() && fitsW()) { best = m; lo = m + 1; } else hi = m - 1; }
-    // ยอมตัดชื่อยาวด้วย … เล็กน้อย เพื่อให้ตัวอักษรใหญ่ขึ้น (อ่านง่ายสำหรับผู้สูงอายุ) — ความสูงต้องพอดีเสมอ
-    let bh = best; lo = best; hi = maxF;
-    while (lo <= hi) { const m = (lo + hi) >> 1; render(0, m); if (fitsH()) { bh = m; lo = m + 1; } else hi = m - 1; }
-    render(0, Math.max(minF, Math.round(Math.max(best, Math.min(bh, Math.round(best * 1.2), Math.round(minF * 2.4))) * .88)));
+    // 2) ชื่อยาวขึ้นบรรทัดที่ 2 ได้ (ไม่ตัดชื่อ) ถ้าทำให้ตัวใหญ่ขึ้นชัดเจน
+    const twoLines = () => [...grid.querySelectorAll('.n>b')].every(b => b.getBoundingClientRect().height <= parseFloat(grid.style.fontSize) * 1.22 * 2.3);
+    grid.classList.add('wr'); let bw = 0; lo = best + 1; hi = maxF;
+    while (lo <= hi) { const m = (lo + hi) >> 1; render(0, m); if (fitsH() && twoLines() && grid.scrollWidth <= grid.clientWidth + 1 && (!gt || gt.scrollWidth <= gt.clientWidth + 1)) { bw = m; lo = m + 1; } else hi = m - 1; }
+    let f = best;
+    if (bw >= best * 1.12) f = bw; else grid.classList.remove('wr');
+    render(0, f);
+    // ความสูงที่เหลือ → กระจายเป็นระยะห่างแต่ละแถว (ไม่เกินครึ่งตัวอักษร) ให้รายการเต็มพื้นที่ ไม่เว้นว่างก้อนใหญ่
+    const rows = grid.querySelectorAll('.a').length, spare = H - used();
+    if (rows && spare > 0) grid.style.setProperty('--rp', Math.max(0, Math.min(f * .28, spare / rows / 2 - .5)).toFixed(1) + 'px');
   };
   // ย่อตัวเลขยอดรวมให้พอดีกว้างของแถบแดง
   const fitOne = el => { if (!el) return; const W = el.parentElement.clientWidth * .92; let f = parseFloat(getComputedStyle(el).fontSize); el.style.fontSize = ''; f = parseFloat(getComputedStyle(el).fontSize); while (el.scrollWidth > W && f > 18) { f -= 2; el.style.fontSize = f + 'px'; } };
@@ -246,8 +258,8 @@ VIEWS.display = (root, hash) => {
     const extras = `${num(s.disc) ? `<div class="rx">ส่วนลด ${LB(s.disc)}</div>` : ''}${s.customer ? `<div class="rx"><span class="pill">${esc(s.customer)}</span></div>` : ''}${num(s.cashOut) ? `<div class="co">รับเงินสด ${LB(s.cashOut)}</div>` : ''}`;
     // โฆษณา: แสดงตอนสแกนสินค้า · ตอนรับชำระ/โชว์ QR กลับเป็นยอดเงินตัวใหญ่ตามเดิม
     const showAd = s.mode === 'cart' && !qr && s.ads && AdPlayer.set(s.ads);
-    if (showAd) { bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp ad"><div class="adslot" id="ads"></div>${extras ? `<div class="adx">${extras}</div>` : ''}</div>`; AdPlayer.mount($('#ads', root)); }
-    else bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr || `<div class="rlg">${dispLogoHTML(s.logoMode || 'mark', s.logo || '', s.shop || S.settings.shopName, s.brandW, true)}</div>`}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${extras}</div>`;
+    if (showAd) { bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div><div class="gt"></div></div><div class="rp ad"><div class="adslot" id="ads"></div>${extras ? `<div class="adx">${extras}</div>` : ''}</div>`; AdPlayer.mount($('#ads', root)); }
+    else bd.innerHTML = `<div class="lst" id="lst"><div class="gr" id="gr"></div><div class="gt"></div></div><div class="rp${qr ? ' hasqr' : ''}">${qr || `<div class="rlg">${dispLogoHTML(s.logoMode || 'mark', s.logo || '', s.shop || S.settings.shopName, s.brandW, true)}</div>`}<div class="rl">${s.mode === 'pay' ? 'ยอดที่ต้องชำระ' : 'รวมทั้งหมด'}</div><div class="rv" id="rv">${LB(amt)}</div>${extras}</div>`;
     tt.hidden = true;
     const items = s.items || [];
     // จำนวนที่ถูกตัดตั้งแต่ฝั่ง POS (ส่งมาแค่ 60 ล่าสุด)
@@ -261,6 +273,8 @@ VIEWS.display = (root, hash) => {
     if (!s || (s.at && s.at < lastAt)) return; lastAt = s.at || lastAt; Display.cur = s; draw(s); };
   draw(null);
   addEventListener('resize', () => { clearTimeout(VIEWS.display.rt); VIEWS.display.rt = setTimeout(() => draw(cur), 150); });
+  // ฟอนต์โหลดเสร็จทีหลัง (ตัวอักษรกว้างขึ้น) → คำนวณขนาดใหม่ ไม่ให้ชื่อถูกตัด
+  if (document.fonts) { document.fonts.ready.then(() => draw(cur)); document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', () => { clearTimeout(VIEWS.display.ft); VIEWS.display.ft = setTimeout(() => draw(cur), 80); }); }
   if (!code) {
     if (Display.bc) { Display.bc.onmessage = e => { if (e.data && !e.data.hello) accept(e.data); }; Display.bc.postMessage({ hello: 1 }); }
   } else if (!S.apiUrl) {
