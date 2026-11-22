@@ -62,7 +62,7 @@ const Scanner = {
     }
     clearTimeout(this.timer);
     // ส่วนใหญ่เครื่องยิงส่ง Enter ท้าย → รอ Enter ให้นานพอ ไม่ตัดกลางรหัส (เครื่องที่ไม่ส่ง Enter จบเองหลังหยุด 300ms)
-    this.timer = setTimeout(() => { if (this.b) this.finish('idle'); }, LS.get('scanSeenEnter', false) ? 600 : 300);
+    this.timer = setTimeout(() => { if (this.b) this.finish('idle'); }, LS.get('scanSeenEnter', false) ? 400 : 260);
   },
   clean(code) {
     const cfg = this.cfg;
@@ -110,7 +110,8 @@ const Scanner = {
     if (h && !nativeField && !(overlay && !this.handlers._overlayOK)) {
       if (el && b && b.before) { el.value = b.before.v; el.dispatchEvent(new Event('input', { bubbles: true })); }
       if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-      try { h(code); } catch (e) { console.error(e); }
+      const t0 = performance.now(); try { h(code); } catch (e) { console.error(e); }
+      if (this.history[0] && this.history[0].code === code) this.history[0].ui = Math.round(performance.now() - t0);
     } else if (el) {
       // ใส่รหัสที่ถูกต้องลงในช่องที่กำลังพิมพ์ (แทนตัวอักษรที่อาจเพี้ยนเป็นภาษาไทย)
       const bf = b && b.before ? b.before : { v: el.value, s: el.selectionStart ?? el.value.length, e: el.selectionEnd ?? el.value.length };
@@ -207,11 +208,12 @@ VIEWS.scannerset = el => {
   const h = () => st(); document.addEventListener('mm:scanner', h); S.cleanup = () => document.removeEventListener('mm:scanner', h);
   const drawHist = () => {
     const H = Scanner.history;
-    $('#hist', el).innerHTML = H.length ? `<table class="t"><tr><th>บาร์โค้ด</th><th>สินค้า</th><th class="right">ตัว</th><th class="right">เวลา</th><th>จบด้วย</th></tr>${H.slice(0, 12).map(x => { const f = findByCode(x.code); return `<tr><td class="num">${esc(x.code)}${x.thai ? ' <span class="tag amber">แป้นไทย→แก้แล้ว</span>' : ''}</td><td>${f ? esc(f.p.name) : '<span class="muted">ไม่พบ</span>'}</td><td class="right">${x.len}</td><td class="right">${x.src === 'Serial' ? 'Serial' : x.ms + 'ms'}</td><td>${x.term === 'idle' ? 'ไม่มี Enter' : x.term}</td></tr>`; }).join('')}</table>` : '<div class="muted small">ยังไม่มีการยิง</div>';
+    $('#hist', el).innerHTML = H.length ? `<table class="t"><tr><th>บาร์โค้ด</th><th>สินค้า</th><th class="right">ตัว</th><th class="right">เครื่องยิงส่ง</th><th class="right">ระบบแสดง</th><th>จบด้วย</th></tr>${H.slice(0, 12).map(x => { const f = findByCode(x.code); return `<tr><td class="num">${esc(x.code)}${x.thai ? ' <span class="tag amber">แป้นไทย→แก้แล้ว</span>' : ''}</td><td>${f ? esc(f.p.name) : '<span class="muted">ไม่พบ</span>'}</td><td class="right">${x.len}</td><td class="right">${x.src === 'Serial' ? 'Serial' : x.ms + 'ms'}</td><td class="right">${x.ui != null ? x.ui + 'ms' : '—'}</td><td>${x.term === 'idle' ? 'ไม่มี Enter' : x.term}</td></tr>`; }).join('')}</table>` : '<div class="muted small">ยังไม่มีการยิง</div>';
     const last = H[0], tips = [];
     if (last) {
       if (last.thai) tips.push(['amber', 'แป้นพิมพ์ของเครื่องนี้เป็นภาษาไทย — ระบบแปลงเป็นตัวเลขที่ถูกต้องให้แล้ว (ไม่ต้องสลับภาษา)']);
       if (last.term === 'idle') tips.push(['blue', 'เครื่องยิงไม่ส่ง Enter ต่อท้าย — ระบบจบการยิงให้อัตโนมัติแล้ว (ถ้าอยากให้เร็วขึ้นเล็กน้อย ตั้งเครื่องยิงให้ส่ง Enter/CR ตามคู่มือของเครื่อง)']);
+      if (last.src === 'HID' && last.ms > 250) tips.push(['amber', `เครื่องยิงใช้เวลาส่งรหัส ${last.ms} ms ต่อครั้ง (ระบบแสดงผลเองใช้ ${last.ui != null ? last.ui : '<30'} ms) — ความช้ามาจากความเร็วส่ง Bluetooth ของเครื่องยิง: สแกนบาร์โค้ดตั้งค่า “Bluetooth HID transmit speed: High/Fast” (หรือ “Keyboard delay: 0 ms”) ในคู่มือเครื่องยิง จะเร็วขึ้นมาก`]);
       if (last.src === 'HID' && last.avg > 30) tips.push(['amber', `เครื่องนี้ส่งตัวอักษรช้า (เฉลี่ย ${last.avg} ms/ตัว) — ถ้ายิงแล้วไม่ติดบ่อย ให้เลื่อน “ช่วงห่างสูงสุด” เป็น ${Math.min(150, Math.ceil(last.avg * 2 / 5) * 5)} ms`]);
       if (/^\d{12}$/.test(last.code)) tips.push(['blue', 'ได้รหัส 12 หลัก (UPC-A) — ระบบค้นหาแบบเติม 0 ข้างหน้าให้อัตโนมัติ']);
       if (!tips.length) tips.push(['green', 'เครื่องยิงทำงานปกติ ✓']);

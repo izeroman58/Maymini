@@ -28,7 +28,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:var(--fs)/1.5 var(--fb);overscroll-behavior:none;overflow-x:hidden;touch-action:manipulation;-webkit-text-size-adjust:100%}
 /* หน้าขาย/จอลูกค้า: ล็อกพอดีจอ ไม่เลื่อนขึ้นลง */
-html:has(body.full),body.full{height:100%;overflow:hidden}body.full #app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}body.full #view{flex:1;min-height:0;overflow:hidden;width:100%;max-width:none;margin:0}body.full #view>.pos{height:100%}
+html:has(body.full),body.full{height:100%;overflow:hidden}body.full #app{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden}body.full #view{flex:1;min-height:0;overflow:hidden;width:100%;max-width:none;margin:0}body.full #view>.pos{height:100%}
 h1,h2,h3,.disp{font-family:var(--fh);margin:0;line-height:1.25}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--blue)}
@@ -193,7 +193,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.30';
+const APP_VER = '2.6.31';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -2450,20 +2450,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.30"></script>
-<script src="logic.js?v=2.6.30"></script>
-<script src="cache.js?v=2.6.30"></script>
-<script src="offline.js?v=2.6.30"></script>
-<script src="scanner.js?v=2.6.30"></script>
-<script src="printer.js?v=2.6.30"></script>
-<script src="pos.js?v=2.6.30"></script>
-<script src="display.js?v=2.6.30"></script>
-<script src="reports.js?v=2.6.30"></script>
-<script src="inventory.js?v=2.6.30"></script>
-<script src="people.js?v=2.6.30"></script>
-<script src="quality.js?v=2.6.30"></script>
-<script src="services.js?v=2.6.30"></script>
-<script src="owner.js?v=2.6.30"></script>
+<script src="qr.js?v=2.6.31"></script>
+<script src="logic.js?v=2.6.31"></script>
+<script src="cache.js?v=2.6.31"></script>
+<script src="offline.js?v=2.6.31"></script>
+<script src="scanner.js?v=2.6.31"></script>
+<script src="printer.js?v=2.6.31"></script>
+<script src="pos.js?v=2.6.31"></script>
+<script src="display.js?v=2.6.31"></script>
+<script src="reports.js?v=2.6.31"></script>
+<script src="inventory.js?v=2.6.31"></script>
+<script src="people.js?v=2.6.31"></script>
+<script src="quality.js?v=2.6.31"></script>
+<script src="services.js?v=2.6.31"></script>
+<script src="owner.js?v=2.6.31"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

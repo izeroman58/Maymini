@@ -52,6 +52,7 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .pos.dk .paywrap,.pos.dk .done{background:#1B1C1F;color:#E8E8E8}.pos.dk .ptypes button{background:#26282C;border-color:#3A3D42;color:#E8E8E8}.pos.dk .ptypes button.on{background:#2E3136}
 .pos.dk .qcash button,.pos.dk .kp button{background:#2E3136;border-color:#3A3D42;color:#F0F0F0;box-shadow:none}.pos.dk .qcash button:active,.pos.dk .kp button:active{background:#3A3E44}
 .pos.dk .qcash button[style]{background:#1F3A24!important;border-color:#2E7D32!important;color:#C8F2C9}.pos.dk .cashin input{color:#fff}.pos.dk .cust{background:#1E3350;color:#CFE1FF}.pos.dk .cartbar{background:#1B1C1F;border-top-color:#33363B}.pos.dk .btn.ghost{background:#2A2D31;color:#E8E8E8;box-shadow:inset 0 0 0 1.5px #3A3D42}
+.pos.dk .list{background:#1B1C1F;box-shadow:none}.pos.dk .list .item{border-color:#2E3135;color:#E8E8E8;background:transparent}.pos.dk .list .item:active{background:#2A2D31}.pos.dk .item .m,.pos.dk .empty{color:#9EA2A8}.pos.dk .item .t{color:#EDEDED}.pos.dk .item .price{color:#FF8A93}
 .pos.dk .payb:disabled{background:#3D4A33;color:#9AA88E}.pos.dk .kv{border-color:#2E3135}.pos.dk .in{background:#26282C;color:#fff;border-color:#3A3D42}
 .payb{margin:0 14px calc(14px + var(--safe-b));min-height:72px;font-size:21px;border-radius:8px;background:#7CB342}
 .who2{display:flex;align-items:center;gap:6px;background:transparent;color:#fff;padding:5px 8px;margin:0 4px;white-space:nowrap;font-family:var(--fh);font-size:16px;font-weight:700}
@@ -378,7 +379,7 @@ const POS = {
     return L;
   },
   // บันทึกตั๋ว: แสดงรายการทันที แล้วค่อยส่งไปจอลูกค้าหลังหน้าจอวาดเสร็จ (สแกนปุ๊บขึ้นปั๊บ)
-  save() { LS.set('ticket', this.t); this.renderTicket(); const tok = this._ptok = (this._ptok || 0) + 1; requestAnimationFrame(() => setTimeout(() => { if (tok === this._ptok) this.pushDisplay(); }, 0)); },
+  save() { LS.set('ticket', this.t); this.renderTicket(); window.TSync && TSync.out(); const tok = this._ptok = (this._ptok || 0) + 1; requestAnimationFrame(() => setTimeout(() => { if (tok === this._ptok) this.pushDisplay(); }, 0)); },
   totals() {
     const sub = this.t.items.reduce((s, it) => s + num(it.qty) * num(it.price), 0);
     let disc = 0; const d = this.t.discount;
@@ -650,7 +651,7 @@ const POS = {
     if (!this.el) return;
     const T = this.totals(), t = this.t, c = t.customer;
     const pr = $('#pr', this.el);
-    pr.innerHTML = `<div class="thead"><button class="iconbtn" id="tback" style="display:none">${I(IC.back)}</button><h3>ตั๋วออเดอร์</h3><button class="iconbtn" id="tc" title="ลูกค้า">${I(IC.userplus, 24)}</button><button class="iconbtn" id="tm">${I(IC.dots, 24)}</button></div>
+    pr.innerHTML = `<div class="thead"><button class="iconbtn" id="tback" style="display:none">${I(IC.back)}</button><h3>ตั๋วออเดอร์ <span id="tsy" style="display:none;font-size:13px;vertical-align:middle">🔗</span></h3><button class="iconbtn" id="tc" title="ลูกค้า">${I(IC.userplus, 24)}</button><button class="iconbtn" id="tm">${I(IC.dots, 24)}</button></div>
       ${c ? `<div class="cust">${I(IC.user, 18)}<div class="grow"><b>${esc(c.name)}</b> ${esc(c.phone || '')}<div class="tiny">${num(c.points)} แต้ม${num(c.credit) ? ' · ค้างชำระ ' + money(c.credit) : ''}${t.pointsUse ? ` · ใช้ ${t.pointsUse} แต้ม` : ''}</div></div><button class="iconbtn" id="cx">${I(IC.x, 18)}</button></div>` : ''}
       <div class="tlist">${t.items.length ? t.items.map((it, i) => `<div class="titem" data-i="${i}"><span class="nm">${esc(it.name)}</span><span class="q">×${it.byWeight === 'Y' ? num(it.qty).toFixed(3).replace(/\.?0+$/, '') + 'กก.' : num(it.qty)}</span><span class="num">${baht(num(it.qty) * num(it.price))}</span></div>`).join('') : '<div class="empty" style="padding-top:60px">ยังไม่มีสินค้า<br><span class="tiny">แตะปุ่มสินค้า หรือสแกนบาร์โค้ด</span></div>'}</div>
       ${num(t.cashOut) ? `<div class="cashout">💵 ต้องจ่ายเงินสดให้ลูกค้า ${bahtL(t.cashOut)}</div>` : ''}
@@ -767,6 +768,7 @@ const POS = {
       ['จอแสดงผลฝั่งลูกค้า', IC.monitor, () => go('displayset')],
       ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
       pconn().drawer && ['เปิดลิ้นชักเก็บเงิน', IC.sale, () => RP.kick().then(() => toast('เปิดลิ้นชักแล้ว'), e => toast(e.message, 1))],
+      [LS.get('tkSync', true) ? 'ปิดซิงค์ตั๋วกับเครื่องอื่น (ชื่อเดียวกัน)' : 'เปิดซิงค์ตั๋วกับเครื่องอื่น (ชื่อเดียวกัน)', IC.wifi, () => { const v = !LS.get('tkSync', true); LS.set('tkSync', v); toast(v ? 'เปิดซิงค์ตั๋วแล้ว — เครื่องที่ล็อกอินชื่อเดียวกันเห็นตั๋วเดียวกัน' : 'ปิดซิงค์ตั๋วแล้ว — เครื่องนี้ใช้ตั๋วแยก'); if (v) TSync.out(); TSync.badge(); }],
       [LS.get('posDark', true) ? 'หน้าขายโทนสว่าง' : 'หน้าขายโทนมืด (ถนอมสายตา/ประหยัดแบต)', IC.monitor, () => { const d = !LS.get('posDark', true); LS.set('posDark', d); $('#pos', this.el).classList.toggle('dk', d); }],
       [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)', IC.edit, async () => { this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }, 'editLayout'],
       ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)],
@@ -892,7 +894,9 @@ const POS = {
   }
 };
 VIEWS.pos = el => { POS.pay = POS.pay && POS.pay.done ? null : POS.pay; if (POS.pay && POS.pay.done) POS.newTicket(); POS.mount(el); POS.pushDisplay(); };
-window.addEventListener('resize', () => { if (S.view === 'pos' && !$('.ov')) { clearTimeout(POS.rt); POS.rt = setTimeout(() => POS.render(), 150); } });
+// แป้นพิมพ์เด้งขึ้น = ความสูงเปลี่ยน → ไม่วาดหน้าใหม่ (ไม่งั้นช่องค้นหาหลุดโฟกัส แป้นพิมพ์หาย) · วาดใหม่เมื่อความกว้างเปลี่ยน (หมุนจอ)
+let _posW = innerWidth;
+window.addEventListener('resize', () => { if (S.view !== 'pos') return; clearTimeout(POS.rt); POS.rt = setTimeout(() => { const a = document.activeElement; if (innerWidth !== _posW && !$('.ov') && !(a && a.tagName === 'INPUT')) { _posW = innerWidth; POS.render(); } else POS.fitTicket(); }, 150); });
 
 /* ---------- ลงเวลาทำงาน ---------- */
 async function clockToggle() {
@@ -953,3 +957,105 @@ VIEWS.payset = el => {
   };
   prev();
 };
+
+/* =========================================================
+   ซิงค์ตั๋วออเดอร์ระหว่างเครื่องที่ล็อกอินชื่อเดียวกัน (เช่น แท็บเล็ต + มือถือ)
+   - เครื่องเดียวกัน (หลายแท็บ): BroadcastChannel — ทันที
+   - คนละเครื่อง: เชื่อมตรง WebRTC (Wi-Fi เดียวกัน ~ไม่ถึง 0.1 วิ) + สำรองผ่าน Google (~1–2 วิ)
+   - ตัดสินว่าตั๋วไหนใหม่กว่าด้วยเลขรอบ (rev: เพิ่มขึ้นเสมอ อิงเวลา) + รหัสเครื่องเมื่อเท่ากัน → ทุกเครื่องได้ตั๋วเดียวกันเสมอ
+   ========================================================= */
+const TSync = {
+  dev: (() => { let d = LS.get('tkDev', ''); if (!d) { d = Math.random().toString(36).slice(2, 10); LS.set('tkDev', d); } return d; })(),
+  rev: LS.get('tkRev', 0), last: null, applying: false, dc: null, pc: null, peerAt: 0, direct: false, own: null, handled: '',
+  bc: ('BroadcastChannel' in window) ? new BroadcastChannel('mm-ticket') : null,
+  on() { return LS.get('tkSync', true) && !!S.user; },
+  code() { let h = 2166136261; const s = (S.apiUrl || 'local') + '|' + (S.user ? S.user.id : ''); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0; return '9' + String(h % 10000000).padStart(7, '0'); },
+  msg() { const t = POS.t; return { k: 'tk', dev: this.dev, u: S.user.id, rev: this.rev, t: { items: t.items, customer: t.customer, discount: t.discount, pointsUse: t.pointsUse || 0, cashOut: t.cashOut || 0 } }; },
+  out() {
+    if (this.applying || !this.on()) return;
+    this.rev = Math.max(this.rev + 1, Date.now()); LS.set('tkRev', this.rev);   // เลขรอบ = เวลา (ตั๋วเก่าค้างจากเมื่อวานไม่ทับตั๋วปัจจุบัน) และเพิ่มขึ้นเสมอ
+    const m = this.last = this.msg();
+    try { this.bc && this.bc.postMessage(m); } catch (e) { }
+    const s = JSON.stringify(m);
+    let sent = false; try { if (this.dc && this.dc.readyState === 'open') { this.dc.send(s); sent = true; } } catch (e) { }
+    // สำรองผ่าน Google: ส่งเสมอเมื่อยังไม่เชื่อมตรง · ถ้าเชื่อมตรงแล้วส่งช้า ๆ ไว้ให้เครื่องที่เพิ่งเปิด
+    if (S.apiUrl) { clearTimeout(this.rt); this.rt = setTimeout(() => api('displayPush', { code: this.code(), state: this.last }).catch(() => { }), sent ? 1500 : 60); }
+  },
+  in(m) {
+    if (!m || m.k !== 'tk' || m.dev === this.dev || !this.on() || m.u !== S.user.id) return;
+    this.peerAt = Date.now();
+    if (m.rev < this.rev || (m.rev === this.rev && m.dev < this.dev)) return;
+    if (this.last && m.rev === this.last.rev && m.dev === this.last.dev) return;
+    this.rev = m.rev; LS.set('tkRev', this.rev); this.last = m;
+    this.applying = true;
+    try {
+      POS.t = { items: m.t.items || [], customer: m.t.customer || null, discount: m.t.discount || null, pointsUse: m.t.pointsUse || 0, ...(m.t.cashOut ? { cashOut: m.t.cashOut } : {}) };
+      LS.set('ticket', POS.t);
+      if (S.view === 'pos' && POS.el) {
+        if (POS.pay && (!POS.t.items.length || POS.pay.done)) { POS.pay = null; POS.render(); }
+        else if (POS.pay) { POS.renderTicket(); POS.renderPay(); }
+        else POS.renderTicket();
+        POS.pushDisplay();
+      }
+    } finally { this.applying = false; }
+    this.badge();
+  },
+  badge() { const b = $('#tsy'); if (!b) return; const live = Date.now() - this.peerAt < 90000; b.style.display = this.on() && live ? '' : 'none'; b.title = this.direct ? 'ซิงค์กับอีกเครื่องแบบเชื่อมตรง' : 'ซิงค์กับอีกเครื่องผ่านอินเทอร์เน็ต'; b.style.color = this.direct ? '#7CB342' : '#FFB300'; },
+  // ---- สำรองผ่าน Google ----
+  v: '',
+  async pull() {
+    clearTimeout(this.pt);
+    if (this.on() && S.apiUrl && !document.hidden) {
+      try {
+        const r = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'displayPull', payload: { code: this.code(), v: this.v } }) }).then(x => x.json());
+        if (r && r.ok && !r.same && r.v) { this.v = r.v; this.in(r.state); }
+      } catch (e) { }
+    }
+    const live = Date.now() - this.peerAt < 600000;
+    this.pt = setTimeout(() => this.pull(), document.hidden ? 8000 : this.direct ? 6000 : live ? 1200 : 2000);
+  },
+  // ---- เชื่อมตรง WebRTC ระหว่างเครื่อง (ใช้ช่องส่งสัญญาณเดียวกับจอลูกค้า) ----
+  wire(ch) {
+    this.dc = ch;
+    ch.onopen = () => { this.direct = true; this.peerAt = Date.now(); try { ch.send('hello'); } catch (e) { } this.badge(); };
+    ch.onmessage = e => { if (e.data === 'hello') { if (this.last) try { ch.send(JSON.stringify(this.last.dev === this.dev ? this.last : this.msg())); } catch (x) { } return; } try { this.in(JSON.parse(e.data)); } catch (x) { } };
+    ch.onclose = () => { if (this.dc === ch) { this.dc = null; this.direct = false; this.badge(); } };
+  },
+  async rtc() {
+    clearTimeout(this.st);
+    const open = this.dc && this.dc.readyState === 'open';
+    if (this.on() && S.apiUrl && !document.hidden && !open && 'RTCPeerConnection' in window && typeof sig === 'function') {
+      const code = this.code();
+      try {
+        const off = await sig(code, 'offer');
+        if (off && off.dev && off.dev !== this.dev && off.id !== this.handled && Date.now() - off.t < 60000) {
+          // อีกเครื่องขอเชื่อม → ตอบรับ
+          this.handled = off.id; this.own = null; this.peerAt = Date.now();
+          try { this.pc && this.pc.close(); } catch (e) { }
+          const pc = this.pc = new RTCPeerConnection(RTC_CFG);
+          pc.ondatachannel = ev => this.wire(ev.channel);
+          await pc.setRemoteDescription(off.sdp); await pc.setLocalDescription(await pc.createAnswer()); await iceDone(pc);
+          await sig(code, 'answer', { id: off.id, dev: this.dev, sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : { type: 'answer', sdp: pc.localDescription.sdp } });
+        } else if (this.own && Date.now() - this.own.t < 45000) {
+          const ans = await sig(code, 'answer');
+          if (ans && ans.id === this.own.id && this.pc && this.pc.signalingState === 'have-local-offer') { await this.pc.setRemoteDescription(ans.sdp); this.own = null; }
+        } else if (!off || off.dev === this.dev || Date.now() - off.t >= 60000 || off.id === this.handled) {
+          // ยังไม่มีใครขอ → ประกาศให้อีกเครื่องมาเชื่อม
+          try { this.pc && this.pc.close(); } catch (e) { }
+          const pc = this.pc = new RTCPeerConnection(RTC_CFG);
+          this.wire(pc.createDataChannel('tk', { ordered: true }));
+          await pc.setLocalDescription(await pc.createOffer()); await iceDone(pc);
+          const id = Math.random().toString(36).slice(2);
+          this.own = { id, t: Date.now() };
+          await sig(code, 'offer', { id, dev: this.dev, t: Date.now(), sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : { type: 'offer', sdp: pc.localDescription.sdp } });
+        }
+      } catch (e) { }
+    }
+    const live = Date.now() - this.peerAt < 600000;
+    this.st = setTimeout(() => this.rtc(), document.hidden ? 10000 : open ? 8000 : this.own ? 1500 : live ? 3000 : 6000);
+  },
+  start() { if (this.started) return; this.started = true; this.pull(); setTimeout(() => this.rtc(), 800); document.addEventListener('visibilitychange', () => { if (!document.hidden) { this.pull(); this.rtc(); } }); setInterval(() => this.badge(), 15000); }
+};
+window.TSync = TSync;
+if (TSync.bc) TSync.bc.onmessage = e => { const m = e.data; if (m === 'hello') { if (TSync.on() && TSync.last) TSync.bc.postMessage(TSync.last.dev === TSync.dev ? TSync.last : TSync.msg()); return; } TSync.in(m); };
+document.addEventListener('mm:booted', () => { TSync.start(); try { TSync.bc && TSync.bc.postMessage('hello'); } catch (e) { } });
