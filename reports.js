@@ -17,7 +17,14 @@ const OCACHE = {};
 async function fetchOrders(from, to, force) {
   const key = 'o:' + from + '|' + to;
   if (force) await Cache.del(Cache.key(key));
-  const raw = await swr(key, async () => { await Sync.flush(); return (await api('ordersRange', { from, to })).rows; }, 30000);
+  // บิลอยู่ในเครื่องแล้ว → อ่านจากเครื่องทันที (ดึงบิลใหม่เบื้องหลัง แล้ววาดใหม่เองถ้ามีเปลี่ยน)
+  let raw = null;
+  if (window.OStore && OStore.allowed()) {
+    if (force) await OStore.sync(true);
+    raw = await OStore.query(from, to);
+    if (raw) { (S.deps || (S.deps = new Set())).add('ostore'); if (!force) OStore.sync(); }
+  }
+  if (!raw) raw = await swr(key, async () => { await Sync.flush(); return (await api('ordersRange', { from, to })).rows; }, 30000);
   const rows = raw.map(o => ({ ...o, _items: Logic.J(o.items, []), _pays: Logic.J(o.payments, []) }));
   // บิลที่ยังรอส่ง
   Sync.box.filter(o => o.date.slice(0, 10) >= from && o.date.slice(0, 10) <= to && !rows.some(x => x.id === o.id)).forEach(o => rows.push({ ...o, _pending: 1, _items: Logic.J(o.items, []), _pays: Logic.J(o.payments, []) }));
@@ -124,6 +131,12 @@ VIEWS.reports = el => {
   $('#ex', el).onclick = () => download(`sales_${RS.tab}_${RS.from}_${RS.to}.csv`, toCSV(tableRows.map(r => r.map(v => typeof v === 'number' ? Math.round(v * 100) / 100 : v))));
   rangePicker($('#rp', el), RS, () => load());
   load();
+  // สถานะข้อมูลในเครื่อง
+  if (window.OStore && OStore.allowed()) {
+    el.insertAdjacentHTML('beforeend', '<div class="tiny muted center" id="osi" style="margin:10px 0 4px"></div>');
+    const thd = d => d ? thDate(d) : '—';
+    OStore.info().then(i => { const o = $('#osi', el); if (!o) return; o.innerHTML = i.from ? `ข้อมูลในเครื่อง ${i.count.toLocaleString()} บิล ตั้งแต่ ${thd(i.from)}${i.busy ? ' · กำลังดึงย้อนหลัง…' : ''} · อัปเดต ${i.at ? new Date(i.at).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) + ' น.' : '—'} · <a href="#" id="osr">ดึงใหม่ทั้งหมด</a>` : 'กำลังเตรียมข้อมูลในเครื่อง (ครั้งแรก) — ระหว่างนี้ใช้ข้อมูลออนไลน์'; const r = $('#osr', el); if (r) r.onclick = async e => { e.preventDefault(); if (await confirmDlg('ลบข้อมูลบิลในเครื่องแล้วดึงใหม่ทั้งหมด (ใช้เวลาสักครู่ เบื้องหลัง)?', 'ดึงใหม่')) { await OStore.reset(); toast('เริ่มดึงข้อมูลใหม่แล้ว'); } }; });
+  }
 };
 
 /* ---------- ใบเสร็จรับเงินย้อนหลัง ---------- */
@@ -164,7 +177,7 @@ function orderDetail(o, onChange) {
   const rf = $('#rf', ov); if (rf) rf.onclick = () => {
     const o2 = sheet('คืนเงินทั้งใบ', `<p class="small">คืนเงิน <b>${baht(o.total)}</b> ให้ใบเสร็จ ${esc(o.id)} — ระบบจะคืนสต็อก${o.customerId ? ' ปรับยอด/แต้ม/เงินเชื่อของลูกค้า' : ''} และออกใบคืนเงิน</p><label class="f"><span>เหตุผล</span><input class="in" id="rs" placeholder="เช่น สินค้าชำรุด"></label>`, `<button class="btn block" id="ok">ยืนยันคืนเงิน</button>`);
     $('#ok', o2).onclick = async () => {
-      try { busy(1, 'กำลังคืนเงิน...'); const r = await api('refund', { id: o.id, reason: $('#rs', o2).value }); await loadProducts(true); busy(0); o2.remove(); ov.remove(); toast('คืนเงินแล้ว'); const rr = { ...r.refund }; if (pconn().autoPrint) RP.printOrder(rr).catch(() => { }); onChange && onChange(); }
+      try { busy(1, 'กำลังคืนเงิน...'); const r = await api('refund', { id: o.id, reason: $('#rs', o2).value }); window.OStore && OStore.sync(true); await loadProducts(true); busy(0); o2.remove(); ov.remove(); toast('คืนเงินแล้ว'); const rr = { ...r.refund }; if (pconn().autoPrint) RP.printOrder(rr).catch(() => { }); onChange && onChange(); }
       catch (e) { busy(0); toast(e.message, 1); }
     };
   };

@@ -71,10 +71,160 @@ function quick(p, ms, fb) {
 }
 /* ---------- ตัวโหลดข้อมูลที่ใช้แคช ---------- */
 loadTable = t => swr('t:' + t, () => api('list', { table: t }).then(r => r.rows), 20000);
-function dailySummary(from, to) { return swr('d:' + from + '|' + to, () => api('dailySummary', { from, to }).then(r => r.days), 60000); }
 // อุ่นแคชหลังเจ้าของเข้าระบบ (โหลดเบื้องหลัง ไม่ต้องรอ)
 function warmCache() {
   if (!S.user || S.user.role !== 'owner' || !S.apiUrl) return;
   const t = todayISO(), y = t.slice(0, 4), lm = addDays(t.slice(0, 8) + '01', -1).slice(0, 8) + '01';
   setTimeout(() => { [dailySummary(lm, t), dailySummary(y + '-01-01', y + '-12-31'), loadTable('Licenses'), loadTable('Receipts'), loadTable('Sales'), loadTable('TaxFilings')].forEach(p => p.catch(() => { })); }, 1500);
 }
+
+/* =========================================================
+   บิลขายเก็บในเครื่อง (A) — รายงาน/กราฟ/ใบเสร็จย้อนหลัง คำนวณในเครื่อง แสดงทันที ใช้ได้ตอนออฟไลน์
+   - ครั้งแรก: ดึงบิลย้อนหลัง 13 เดือนทีละเดือนอยู่เบื้องหลัง
+   - หลังจากนั้น: ดึงเฉพาะ 2 วันล่าสุด (บิลใหม่/คืนเงิน) ทุกครั้งที่เปิดหน้ารายงาน หรือทุก 2 นาที
+   - เฉพาะผู้ที่มีสิทธิ์ดูรายงาน · แยกตามผู้ใช้และฐานข้อมูลร้าน
+   ========================================================= */
+const OStore = {
+  dbp: null, meta: null, busy: false, syncing: null, lastSync: 0, MONTHS: 13,
+  allowed() { return !!(S.user && S.apiUrl && typeof canStrict === 'function' && canStrict('reports')); },
+  owner() { return (S.apiUrl || '') + '|' + (S.user ? S.user.id : '') + '|' + (typeof canStrict === 'function' && canStrict('viewCost') ? 'c' : 'n'); },
+  db() {
+    if (this.dbp) return this.dbp;
+    return this.dbp = new Promise(res => {
+      try {
+        const r = indexedDB.open('mm-orders', 1);
+        r.onupgradeneeded = () => { const s = r.result.createObjectStore('o', { keyPath: 'id' }); s.createIndex('date', 'date'); r.result.createObjectStore('m'); };
+        r.onsuccess = () => res(r.result); r.onerror = () => res(null);
+      } catch (e) { res(null); }
+    });
+  },
+  tx(store, mode, fn) { return this.db().then(db => db ? new Promise(res => { try { const t = db.transaction(store, mode); const out = fn(t.objectStore(store)); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = t.onabort = () => res(null); } catch (e) { res(null); } }) : null); },
+  async getMeta() {
+    if (this.meta && this.meta.owner === this.owner()) return this.meta;
+    const m = await this.tx('m', 'readonly', s => s.get('meta'));
+    if (m && m.owner === this.owner()) return this.meta = m;
+    // คนละผู้ใช้/คนละร้าน → เริ่มใหม่
+    await this.tx('o', 'readwrite', s => s.clear());
+    this.meta = { owner: this.owner(), from: '', last: '', at: 0, count: 0 };
+    await this.tx('m', 'readwrite', s => s.put(this.meta, 'meta'));
+    return this.meta;
+  },
+  saveMeta() { return this.tx('m', 'readwrite', s => s.put(this.meta, 'meta')); },
+  async put(rows) {
+    if (!rows || !rows.length) return 0;
+    this.ver = (this.ver || 0) + 1;
+    const refunded = rows.filter(o => o.status === 'refund' && o.refundOf).map(o => o.refundOf);
+    await this.tx('o', 'readwrite', s => { rows.forEach(o => s.put(o)); });
+    // บิลเดิมที่ถูกคืนเงิน (อาจอยู่นอกช่วงที่ดึงใหม่) → ติดสถานะคืนเงินให้ด้วย
+    for (const id of refunded) { const o = await this.tx('o', 'readonly', s => s.get(id)); if (o && o.status !== 'refunded') { o.status = 'refunded'; await this.tx('o', 'readwrite', s => s.put(o)); } }
+    return rows.length;
+  },
+  async count() { return (await this.tx('o', 'readonly', s => s.count())) || 0; },
+  // ดึงบิลใหม่ (2 วันล่าสุด) — ถ้าเปลี่ยนแจ้งหน้าให้วาดใหม่
+  sync(force) {
+    if (!this.allowed() || (typeof Net !== 'undefined' && !Net.ok && !force)) return Promise.resolve(false);
+    if (this.syncing) return this.syncing;
+    if (!force && Date.now() - this.lastSync < 20000) return Promise.resolve(false);
+    return this.syncing = (async () => {
+      try {
+        const m = await this.getMeta(), t = todayISO();
+        if (!m.from) { this.backfill(); return false; }        // ยังไม่เคยดึง → เริ่มดึงย้อนหลัง
+        const from = m.last ? addDays(m.last, -2) : addDays(t, -2);
+        if (window.Sync && Sync.box.length) await Sync.flush();
+        const rows = (await apiRaw('ordersRange', { from, to: t })).rows || [];
+        const before = JSON.stringify(await this.query(from, t, true));
+        await this.put(rows);
+        m.last = t; m.at = Date.now(); this.lastSync = Date.now(); await this.saveMeta();
+        const changed = before !== JSON.stringify(await this.query(from, t, true));
+        if (changed) document.dispatchEvent(new CustomEvent('mm:data', { detail: 'ostore' }));
+        return changed;
+      } catch (e) { return false; } finally { this.syncing = null; }
+    })();
+  },
+  // ดึงย้อนหลังทีละเดือน (เบื้องหลัง ไม่รบกวนการขาย)
+  async backfill() {
+    if (this.busy || !this.allowed()) return; this.busy = true;
+    try {
+      const m = await this.getMeta(), t = todayISO();
+      const target = addDays(t.slice(0, 8) + '01', 0).slice(0, 7);   // เดือนนี้
+      const [ty, tm] = target.split('-').map(Number); const startD = new Date(Date.UTC(ty, tm - 1 - (this.MONTHS - 1), 1)); const goal = startD.toISOString().slice(0, 10);
+      if (!m.from) { // เริ่มจากเดือนนี้ก่อน (เห็นผลเร็วที่สุด)
+        const f = t.slice(0, 8) + '01';
+        await this.put((await apiRaw('ordersRange', { from: f, to: t })).rows || []);
+        m.from = f; m.last = t; m.at = Date.now(); this.lastSync = Date.now(); await this.saveMeta();
+        document.dispatchEvent(new CustomEvent('mm:data', { detail: 'ostore' }));
+      }
+      while (m.from > goal && this.allowed() && (typeof Net === 'undefined' || Net.ok)) {
+        const end = addDays(m.from, -1), f = end.slice(0, 8) + '01';
+        await this.put((await apiRaw('ordersRange', { from: f, to: end })).rows || []);
+        m.from = f; await this.saveMeta();
+        document.dispatchEvent(new CustomEvent('mm:data', { detail: 'ostore' }));
+        await new Promise(r => setTimeout(r, 400));
+      }
+      m.count = await this.count(); await this.saveMeta();
+    } catch (e) { } finally { this.busy = false; }
+  },
+  // อ่านบิลในช่วงวันที่ จากเครื่อง (null = ช่วงนี้ยังไม่มีในเครื่อง → ใช้ออนไลน์)
+  async query(from, to, any) {
+    const m = await this.getMeta();
+    if (!any && (!m.from || from < m.from)) return null;
+    const rows = await this.db().then(db => db ? new Promise(res => { try { const out = []; const r = db.transaction('o').objectStore('o').index('date').openCursor(IDBKeyRange.bound(from, to + 'T99')); r.onsuccess = () => { const c = r.result; if (c) { out.push(c.value); c.continue(); } else res(out); }; r.onerror = () => res(null); } catch (e) { res(null); } }) : null);
+    return rows;
+  },
+  // สรุปรายวันจากบิลในเครื่อง (รูปแบบเดียวกับ dailySummary ของเซิร์ฟเวอร์)
+  async days(from, to) {
+    const mk = from + '|' + to + '|' + (this.ver || 0) + '|' + (window.Sync ? Sync.box.length : 0);
+    const dm = this.dm || (this.dm = new Map()); if (dm.has(mk)) return dm.get(mk);
+    const rows = await this.query(from, to); if (!rows) return null;
+    const pend = (window.Sync ? Sync.box : []).filter(o => o.date.slice(0, 10) >= from && o.date.slice(0, 10) <= to && !rows.some(x => x.id === o.id));
+    const ex = {}; ((cfg('vatCfg', {}).exemptCats) || []).forEach(c => ex[c] = 1);
+    const days = {}, J = (s, d) => { try { return typeof s === 'string' ? JSON.parse(s || 'null') || d : s || d; } catch (e) { return d; } };
+    rows.concat(pend).forEach(o => {
+      const k = String(o.date).slice(0, 10), x = days[k] || (days[k] = { gross: 0, refund: 0, disc: 0, net: 0, cost: 0, count: 0, pass: 0, exempt: 0, src: 'POS' });
+      const t = num(o.total), sg = o.status === 'refund' ? -1 : 1;
+      if (sg < 0) { x.refund += -t; x.cost -= Math.abs(num(o.cost)); } else { x.gross += num(o.subtotal) || t; x.disc += num(o.discount); x.count++; x.cost += num(o.cost); }
+      x.net += t;
+      J(o.items, []).forEach(it => { const a = sg * Math.abs(num(it.qty) * num(it.price)); if (it.pass) x.pass += a; else if (ex[it.cat || '']) x.exempt += a; });
+    });
+    Object.values(days).forEach(d => ['gross', 'refund', 'disc', 'net', 'cost', 'pass', 'exempt'].forEach(f => d[f] = Math.round(d[f] * 100) / 100));
+    dm.set(mk, days); if (dm.size > 8) dm.delete(dm.keys().next().value);
+    return days;
+  },
+  async info() { const m = await this.getMeta(); return { from: m.from, last: m.last, at: m.at, count: await this.count(), busy: this.busy }; },
+  async reset() { await this.tx('o', 'readwrite', s => s.clear()); this.meta = { owner: this.owner(), from: '', last: '', at: 0, count: 0 }; await this.saveMeta(); this.backfill(); },
+  start() {
+    if (this.started || !this.allowed()) return; this.started = true;
+    setTimeout(() => this.backfill().then(() => this.sync()), 4000);
+    setInterval(() => { if (!document.hidden) this.sync(); }, 120000);
+    document.addEventListener('mm:online', () => this.backfill().then(() => this.sync(true)));
+  }
+};
+window.OStore = OStore;
+
+// สรุปรายวัน: บิลขายจากเครื่อง (ทันที) + ยอดที่นำเข้าจาก Loyverse จากเซิร์ฟเวอร์ (แคช)
+const dailySummaryServer = (from, to) => swr('d:' + from + '|' + to, () => api('dailySummary', { from, to }).then(r => r.days), 60000);
+var dailySummary = async function (from, to) {
+  const loc = OStore.allowed() ? await OStore.days(from, to).catch(() => null) : null;
+  if (!loc) return dailySummaryServer(from, to);
+  (S.deps || (S.deps = new Set())).add('ostore');
+  const k = Cache.key('d:' + from + '|' + to), c = await Cache.get(k);
+  let base;
+  if (c) { base = c.v; dailySummaryServer(from, to).catch(() => { }); }
+  else { base = {}; dailySummaryServer(from, to).then(() => document.dispatchEvent(new CustomEvent('mm:data', { detail: 'ostore' }))).catch(() => { }); }
+  const out = {};
+  Object.keys(base || {}).forEach(d => { if (base[d] && base[d].src !== 'POS') out[d] = base[d]; });   // ยอดนำเข้า (วันที่ไม่มีบิล POS)
+  Object.keys(loc).forEach(d => out[d] = loc[d]);
+  return out;
+};
+
+// (D) เตรียมข้อมูลล่วงหน้าหลังเข้าระบบ — ทุกคน: สินค้า รูป ลูกค้า · ผู้ดูรายงาน: บิลย้อนหลัง
+function prefetchAll() {
+  if (!S.user || !S.apiUrl) return;
+  setTimeout(() => {
+    try { typeof loadProducts === 'function' && loadProducts().catch(() => { }); } catch (e) { }
+    try { window.Img && Img.sync(); } catch (e) { }
+    try { typeof loadCustomers === 'function' && loadCustomers().catch(() => { }); } catch (e) { }
+    OStore.start();
+  }, 2500);
+}
+document.addEventListener('mm:booted', prefetchAll);

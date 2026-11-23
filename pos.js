@@ -20,6 +20,7 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .pbar{position:relative;background:var(--red);color:#fff;display:flex;align-items:center;gap:4px;padding:calc(6px + var(--safe-t)) 8px 6px;min-height:56px}
 .pbar .ttl{flex:1;font-family:var(--fh);font-size:19px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:4px}
 .pbar .iconbtn{color:#fff}
+.pbar .pside.r{gap:10px!important}@media (min-width:521px){.pbar{grid-template-columns:minmax(0,1fr) auto minmax(0,1.7fr)!important}}.pbar .pside.r .iconbtn{border-radius:12px}.pbar .pside.r .iconbtn:active{background:#ffffff30}.pbar .pdrw{background:#ffffff1f}@media (max-width:700px){.pbar .pside.r{gap:6px!important}}
 .pbar .badge{background:#fff;color:var(--red);border-radius:99px;font-size:11px;padding:1px 7px;font-weight:700}
 .pgrid{flex:1;display:grid;gap:8px;padding:8px;min-height:0;overflow:auto;align-content:start}
 .pgrid.fill{align-content:stretch}
@@ -421,12 +422,13 @@ const POS = {
         <div class="pclock" id="pclk" title="เวลา กรุงเทพฯ"></div>
         <div class="pside r"><div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 20)}</span><b>${esc(S.user.name)}</b></div>
         <button class="iconbtn" id="psvc" title="Services">${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
-        <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button></div></div>
+        <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn pdrw" id="pdrw" title="เปิดลิ้นชักเก็บเงิน">${I('<rect x="2.5" y="10" width="19" height="10" rx="1.5"/><path d="M4.5 10l2-5.5h11l2 5.5"/><path d="M9.5 15h5"/>', 22)}</button><button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button></div></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
         <div class="cartbar" id="cbar"></div></div>
       <div class="pos-r" id="pr"></div></div>`;
     $('#pm', el).onclick = () => this.menu();
     $('#psvc', el).onclick = () => svcMenu();
+    $('#pdrw', el).onclick = () => { if (!pconn().drawer) return toast('ยังไม่ได้เปิดใช้ลิ้นชัก — ตั้งที่ ☰ › เครื่องพิมพ์ใบเสร็จ › ติ๊ก "เปิดลิ้นชักเก็บเงิน"', 1); RP.kick().then(() => toast('เปิดลิ้นชักแล้ว'), e => toast(e.message, 1)); };
     const tick = () => { const c = $('#pclk', el); if (c) c.innerHTML = new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false }) + '<small>น.</small>'; };
     tick(); clearInterval(this.clk); this.clk = setInterval(tick, 10000);
     $('#ps', el).onclick = () => this.search();
@@ -869,6 +871,8 @@ const POS = {
     const printable = { ...order, cashOut: t.cashOut || 0, customerPhone: c ? c.phone : '', pointsBalance: cust ? cust.points : null, creditBalance: cust && P.payments.some(p => p.type === 'credit') ? cust.credit : null };
     const recent = LS.get('recentOrders', []); recent.unshift(printable); LS.set('recentOrders', recent.slice(0, 30));
     Sync.add(order);
+    // รายงานในเครื่องเห็นบิลนี้ทันที (ไม่ต้องรอส่งขึ้นออนไลน์)
+    try { if (window.OStore && OStore.allowed()) { if (canStrict('viewCost')) OStore.put([order]); else setTimeout(() => OStore.sync(true), 5000); } } catch (e) { }
     P.done = printable;
     this.renderPay(); this.renderTicket();
     this.pushDisplay({ mode: 'done', total: T.total, change: P.change || 0, cash: P.cash || 0 });
