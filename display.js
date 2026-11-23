@@ -43,18 +43,35 @@ const custInputOn = () => (S.settings && S.settings.custInput) !== 'N';
 const Display = {
   bc: ('BroadcastChannel' in window) ? new BroadcastChannel('mm-display') : null,
   last: null, t: null, dc: null, pc: null, offerId: '', sigT: null,
-  push(state) {
+  // โลโก้/โฆษณา (ข้อมูลใหญ่) แยกจากรายการขาย — ส่งเฉพาะเมื่อเปลี่ยน ทุกการสแกนส่งแค่รายการ (เล็กมาก → เร็ว)
+  assets() {
+    const st = S.settings || {}, sm = v => { v = String(v || ''); return v.length + ':' + v.slice(0, 48) + v.slice(-48); }, sig = [st.shopName, sm(st.displayCfg), sm(st.adsCfg), sm(st.brandLogo), Brand.custom() ? 1 : 0].join('|');
+    if (this.A && this.A.sig === sig) return this.A;
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
-    state = { ...state, shop: S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: (S.settings && S.settings.brandLogo) || '', ads: adsCfg(), cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now(), ask: this.askSt || null, pv: this.askSt ? null : (this.pvSt || null) };
-    this.last = state;
-    try { this.bc && this.bc.postMessage(state); } catch (e) { }
-    // เครื่องเดียวกัน (อีกแท็บ/อีกหน้าต่าง): เก็บสถานะล่าสุดในเครื่องด้วย — แท็บจอลูกค้าที่ถูกพัก (iPad/มือถือ) อ่านได้ทันทีเมื่อกลับมาแสดง
-    try { localStorage.setItem('mm_dispState', JSON.stringify(state)); } catch (e) { }
-    const direct = this.send(state);
+    let h = 0; for (let i = 0; i < sig.length; i++) h = (Math.imul(h, 31) + sig.charCodeAt(i)) | 0;
+    return this.A = { sig, k: 'a' + (h >>> 0).toString(36) + sig.length.toString(36), v: { shop: st.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: st.brandLogo || '', ads: adsCfg() } };
+  },
+  dev: (() => { let d = ''; try { d = localStorage.getItem('mm_dispSrc') || ''; if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem('mm_dispSrc', d); } } catch (e) { } return d; })(),
+  seq: 0,
+  push(state) {
+    const A = this.assets();
+    this.seq = Math.max(this.seq + 1, Date.now());
+    const { shop, welcome, promo, logoMode, logo, brandW, brandC, ads, ...dyn } = state || {};   // repush ส่งของเดิมกลับมา → ตัดส่วนใหญ่ออกก่อน
+    const s = { ...dyn, ak: A.k, src: this.dev, seq: this.seq, cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now(), ask: this.askSt || null, pv: this.askSt ? null : (this.pvSt || null) };
+    const full = { ...s, ...A.v };
+    this.last = full;
+    // เครื่องเดียวกัน: ส่งแค่รายการ (โลโก้เก็บแยกไว้ในเครื่อง เขียนเฉพาะตอนเปลี่ยน)
+    if (this.lsAK !== A.k) { try { localStorage.setItem('mm_dispAssets', JSON.stringify({ k: A.k, v: A.v })); this.lsAK = A.k; } catch (e) { } }
+    try { this.bc && this.bc.postMessage(s); } catch (e) { }
+    try { localStorage.setItem('mm_dispState', JSON.stringify(s)); } catch (e) { }
+    // เชื่อมตรง: ส่งโลโก้ครั้งแรก/เมื่อเปลี่ยน ที่เหลือส่งแค่รายการ
+    const direct = this.dcAK === A.k ? this.send(s) : (this.send(full) && (this.dcAK = A.k, true));
     const code = LS.get('dispCode', '');
-    // สำรองผ่านเซิร์ฟเวอร์: ถ้าเชื่อมตรงอยู่ ส่งช้าๆ ไว้กันพลาด (ใช้ตอนจอเพิ่งเปิดใหม่)
-    // ส่งผ่าน Google ทุกครั้งด้วย (เร็ว ~150 มิลลิวิ) กันกรณีเชื่อมตรงค้าง/ขาด เช่น จอลูกค้าเพิ่งโหลดใหม่หรือใช้เน็ตมือถือ · จอลูกค้าตัดข้อมูลซ้ำ/เก่าทิ้งเอง
-    if (code && S.apiUrl) { clearTimeout(this.t); this.t = setTimeout(() => api('displayPush', { code, state: this.last }).catch(() => { }), state.mode === 'cart' ? 150 : 0); }
+    // สำรองผ่าน Google: ส่งโลโก้เฉพาะเมื่อเปลี่ยน หรือทุก 60 วิ (ให้จอที่เพิ่งเปิดได้โลโก้ด้วย)
+    if (code && S.apiUrl) {
+      clearTimeout(this.t);
+      this.t = setTimeout(() => { const f = this.rAK !== A.k || Date.now() - (this.rAt || 0) > 60000; api('displayPush', { code, state: f ? this.last : { ...this.last, shop: undefined, welcome: undefined, promo: undefined, logoMode: undefined, logo: undefined, brandW: undefined, brandC: undefined, ads: undefined } }).then(() => { if (f) { this.rAK = A.k; this.rAt = Date.now(); } }).catch(() => { }); }, s.mode === 'cart' ? 150 : 0);
+    }
   },
   // ---- ให้ลูกค้ากรอกที่จอลูกค้า ----
   // spec: { title, sub, field: 'phone'|'account'|'digits', min, max, pick: 'bank'|'carrier', picks: [...], value, pickValue }
@@ -105,8 +122,8 @@ const Display = {
           const pc = this.pc = new RTCPeerConnection(RTC_CFG);
           pc.ondatachannel = ev => {
             const ch = ev.channel; this.dc = ch;
-            ch.onopen = () => { this.rxAt = Date.now(); this.last && this.send(this.last); };
-            ch.onmessage = m => { this.rxAt = Date.now(); if (m.data === 'ping') { try { ch.send('pong'); } catch (e) { } return; } if (m.data === 'hello') { this.last && this.send(this.last); return; } try { const o = JSON.parse(m.data); if (o && o.reply) this.reply(o.reply); } catch (e) { } };
+            ch.onopen = () => { this.rxAt = Date.now(); this.dcAK = ''; this.last && this.send(this.last) && (this.dcAK = this.last.ak); };
+            ch.onmessage = m => { this.rxAt = Date.now(); if (m.data === 'ping') { try { ch.send('pong'); } catch (e) { } return; } if (m.data === 'need') { this.last && this.send(this.last) && (this.dcAK = this.last.ak); return; } if (m.data === 'hello') { this.last && this.send(this.last); return; } try { const o = JSON.parse(m.data); if (o && o.reply) this.reply(o.reply); } catch (e) { } };
             ch.onclose = () => { if (this.dc === ch) this.dc = null; };
           };
           await pc.setRemoteDescription(off.sdp);
@@ -390,10 +407,25 @@ VIEWS.display = (root, hash) => {
     const all = extra ? [{ n: `(+${extra} รายการ)`, q: 1, a: 0 }].concat(items) : items;
     requestAnimationFrame(() => { const box = $('#lst', root), gr = $('#gr', root); if (box && gr) fit(box, gr, all, { a: amt, c: items.reduce((a, x) => a + (x.w === 'Y' ? 1 : num(x.q) || 1), 0) + extra }); fitOne($('#rv', root)); });
   };
+  // โลโก้/โฆษณาที่ได้รับล่าสุด (ส่งมาเฉพาะตอนเปลี่ยน)
+  let AS = null; try { AS = JSON.parse(localStorage.getItem('mm_dispAssets') || 'null'); } catch (e) { }
+  const AK = ['shop', 'welcome', 'promo', 'logoMode', 'logo', 'brandW', 'brandC', 'ads'];
+  let lastSrc = '', lastSeq = 0;
   const accept = s => {
     // เครื่องขายใช้เวอร์ชันใหม่กว่า → จอลูกค้าโหลดตัวเองใหม่ (ไม่ต้องไปกดรีเฟรชที่จอลูกค้า)
     if (s && s.ver && s.ver !== APP_VER && sessionStorage.getItem('mm_dver') !== s.ver) { sessionStorage.setItem('mm_dver', s.ver); location.reload(); return; }
-    if (!s || (s.at && s.at <= lastAt)) return; lastAt = s.at || lastAt; Display.cur = s; draw(s); };
+    if (!s) return;
+    // ลำดับ: เทียบเลขลำดับของเครื่องที่ส่ง (ไม่พึ่งนาฬิกาที่อาจต่างกันระหว่างเครื่อง)
+    if (s.src) { if (s.src === lastSrc ? s.seq <= lastSeq : (s.at && s.at < lastAt - 3000)) return; lastSrc = s.src; lastSeq = s.seq; }
+    else if (s.at && s.at <= lastAt) return;
+    lastAt = Math.max(lastAt, s.at || 0);
+    if ('brandC' in s && s.brandC !== undefined) { AS = { k: s.ak, v: {} }; AK.forEach(k => AS.v[k] = s[k]); }
+    else {
+      if (!AS || AS.k !== s.ak) { try { const L = JSON.parse(localStorage.getItem('mm_dispAssets') || 'null'); if (L && L.k === s.ak) AS = L; } catch (e) { } }
+      if (s.ak && (!AS || AS.k !== s.ak)) { try { Display.rx && Display.rx.readyState === 'open' && Display.rx.send('need'); } catch (e) { } }
+      if (AS) s = { ...AS.v, ...s };
+    }
+    Display.cur = s; draw(s); };
   // สถานะล่าสุดที่เครื่องขายเก็บไว้ในเครื่องนี้ (เปิดหน้าขาย + จอลูกค้าในเครื่องเดียวกัน)
   const local = maxAge => { try { const s = JSON.parse(localStorage.getItem('mm_dispState') || 'null'); if (s && (!maxAge || Date.now() - (s.at || 0) < maxAge)) accept(s); } catch (e) { } };
   addEventListener('storage', e => { if (e.key === 'mm_dispState' && e.newValue) { try { accept(JSON.parse(e.newValue)); } catch (x) { } } });

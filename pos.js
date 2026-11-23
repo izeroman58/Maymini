@@ -41,7 +41,7 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .thead{display:flex;align-items:center;gap:6px;padding:calc(10px + var(--safe-t)) 10px 10px;border-bottom:1px solid #E0E0E0;min-height:56px}
 .thead h3{flex:1;font-size:19px}
 .tlist{flex:1;overflow:auto;padding:4px 14px}
-.tlist{font-size:var(--tf,16px)}.titem{display:flex;gap:.4em;padding:.4em 0;border-bottom:1px solid #EEE;cursor:pointer;font-size:1em;line-height:1.3;align-items:baseline;white-space:nowrap}.titem .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.titem .q{font-size:.78em;flex:none}.titem .num{font-weight:700;flex:none}.ttot .tgt{font-size:clamp(22px,3.4vh,30px)}.ttot .tgt b:last-child{font-size:1.15em}
+.tlist{font-size:var(--tf,16px);contain:strict}.pos-l{contain:layout paint}.titem{display:flex;gap:.4em;padding:.4em 0;border-bottom:1px solid #EEE;cursor:pointer;font-size:1em;line-height:1.3;align-items:baseline;white-space:nowrap}.titem .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.titem .q{font-size:.78em;flex:none}.titem .num{font-weight:700;flex:none}.ttot .tgt{font-size:clamp(22px,3.4vh,30px)}.ttot .tgt b:last-child{font-size:1.15em}
 .titem .q{color:#888}
 .ttot{padding:10px 14px;border-top:1px solid #E0E0E0}
 .ttot .kv{border:0;padding:3px 0}
@@ -653,7 +653,7 @@ const POS = {
     if (!this.el) return;
     const T = this.totals(), t = this.t, c = t.customer;
     const pr = $('#pr', this.el);
-    pr.innerHTML = `<div class="thead"><button class="iconbtn" id="tback" style="display:none">${I(IC.back)}</button><h3>ตั๋วออเดอร์ <span id="tsy" style="display:none;font-size:13px;vertical-align:middle">🔗</span></h3><button class="iconbtn" id="tc" title="ลูกค้า">${I(IC.userplus, 24)}</button><button class="iconbtn" id="tm">${I(IC.dots, 24)}</button></div>
+    pr.innerHTML = `<div class="thead"><button class="iconbtn" id="tback" style="display:none">${I(IC.back)}</button><h3>ตั๋วออเดอร์ <span id="tsy" style="display:none;font-size:13px;vertical-align:middle">🔗</span><span id="smt" class="tiny" style="display:none;font-weight:400;margin-left:6px;opacity:.75"></span></h3><button class="iconbtn" id="tc" title="ลูกค้า">${I(IC.userplus, 24)}</button><button class="iconbtn" id="tm">${I(IC.dots, 24)}</button></div>
       ${c ? `<div class="cust">${I(IC.user, 18)}<div class="grow"><b>${esc(c.name)}</b> ${esc(c.phone || '')}<div class="tiny">${num(c.points)} แต้ม${num(c.credit) ? ' · ค้างชำระ ' + money(c.credit) : ''}${t.pointsUse ? ` · ใช้ ${t.pointsUse} แต้ม` : ''}</div></div><button class="iconbtn" id="cx">${I(IC.x, 18)}</button></div>` : ''}
       <div class="tlist">${t.items.length ? t.items.map((it, i) => `<div class="titem" data-i="${i}"><span class="nm">${esc(it.name)}</span><span class="q">×${it.byWeight === 'Y' ? num(it.qty).toFixed(3).replace(/\.?0+$/, '') + 'กก.' : num(it.qty)}</span><span class="num">${baht(num(it.qty) * num(it.price))}</span></div>`).join('') : '<div class="empty" style="padding-top:60px">ยังไม่มีสินค้า<br><span class="tiny">แตะปุ่มสินค้า หรือสแกนบาร์โค้ด</span></div>'}</div>
       ${num(t.cashOut) ? `<div class="cashout">💵 ต้องจ่ายเงินสดให้ลูกค้า ${bahtL(t.cashOut)}</div>` : ''}
@@ -754,30 +754,36 @@ const POS = {
     $('#q', ov).onkeydown = e => { if (e.key === 'Enter' && q) { const f = findByCode(q.trim()); if (f) { pick = f.p; beep(); } dr(); } };
     if (!touchUI()) setTimeout(() => $('#q', ov).focus(), 100);
   },
+  async toggleEdit() { this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); },
   async menu() {
-    const sh = S.shift, k = isKiosk();
-    const acts = [
-      !k && ['หน้าหลัก', IC.home, () => go('home')],
-      ['ใบเสร็จรับเงิน' + (seesSales() ? '' : ' (วันนี้)'), IC.receipt, () => go('salesreceipts')],
-      ['เช็คราคา / สแกน', IC.scan, () => go('scan')],
-      ['เครื่องยิงบาร์โค้ด (ทดสอบ/ตั้งค่า)', IC.scan, () => go('scannerset')],
-      k && ['สินค้า', IC.box, () => go('products')],
-      k && can('stockCount') && ['ตรวจนับสต็อก', IC.count, () => go('stockcount')],
-      k && can('customers') && ['ฐานลูกค้า', IC.user, () => go('customers')],
-      k && ['พิมพ์ฉลาก/บาร์โค้ด', IC.tag, () => go('labels')],
-      ['บริการ โอนเงิน/เติมเงิน/จ่ายบิล', IC.sale, () => svcMenu()],
-      ['งานโอน/ชำระบิล (สถานะ)', IC.alert, () => go('jobs')],
-      ['จอแสดงผลฝั่งลูกค้า', IC.monitor, () => go('displayset')],
-      ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
-      pconn().drawer && ['เปิดลิ้นชักเก็บเงิน', IC.sale, () => RP.kick().then(() => toast('เปิดลิ้นชักแล้ว'), e => toast(e.message, 1))],
-      [LS.get('tkSync', true) ? 'ปิดซิงค์ตั๋วกับเครื่องอื่น (ชื่อเดียวกัน)' : 'เปิดซิงค์ตั๋วกับเครื่องอื่น (ชื่อเดียวกัน)', IC.wifi, () => { const v = !LS.get('tkSync', true); LS.set('tkSync', v); toast(v ? 'เปิดซิงค์ตั๋วแล้ว — เครื่องที่ล็อกอินชื่อเดียวกันเห็นตั๋วเดียวกัน' : 'ปิดซิงค์ตั๋วแล้ว — เครื่องนี้ใช้ตั๋วแยก'); if (v) TSync.out(); TSync.badge(); }],
-      [LS.get('posDark', true) ? 'หน้าขายโทนสว่าง' : 'หน้าขายโทนมืด (ถนอมสายตา/ประหยัดแบต)', IC.monitor, () => { const d = !LS.get('posDark', true); LS.set('posDark', d); $('#pos', this.el).classList.toggle('dk', d); }],
-      [this.edit ? 'ปิดโหมดแก้ไขหน้าขาย' : 'แก้ไขหน้าขาย (ปุ่มลัด)', IC.edit, async () => { this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); }, 'editLayout'],
-      ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true)],
-      Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }],
-      ['ออกจากระบบ', IC.logout, () => switchUser()]
-    ].filter(Boolean);
-    popMenu($('#pm', this.el), acts.map(a => [a[0], a[2], a[1], a[3]]), 'left', 'pos');
+    const k = isKiosk(), dk = LS.get('posDark', true), sy = LS.get('tkSync', true);
+    const G = [
+      !k && ['หน้าจัดการร้าน', IC.home, () => go('home')],
+      { t: 'ขาย & บิล', ic: IC.receipt, items: [
+        ['ใบเสร็จรับเงิน' + (seesSales() ? '' : ' (วันนี้)'), IC.receipt, () => go('salesreceipts')],
+        ['เช็คราคา', IC.scan, () => go('scan')],
+        ['บริการ โอน / เติม / บิล', IC.sale, () => svcMenu()],
+        ['สถานะงานโอน / บิล', IC.alert, () => go('jobs')],
+        ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true), Sync.box.length || '']] },
+      { t: 'สินค้า', ic: IC.box, items: [
+        ['รายการสินค้า', IC.box, () => go('products')],
+        can('stockCount') && ['นับสต็อก', IC.count, () => go('stockcount')],
+        ['พิมพ์ฉลาก', IC.tag, () => go('labels')],
+        can('customers') && ['ลูกค้า', IC.user, () => go('customers')]] },
+      { t: 'อุปกรณ์', ic: IC.print, items: [
+        ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
+        pconn().drawer && ['เปิดลิ้นชัก', IC.sale, () => RP.kick().then(() => toast('เปิดลิ้นชักแล้ว'), e => toast(e.message, 1))],
+        ['เครื่องยิงบาร์โค้ด', IC.scan, () => go('scannerset')],
+        ['จอลูกค้า', IC.monitor, () => go('displayset')]] },
+      { t: 'หน้าขาย', ic: IC.grid, items: [
+        [this.edit ? 'ปิดโหมดแก้ไขปุ่ม' : 'แก้ไขปุ่มลัด', IC.edit, () => this.toggleEdit()],
+        [dk ? 'โทนสว่าง' : 'โทนมืด', IC.monitor, () => { LS.set('posDark', !dk); $('#pos', this.el).classList.toggle('dk', !dk); }],
+        [sy ? 'ปิดซิงค์ตั๋ว (ชื่อเดียวกัน)' : 'เปิดซิงค์ตั๋ว (ชื่อเดียวกัน)', IC.wifi, () => { LS.set('tkSync', !sy); toast(!sy ? 'เปิดซิงค์ตั๋วแล้ว — เครื่องที่ล็อกอินชื่อเดียวกันเห็นตั๋วเดียวกัน' : 'ปิดซิงค์ตั๋วแล้ว — เครื่องนี้ใช้ตั๋วแยก'); if (!sy) TSync.out(); TSync.badge(); }]] },
+      Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }]
+    ];
+    Drawer.open({ mode: 'overlay', key: 'pos', head: drawerHead(), groups: G,
+      foot: `<button class="dg one" id="dlo" style="color:var(--red)"><span class="dic" style="color:var(--red)">${I(IC.logout, 20)}</span><span class="dt">ออกจากระบบ</span></button><div class="ver">v.${APP_VER}</div>` });
+    const lo = $('#dlo', Drawer.el); if (lo) lo.onclick = () => { Drawer.close(); switchUser(); };
   },
 
   /* --- ชำระเงิน --- */
@@ -1065,3 +1071,6 @@ const TSync = {
 window.TSync = TSync;
 if (TSync.bc) TSync.bc.onmessage = e => { const m = e.data; if (m === 'hello') { if (TSync.on() && TSync.last) TSync.bc.postMessage(TSync.last.dev === TSync.dev ? TSync.last : TSync.msg()); return; } TSync.in(m); };
 document.addEventListener('mm:booted', () => { TSync.start(); try { TSync.bc && TSync.bc.postMessage('hello'); } catch (e) { } });
+
+// ⏱ วัดเวลาสแกนบนหน้าขาย (เปิดที่หน้า เครื่องยิงบาร์โค้ด) — แยก "เครื่องยิงส่ง" กับ "ระบบแสดง"
+window.addEventListener('mm:scanTiming', e => { if (!LS.get('scanMeter', false)) return; const b = $('#smt'); if (!b) return; const H = e.detail; b.style.display = ''; b.textContent = `⏱ ยิง ${H.ms != null ? H.ms : '?'} · แสดง ${H.show} ms`; b.style.color = H.show > 150 ? '#FF6B6B' : ''; });

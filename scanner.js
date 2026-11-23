@@ -104,14 +104,20 @@ const Scanner = {
   dispatch(code, b, term, ev) {
     const cfg = this.cfg;
     const el = b ? b.el : (this.isField(document.activeElement) ? document.activeElement : null);
-    const overlay = $('.ov') || $('.scan');
+    const overlay = $('.ov') || $('.scan:not(.inline)');
     const h = this.handlers[S.view];
     const nativeField = el && (el.hasAttribute('data-scan-field') || overlay);
     if (h && !nativeField && !(overlay && !this.handlers._overlayOK)) {
       if (el && b && b.before) { el.value = b.before.v; el.dispatchEvent(new Event('input', { bubbles: true })); }
       if (ev) { ev.preventDefault(); ev.stopPropagation(); }
       const t0 = performance.now(); try { h(code); } catch (e) { console.error(e); }
-      if (this.history[0] && this.history[0].code === code) this.history[0].ui = Math.round(performance.now() - t0);
+      const H = this.history[0];
+      if (H && H.code === code) {
+        H.ui = Math.round(performance.now() - t0);
+        // เวลาจริงที่ผู้ใช้เห็น: ตั้งแต่ตัวอักษรแรกจากเครื่องยิง → จอวาดรายการเสร็จ
+        const first = b && b.t0, ent = ev && ev.timeStamp;
+        requestAnimationFrame(() => setTimeout(() => { const now = performance.now(); H.show = Math.round(now - (ent || t0)); if (first) H.total = Math.round(now - first); window.dispatchEvent(new CustomEvent('mm:scanTiming', { detail: H })); }, 0));
+      }
     } else if (el) {
       // ใส่รหัสที่ถูกต้องลงในช่องที่กำลังพิมพ์ (แทนตัวอักษรที่อาจเพี้ยนเป็นภาษาไทย)
       const bf = b && b.before ? b.before : { v: el.value, s: el.selectionStart ?? el.value.length, e: el.selectionEnd ?? el.value.length };
@@ -184,7 +190,7 @@ VIEWS.scannerset = el => {
      ${I(IC.scan, 40)}<div class="disp" style="font-size:19px;margin-top:6px">ยิงบาร์โค้ดทดสอบได้เลย</div>
      <div class="small muted">ไม่ต้องคลิกช่องใด · ใช้ได้ทั้งสาย USB และ Bluetooth</div>
      <div id="last" style="margin-top:12px"></div></div>
-   <div class="card"><h3>ผลการทดสอบล่าสุด</h3><div id="hist" class="scroll-x"></div><div id="tips"></div></div>
+   <div class="card"><h3>ผลการทดสอบล่าสุด</h3><label class="row small" style="gap:8px;margin:6px 0 10px"><input type="checkbox" id="smeter" ${LS.get('scanMeter', false) ? 'checked' : ''} onchange="LS.set('scanMeter', this.checked)"> แสดงเวลาสแกนบนหน้าขาย (ข้างคำว่า “ตั๋วออเดอร์”) — ใช้เทียบว่าช้าที่เครื่องยิงหรือที่ระบบ</label><div id="hist" class="scroll-x"></div><div id="tips"></div></div>
    <div class="card"><h3>วิธีเชื่อมต่อ</h3>
      <div class="kv"><span><b>สาย USB</b> (Type-C / Type-A / ผ่านหัวแปลง OTG)</span><span class="small muted right">เสียบแล้วใช้ได้เลย ไม่ต้องลงโปรแกรม</span></div>
      <div class="kv"><span><b>Bluetooth</b></span><span class="small muted right">จับคู่ในหน้าตั้งค่า Bluetooth ของมือถือ/แท็บเล็ต/คอม ก่อน (ไม่ใช่ในแอปนี้) แล้วใช้ได้เลย</span></div>
@@ -208,7 +214,7 @@ VIEWS.scannerset = el => {
   const h = () => st(); document.addEventListener('mm:scanner', h); S.cleanup = () => document.removeEventListener('mm:scanner', h);
   const drawHist = () => {
     const H = Scanner.history;
-    $('#hist', el).innerHTML = H.length ? `<table class="t"><tr><th>บาร์โค้ด</th><th>สินค้า</th><th class="right">ตัว</th><th class="right">เครื่องยิงส่ง</th><th class="right">ระบบแสดง</th><th>จบด้วย</th></tr>${H.slice(0, 12).map(x => { const f = findByCode(x.code); return `<tr><td class="num">${esc(x.code)}${x.thai ? ' <span class="tag amber">แป้นไทย→แก้แล้ว</span>' : ''}</td><td>${f ? esc(f.p.name) : '<span class="muted">ไม่พบ</span>'}</td><td class="right">${x.len}</td><td class="right">${x.src === 'Serial' ? 'Serial' : x.ms + 'ms'}</td><td class="right">${x.ui != null ? x.ui + 'ms' : '—'}</td><td>${x.term === 'idle' ? 'ไม่มี Enter' : x.term}</td></tr>`; }).join('')}</table>` : '<div class="muted small">ยังไม่มีการยิง</div>';
+    $('#hist', el).innerHTML = H.length ? `<table class="t"><tr><th>บาร์โค้ด</th><th>สินค้า</th><th class="right">ตัว</th><th class="right">เครื่องยิงส่ง</th><th class="right">ระบบแสดง</th><th>จบด้วย</th></tr>${H.slice(0, 12).map(x => { const f = findByCode(x.code); return `<tr><td class="num">${esc(x.code)}${x.thai ? ' <span class="tag amber">แป้นไทย→แก้แล้ว</span>' : ''}</td><td>${f ? esc(f.p.name) : '<span class="muted">ไม่พบ</span>'}</td><td class="right">${x.len}</td><td class="right">${x.src === 'Serial' ? 'Serial' : x.ms + 'ms'}</td><td class="right">${x.show != null ? x.show + 'ms' : x.ui != null ? x.ui + 'ms' : '—'}</td><td>${x.term === 'idle' ? 'ไม่มี Enter' : x.term}</td></tr>`; }).join('')}</table>` : '<div class="muted small">ยังไม่มีการยิง</div>';
     const last = H[0], tips = [];
     if (last) {
       if (last.thai) tips.push(['amber', 'แป้นพิมพ์ของเครื่องนี้เป็นภาษาไทย — ระบบแปลงเป็นตัวเลขที่ถูกต้องให้แล้ว (ไม่ต้องสลับภาษา)']);

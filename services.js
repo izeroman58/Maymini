@@ -262,8 +262,25 @@ const JOB_T = { transfer: ['💸', 'โอนเงินให้ลูกค�
 const JOB_ST = { pending: ['รอดำเนินการ', 'amber'], done: ['ทำแล้ว', 'green'], cancelled: ['ยกเลิก', 'gray'] };
 async function jobsBadge(box) {
   if (!box) return;
-  try { const r = await api('jobs', { status: 'pending', limit: 50 }); const n = r.rows.length; if (!box.isConnected) return;
-    box.innerHTML = n ? `<button class="alert red" style="width:100%;border:0;cursor:pointer;text-align:left;margin-bottom:10px;font-size:16px" onclick="go('jobs')">${I(IC.alert, 22)}<div class="grow"><b>งานรอดำเนินการ ${n} รายการ</b><div class="small">${r.rows.slice(0, 3).map(j => (JOB_T[j.type] || ['', j.type])[1] + ' ' + baht(j.amount)).join(' · ')}${n > 3 ? ' …' : ''}</div></div><span style="font-size:22px">›</span></button>` : '';
+  try { const r = await api('jobs', { status: 'pending', limit: 50 }); const n = r.rows.length; S.jobsN = n; if (!box.isConnected) return;
+    if (!n) { box.innerHTML = ''; return; }
+    const ago = d => { const m = Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 60000)); return !d || isNaN(m) ? '' : m < 1 ? 'เมื่อกี้' : m < 60 ? m + ' นาทีที่แล้ว' : Math.floor(m / 60) + ' ชม. ' + (m % 60) + ' นาที'; };
+    const det = j => j.type === 'transfer' ? `${esc(j.bank || '')} ${esc(j.acc || '')}${j.accName ? ' · ' + esc(j.accName) : ''}` : j.type === 'wallet' ? esc(j.phone || '') : `${esc(j.billType || '')} ${esc(j.ref || '')}`;
+    box.innerHTML = `<div class="jbig" onclick="go('jobs')">
+      <div class="jtop"><span class="jbell">🔔</span><div class="grow"><div class="jtt">งานด่วน รอดำเนินการ</div><div class="jts">ลูกค้าจ่ายเงินแล้ว รอร้านโอน · เติม · จ่ายบิลให้</div></div><span class="jnum">${n}</span></div>
+      ${r.rows.slice(0, 3).map(j => { const t = JOB_T[j.type] || ['•', j.type]; return `<div class="jrow"><span class="jem">${t[0]}</span><div class="grow" style="min-width:0"><div class="jrt">${t[1]}</div><div class="jrd">${det(j)}${j.cashierName ? ' · ' + esc(j.cashierName) : ''}</div></div><div class="right"><div class="jamt">${baht(j.amount)}</div><div class="jago">${ago(j.date)}</div></div></div>`; }).join('')}
+      ${n > 3 ? `<div class="jmore">และอีก ${n - 3} รายการ</div>` : ''}
+      <button class="jgo">ดำเนินการเลย ›</button></div>
+      <style>.jbig{cursor:pointer;border-radius:18px;padding:14px;margin-bottom:12px;color:#fff;background:linear-gradient(135deg,#FF3D00,#D6001C 60%,#9C0016);box-shadow:0 8px 24px rgba(214,0,28,.35);animation:jpulse 2s ease-in-out infinite}
+      @keyframes jpulse{0%,100%{box-shadow:0 8px 24px rgba(214,0,28,.35)}50%{box-shadow:0 8px 34px rgba(255,61,0,.75)}}
+      .jtop{display:flex;align-items:center;gap:12px;margin-bottom:10px}.jbell{font-size:34px;animation:jring 1.4s ease-in-out infinite;transform-origin:50% 10%}
+      @keyframes jring{0%,60%,100%{transform:rotate(0)}10%{transform:rotate(16deg)}20%{transform:rotate(-14deg)}30%{transform:rotate(10deg)}40%{transform:rotate(-6deg)}}
+      .jtt{font-family:var(--fh);font-size:20px;font-weight:800}.jts{font-size:13.5px;opacity:.9}
+      .jnum{min-width:52px;height:52px;border-radius:26px;background:#fff;color:#D6001C;font-family:var(--fh);font-size:28px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 10px}
+      .jrow{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.14);border-radius:12px;padding:8px 10px;margin-top:6px}.jem{font-size:24px}
+      .jrt{font-weight:700}.jrd{font-size:13px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.jamt{font-family:var(--fh);font-size:20px;font-weight:800}.jago{font-size:12px;opacity:.85;white-space:nowrap}
+      .jmore{font-size:13px;opacity:.9;margin-top:6px}.jgo{all:unset;box-sizing:border-box;width:100%;display:block;text-align:center;margin-top:10px;background:#fff;color:#D6001C;font-weight:800;font-size:17px;border-radius:12px;padding:11px;cursor:pointer}
+      @media (prefers-reduced-motion:reduce){.jbig,.jbell{animation:none}}</style>`;
   } catch (e) { }
 }
 window.jobsBadge = jobsBadge;

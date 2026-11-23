@@ -132,7 +132,23 @@ body.kiosk main{padding-bottom:calc(24px + var(--safe-b))}
 .toast{position:fixed;left:50%;bottom:calc(92px + var(--safe-b));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;z-index:90;font-size:14px;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:su .2s}
 .toast.err{background:var(--red-d)}
 /* scanner */
+.drw-sc{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:88;opacity:0;transition:opacity .22s}.drw-sc.on{opacity:1}
+.drw{position:fixed;top:0;bottom:0;left:0;width:min(330px,86vw);background:#fff;color:var(--ink);z-index:89;transform:translateX(-104%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:6px 0 30px rgba(0,0,0,.25);padding-top:var(--safe-t)}
+.drw.on{transform:none}.drw.dock{box-shadow:1px 0 0 var(--line);z-index:60}
+body.navdock #app{padding-left:min(330px,86vw)}body.navdock .nav{left:min(330px,86vw)}
+.drw .dh{display:flex;align-items:center;gap:8px;padding:10px 8px 10px 16px;background:var(--red);color:#fff;min-height:64px}.drw .dlogo{flex:1;min-width:0}.drw .dh .iconbtn{color:#fff}
+.drw .db{flex:1;overflow-y:auto;padding:6px 0;overscroll-behavior:contain}
+.drw .dg,.drw .di{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.drw .dg{min-height:54px;padding:0 14px 0 18px;font-weight:600;font-size:16.5px}.drw .dg:active,.drw .di:active{background:#0000000d}
+.drw .dic{width:24px;display:flex;justify-content:center;color:var(--ink2)}.drw .dt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drw .dch{color:var(--ink3);transition:transform .18s;display:flex}.drw .dgrp.open .dch{transform:rotate(180deg)}.drw .dgrp.open>.dg{color:var(--red)}.drw .dgrp.open>.dg .dic{color:var(--red)}
+.drw .dsub{display:none;padding:2px 0 8px;background:#FAF7F5}.drw .dgrp.open .dsub{display:block}
+.drw .di{min-height:46px;padding:0 14px 0 56px;font-size:15.5px;color:var(--ink)}.drw .di .dic{display:none}
+.drw .di.on,.drw .dg.one.on{color:var(--red);font-weight:700;background:#D6001C0d}
+.drw .dbad{background:var(--red);color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:2px 8px;min-width:22px;text-align:center}
+.drw .df{border-top:1px solid var(--line);padding:6px 0 calc(8px + var(--safe-b))}.drw .df .ver{padding:4px 18px;color:var(--ink3);font-size:12.5px}
 .scan{position:fixed;inset:0;background:#000;z-index:80;display:flex;flex-direction:column}
+.scan.inline{position:relative;inset:auto;z-index:1;height:min(40vh,320px);border-radius:16px;overflow:hidden;margin:0 0 10px}.scan.inline .bot{display:none}.scan.inline .bar{padding:8px 10px}
 .scan video{flex:1;width:100%;object-fit:cover;min-height:0}.scan .cam{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}.scan.split .cam{flex:none;height:44vh}.scan.split .frame{top:22%;height:36%}.scan.split .last{display:none}.scan.split .bot{padding-bottom:10px}.scan .spane{flex:1;min-height:0;background:var(--bg,#f6f3f2);display:flex;flex-direction:column}
 .scan .frame{position:absolute;left:10%;right:10%;top:30%;height:22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
 .scan .frame:after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff3049;box-shadow:0 0 8px #ff3049;animation:ln 1.6s ease-in-out infinite}
@@ -194,7 +210,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.36';
+const APP_VER = '2.6.38';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -295,6 +311,49 @@ function busy(on, msg) {
 /* เมนูเด้งจากตำแหน่งที่กด (กดด้วยนิ้วได้เร็ว ไม่ต้องเลื่อนสายตาไปกลางจอ) */
 /* เมนูเด้งจากปุ่มที่กด · ถ้าส่ง orderKey: กดค้าง 3 วินาทีที่รายการใดก็ได้ = โหมดจัดลำดับ (▲▼) จำไว้ในเครื่องนี้ */
 const menuKey = it => it[3] || String(it[0]).replace(/<[^>]*>/g, '').replace(/\s*[\(🔒].*$/u, '').trim();
+
+/* =========================================================
+   ลิ้นชักเมนู (เลื่อนออกจากซ้าย) — หัวข้อสั้น กดหัวข้อเพื่อกาง/พับรายการย่อย
+   mode 'overlay': กดพื้นที่มืดด้านขวา/✕ เพื่อปิด (หน้าขาย)
+   mode 'dock'   : จอกว้าง เมนูค้างด้านซ้าย หน้าที่เลือกแสดงด้านขวา · ปิดด้วยลูกศร ‹ มุมขวาบนของเมนู (เพิ่มเติม)
+   ========================================================= */
+const Drawer = {
+  open(o) {
+    this.close(true);
+    const dock = o.mode === 'dock' && innerWidth >= 1000;
+    const sc = document.createElement('div'); sc.className = 'drw-sc';
+    const d = document.createElement('aside'); d.className = 'drw' + (dock ? ' dock' : '');
+    const openKey = 'drwOpen_' + (o.key || 'm');
+    let openG = LS.get(openKey, -1);
+    const row = (it, sub) => { const [t, ic, , badge, on] = it; return `<button class="${sub ? 'di' : 'dg one'}${on ? ' on' : ''}" data-i="${it._i}"><span class="dic">${I(ic || IC.dots, 20)}</span><span class="dt">${t}</span>${badge ? `<span class="dbad">${badge}</span>` : ''}</button>`; };
+    let n = 0; const flat = [];
+    const groups = o.groups.filter(Boolean).map(g => { if (Array.isArray(g)) { g._i = n++; flat.push(g); return g; } const items = g.items.filter(Boolean); items.forEach(it => { it._i = n++; flat.push(it); }); return { ...g, items }; }).filter(g => Array.isArray(g) || g.items.length);
+    const draw = () => {
+      d.innerHTML = `<div class="dh"><div class="dlogo">${o.head || ''}</div><button class="iconbtn dx" title="ปิดเมนู">${o.closeIcon === 'arrow' ? I('<path d="M15 6l-6 6 6 6"/>', 26) : I(IC.x, 24)}</button></div>
+        <div class="db">${groups.map((g, gi) => Array.isArray(g) ? row(g) : `<div class="dgrp${openG === gi ? ' open' : ''}"><button class="dg" data-g="${gi}"><span class="dic">${I(g.ic || IC.dots, 20)}</span><span class="dt">${g.t}</span>${g.badge ? `<span class="dbad">${g.badge}</span>` : ''}<span class="dch">${I('<path d="M6 9l6 6 6-6"/>', 18)}</span></button><div class="dsub">${g.items.map(it => row(it, 1)).join('')}</div></div>`).join('')}</div>
+        ${o.foot ? `<div class="df">${o.foot}</div>` : ''}`;
+      $('.dx', d).onclick = () => this.close();
+      $$('[data-g]', d).forEach(b => b.onclick = () => { const gi = +b.dataset.g; openG = openG === gi ? -1 : gi; LS.set(openKey, openG); $$('.dgrp', d).forEach((x, i) => x.classList.toggle('open', i === openG)); });
+      $$('[data-i]', d).forEach(b => b.onclick = () => { const it = flat[+b.dataset.i]; if (!it) return; if (!this.isDock()) this.close(); else { $$('[data-i]', d).forEach(x => x.classList.toggle('on', x === b)); } setTimeout(() => it[2](), this.isDock() ? 0 : 120); });
+    };
+    draw();
+    if (!dock) { document.body.appendChild(sc); sc.onclick = () => this.close(); }
+    document.body.appendChild(d);
+    this.el = d; this.sc = sc; this.dock = dock; this.o = o;
+    if (dock) document.body.classList.add('navdock');
+    requestAnimationFrame(() => { sc.classList.add('on'); d.classList.add('on'); });
+    this.kd = e => { if (e.key === 'Escape') this.close(); }; document.addEventListener('keydown', this.kd);
+  },
+  isDock() { return !!(this.el && this.dock); },
+  close(now) {
+    const d = this.el, sc = this.sc; if (!d) return;
+    this.el = null; document.body.classList.remove('navdock'); document.removeEventListener('keydown', this.kd);
+    d.classList.remove('on'); sc && sc.classList.remove('on');
+    setTimeout(() => { d.remove(); sc && sc.remove(); }, now ? 0 : 230);
+  }
+};
+window.Drawer = Drawer;
+
 function popMenu(anchor, items, side = 'right', orderKey) {
   if (orderKey) { const ord = LS.get('menuOrder_' + orderKey, []); const pos = k => { const i = ord.indexOf(k); return i < 0 ? 1e6 : i; }; items = items.map((it, i) => [it, i]).sort((x, y) => (pos(menuKey(x[0])) - pos(menuKey(y[0]))) || (x[1] - y[1])).map(x => x[0]); }
   const bg = document.createElement('div'); bg.style.cssText = 'position:fixed;inset:0;z-index:59';
@@ -870,7 +929,9 @@ async function openScanner(onCode, opts = {}) {
    <div class="bot"><div class="last hidden"></div><div class="row"><input class="in grow" inputmode="numeric" placeholder="หรือพิมพ์/ยิงบาร์โค้ด แล้วกด Enter" style="background:rgba(255,255,255,.95)"><button class="btn" data-ok>ตกลง</button></div><div class="tiny center" style="margin-top:8px;opacity:.85" data-st>กำลังเปิดกล้อง...</div></div></div>`;
   // แบ่งจอ: กล้องครึ่งบน · ล่างเป็นแผงของผู้เรียก (เช่น รายการขาย + ปุ่มชำระเงิน)
   if (opts.panel) { el.classList.add('split'); const pane = document.createElement('div'); pane.className = 'spane'; el.appendChild(pane); setTimeout(() => opts.panel(pane, { close: () => close() }), 0); }
-  document.body.appendChild(el);
+  // ฝังกล้องในหน้า (เช่น บนช่องค้นหาหน้าสินค้า) แทนการเปิดเต็มจอ
+  if (opts.inline) { el.classList.add('inline'); opts.inline.appendChild(el); } else document.body.appendChild(el);
+  if (opts.inline) { const wd = setInterval(() => { if (!el.isConnected) { clearInterval(wd); close(); } }, 700); }   // ออกจากหน้า → ปิดกล้องเอง
   const video = $('video', el), st = $('[data-st]', el), inp = $('input', el);
   let stream = null, stop = false, last = '', lastAt = 0, reader = null, timer = null;
   const close = () => { stop = true; clearTimeout(timer); try { reader && reader.reset(); } catch (e) { } stream && stream.getTracks().forEach(t => t.stop()); el.remove(); opts.onClose && opts.onClose(); };
@@ -1062,10 +1123,11 @@ function shell() {
     ${seesSales() ? `<button data-v="reports">${I(IC.chart)}รายงาน</button>` : `<button data-v="scan">${I(IC.scan)}เช็คราคา</button>`}
     <button data-v="more">${I(IC.menu)}เพิ่มเติม</button>
   </nav>`;
-  $$('.nav button').forEach(b => b.onclick = () => go(b.dataset.v));
+  $$('.nav button').forEach(b => b.onclick = () => b.dataset.v === 'more' ? openMore() : go(b.dataset.v));
 }
 const VIEWS = {};
 function go(v, arg) {
+  if (v === 'pos' && window.Drawer) Drawer.close(true);
   if (isKiosk() && !KIOSK_OK.includes(v)) v = 'pos';
   if (Elev.scope && !(ELEV_AREAS[Elev.scope] || []).includes(v)) Elev.clear();
   if (!isKiosk() && v === 'reports' && !seesSales() && S.user && S.user.role !== 'owner') v = 'home';
@@ -1316,8 +1378,11 @@ VIEWS.products = async (el, flag) => {
     $('#cats', el).innerHTML = `<button class="chip ${!PF.cat ? 'on' : ''}" data-c="">ทุกหมวด</button>` + Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button class="chip ${PF.cat === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)} <span class="muted">${n}</span></button>`).join('');
     $$('[data-f]', el).forEach(b => b.onclick = () => { PF.flag = b.dataset.f; PF.limit = 60; draw(); });
     $$('[data-c]', el).forEach(b => b.onclick = () => { PF.cat = b.dataset.c; PF.limit = 60; draw(); });
-    const res = searchProducts(PF.q, PF);
-    $('#cnt', el).textContent = `พบ ${res.length.toLocaleString()} รายการ`;
+    // ค้น/สแกนด้วยบาร์โค้ดหรือรหัส → แสดงเฉพาะรายการที่ตรงทุกตัว (ถ้าบาร์โค้ดซ้ำจะเห็นหลายรายการ เลือกแก้/ลบได้)
+    const qq = String(PF.q || '').trim();
+    const exact = qq.length >= 4 && /^[0-9A-Za-z\-]+$/.test(qq) ? S.products.filter(p => String(p.barcode || '') === qq || String(p.sku || '') === qq || String(p.barcode || '').split(/[,\s]+/).includes(qq)) : [];
+    const res = exact.length ? exact : searchProducts(PF.q, PF);
+    $('#cnt', el).innerHTML = exact.length > 1 ? `<span class="tag red">บาร์โค้ด/รหัสนี้ซ้ำ ${exact.length} รายการ</span> แตะรายการเพื่อดู แก้ไข หรือลบรายการที่ซ้ำ` : `พบ ${res.length.toLocaleString()} รายการ`;
     $('#pl', el).innerHTML = res.length ? res.slice(0, PF.limit).map(p => {
       const low = p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0);
       return `<div class="item" data-sku="${esc(p.sku)}">${pthumb(p)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.sku)} · ${p.barcode ? esc(p.barcode) : '<span class="tag amber">ไม่มีบาร์โค้ด</span>'}${p.trackStock === 'Y' ? ` · <span class="tag ${low ? 'red' : 'gray'}">คงเหลือ ${num(p.stock)}</span>` : ''}${can('viewCost') && num(p.cost) ? ` · ทุน ${money(p.cost)}` : ''}</div></div><div class="price">${baht(p.price)}</div></div>`;
@@ -1326,8 +1391,15 @@ VIEWS.products = async (el, flag) => {
     const m = $('#more', el); if (m) m.onclick = () => { PF.limit += 100; draw(); };
   };
   let t; $('#q', el).oninput = e => { clearTimeout(t); t = setTimeout(() => { PF.q = e.target.value; PF.limit = 60; draw(); }, 150); };
-  $('#sc', el).onclick = () => openScanner(code => { const f = findByCode(code); if (f) { productCard(f.p, f.price); return 'close'; } $('#q', el).value = PF.q = code; draw(); return 'close'; });
-  Scanner.on('products', code => { const f = findByCode(code); if (f) { beep(); productCard(f.p, f.price); } else { Scanner.err(); $('#q', el).value = PF.q = code; PF.limit = 60; draw(); } });
+  // สแกนด้วยกล้อง: กล้องแทรกอยู่เหนือช่องค้นหา สแกนแล้วรายการด้านล่างค้นให้ทันที (สแกนต่อได้เรื่อย ๆ)
+  const camw = document.createElement('div'); $('.search', el).before(camw);
+  let camClose = null;
+  const showCode = code => { $('#q', el).value = PF.q = code; PF.limit = 60; draw(); };
+  $('#sc', el).onclick = async () => {
+    if (camClose) { camClose(); return; }
+    camClose = await openScanner(code => { showCode(code); if (!findByCode(code)) Scanner.err(); }, { inline: camw, continuous: true, title: 'สแกนเพื่อค้นหาสินค้า', onClose: () => { camClose = null; } });
+  };
+  Scanner.on('products', code => { if (findByCode(code)) beep(); else Scanner.err(); showCode(code); });
   $('#rf', el).onclick = async () => { busy(1, 'กำลังโหลดสินค้า...'); try { await loadProducts(true); draw(); } catch (e) { toast(e.message, 1); } busy(0); };
   if (!S.products.length) { try { await loadProducts(true); } catch (e) { toast(e.message, 1); } } else { buildIndex(); loadProducts().then(draw).catch(() => { }); }
   draw();
@@ -1335,7 +1407,10 @@ VIEWS.products = async (el, flag) => {
 function productCard(p, embeddedPrice) {
   if (!p) return;
   const margin = num(p.price) && num(p.cost) ? ((num(p.price) - num(p.cost)) / num(p.price) * 100).toFixed(1) + '%' : '-';
+  const im = window.Img && Img.get(p.sku);
   const ov = sheet(esc(p.name), `
+    <div class="pcimg${im ? '' : ' no'}">${im ? `<img src="${im}" alt="">` : `<div class="center muted">${I(IC.image, 48)}<div class="small">ยังไม่มีรูป — กดแก้ไขเพื่อเพิ่มรูป</div></div>`}</div>
+    <style>.pcimg{width:100%;aspect-ratio:4/3;max-height:42vh;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:12px}.pcimg img{width:100%;height:100%;object-fit:contain}.pcimg.no{aspect-ratio:auto;height:110px}</style>
     <div class="card center"><div class="muted small">${esc(p.category || 'ไม่ระบุหมวด')}</div><div class="big-price" style="margin:8px 0">${baht(embeddedPrice != null ? embeddedPrice : p.price)}</div>${embeddedPrice != null ? '<span class="tag blue">ราคาจากบาร์โค้ดฝังราคา</span>' : ''}${p.byWeight === 'Y' ? '<span class="tag green">ขายตามน้ำหนัก</span>' : ''}</div>
     <div class="card">
       <div class="kv"><span class="muted">รหัส SKU</span><b>${esc(p.sku)}</b></div>
@@ -1344,7 +1419,8 @@ function productCard(p, embeddedPrice) {
       <div class="kv"><span class="muted">สต็อก</span><b>${p.trackStock === 'Y' ? num(p.stock) + (p.lowStock ? ` (เตือนที่ ${p.lowStock})` : '') : 'ไม่ได้นับสต็อก'}</b></div>
       <div class="kv"><span class="muted">แก้ไขล่าสุด</span><span class="small">${esc(p.updatedAt ? String(p.updatedAt).replace('T', ' ').slice(0, 16) : '-')} ${esc(p.updatedBy || '')}</span></div>
     </div>`,
-    `<button class="btn ghost grow" id="lb">${I(IC.print, 18)} ฉลาก</button><button class="btn ghost grow" id="st">± สต็อก</button><button class="btn grow" id="ed">${I(IC.edit, 18)} แก้ไข</button>`);
+    `${isOwner() ? `<button class="btn ghost" id="dl" style="color:var(--red)" title="ลบสินค้านี้">${I(IC.trash, 18)}</button>` : ''}<button class="btn ghost grow" id="lb">${I(IC.print, 18)} ฉลาก</button><button class="btn ghost grow" id="st">± สต็อก</button><button class="btn grow" id="ed">${I(IC.edit, 18)} แก้ไข</button>`);
+  const dl = $('#dl', ov); if (dl) dl.onclick = async () => { if (!(await confirmDlg(`ลบ “${esc(p.name)}” (${esc(p.sku)}) ?`, 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Products', ids: [p.sku] }); S.products = S.products.filter(x => x.sku !== p.sku); LS.set('products', S.products); buildIndex(); busy(0); ov.remove(); toast('ลบแล้ว'); if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); } };
   $('#ed', ov).onclick = () => { ov.remove(); editProduct(p); };
   $('#lb', ov).onclick = () => { ov.remove(); go('labels', [p]); };
   $('#st', ov).onclick = () => { ov.remove(); stockDlg(p); };
@@ -1781,32 +1857,36 @@ function matchDlg(it, done) {
 }
 
 /* ---------- MORE MENU ---------- */
+// เมนู "เพิ่มเติม" — จัดกลุ่ม หัวข้อสั้น (ใช้ทั้งลิ้นชักเมนูและหน้าเพิ่มเติม)
+function moreGroups() {
+  const own = isOwner(), it = (v, ic, t, ok, badge) => ok ? [t, ic, () => go(v), badge, S.view === v] : null;
+  const jn = S.jobsN || 0;
+  return [
+    it('jobs', IC.alert, own ? 'งานรอดำเนินการ' : 'งานโอน/ชำระบิล', 1, jn ? jn : ''),
+    { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), it('sales', IC.sale, 'ยอดขายรายเดือน', own), it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers'))] },
+    { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
+    { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
+    { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', 1), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
+    { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ · PIN', 1), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ โอน/เติม/บิล', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
+  ];
+}
+function drawerHead() { return `<div style="display:flex;align-items:center;gap:10px"><img src="${Brand.white ? Brand.white() : 'logo-white.png'}" alt="" style="height:34px;width:auto" onerror="this.remove()"><div style="min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(S.user ? S.user.name : '')}</div><div style="font-size:12px;opacity:.85">${S.user && S.user.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน'}</div></div></div>`; }
+function openMore() {
+  if (Drawer.el) return Drawer.close();
+  Drawer.open({ mode: 'dock', closeIcon: 'arrow', key: 'more', head: drawerHead(), groups: moreGroups(),
+    foot: `<button class="dg one" id="dlo" style="color:var(--red)"><span class="dic" style="color:var(--red)">${I(IC.logout, 20)}</span><span class="dt">ออกจากระบบ</span></button><div class="ver">v.${APP_VER}</div>` });
+  const lo = $('#dlo', Drawer.el); if (lo) lo.onclick = () => { Drawer.close(); logout(); };
+}
+window.openMore = openMore;
 VIEWS.more = el => {
-  const own = isOwner();
-  const items = [
-    ['dataquality', IC.count, 'ความครบถ้วนของข้อมูล', 'ต้นทุน บาร์โค้ด สต็อก ปุ่มระบุราคา — คะแนนร้าน', own],
-    ['jobs', IC.alert, 'งานรอดำเนินการ', isOwner() ? 'โอนเงิน · เติม TrueMoney · ชำระบิล ให้ลูกค้า' : 'สถานะงานโอน/ชำระบิลวันนี้', 1],
-    ['salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', seesSales() ? 'ดูย้อนหลัง พิมพ์ซ้ำ คืนเงิน' : 'บิลของฉันวันนี้ · พิมพ์ซ้ำ', 1],
-    ['customers', IC.user, 'ฐานลูกค้า', 'เบอร์โทร ยอดซื้อ แต้มสะสม เงินเชื่อ', can('customers')],
-    ['inventory', IC.count, 'สินค้าคงคลัง', 'ตรวจนับสต็อก ใบสั่งซื้อ มูลค่าสต็อก', can('stockCount') || can('receiveGoods') || canStrict('viewCost')],
-    ['receipts', IC.cam, 'ใบเสร็จร้านค้าส่ง', 'ถ่ายรูป อ่านรายการ รับสินค้าเข้า', can('receiveGoods')],
-    ['labels', IC.print, 'พิมพ์ฉลาก / บาร์โค้ด', 'NIIMBOT B1 / B21 · แผ่น A4', 1],
-    ['categories', IC.grid, 'หมวดหมู่สินค้า', 'ชื่อ สี ลำดับ', can('editProducts')],
-    ['staff', IC.users, 'พนักงาน', 'ผู้ใช้ สิทธิ์ ลงเวลา ยอดขายพนักงาน', 1],
-    ['sales', IC.sale, 'ยอดขายรายเดือน', 'นำเข้า/ส่งออก Excel (Loyverse) · ยอด POS · ภาพรวมหลายปี', own],
-    ['tax', IC.tax, 'ภาษีเงินได้บุคคลธรรมดา', 'คำนวณ เปรียบเทียบวิธีหักค่าใช้จ่าย กำหนดยื่น', own],
-    ['licenses', IC.shield, 'ใบอนุญาต', 'สุรา ยาสูบ และอื่นๆ แจ้งเตือนก่อนหมดอายุ', 1],
-    ['io', IC.io, 'นำเข้า / ส่งออกไฟล์', 'Excel / CSV รูปแบบเดียวกับไฟล์ตัวอย่าง', own],
-    ['scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 'USB / Bluetooth / Serial · ทดสอบและตั้งค่า', 1],
-    ['printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 'Bluetooth / USB · ออกแบบใบเสร็จ', 1],
-    ['svcset', IC.sale, 'ค่าบริการพิเศษ (โอนเงิน / เติมเงิน / ชำระบิล)', 'ตั้งช่วงยอดโอนและค่าบริการแต่ละช่วง · ค่าเติมเงิน · ค่าชำระบิล', own],
-    ['payset', IC.sale, 'การชำระเงิน & แต้ม', 'พร้อมเพย์ QR บัตรสวัสดิการ เงินเชื่อ แต้มสะสม', own],
-    ['displayset', IC.monitor, 'จอแสดงผลฝั่งลูกค้า', 'เปิดจอที่ 2 / จับคู่แท็บเล็ต', 1],
-    ['devices', IC.wifi, 'อุปกรณ์ POS', 'มือถือ แท็บเล็ต iPad คอมพิวเตอร์', own],
-    ['settings', IC.gear, 'ตั้งค่า', 'ข้อมูลร้าน การเชื่อมต่อ เปลี่ยน PIN', 1]
-  ].filter(x => x[4]);
-  el.innerHTML = vhead('เพิ่มเติม') + `<div class="list menu">${items.map(([v, ic, t, d]) => `<div class="item" onclick="go('${v}')"><div class="av">${I(ic, 20)}</div><div class="grow"><div class="t">${t}</div><div class="m">${d}</div></div></div>`).join('')}
-   <div class="item" id="lo"><div class="av" style="color:var(--red)">${I(IC.logout, 20)}</div><div class="grow"><div class="t" style="color:var(--red)">ออกจากระบบ</div></div></div></div>`;
+  const G = moreGroups();
+  el.innerHTML = vhead('เพิ่มเติม') + G.filter(Boolean).map(g => Array.isArray(g)
+    ? `<button class="card mrow1" data-go="${g[0]}">${I(g[1], 22)}<b class="grow">${g[0]}</b>${g[3] ? `<span class="tag red">${g[3]}</span>` : ''}<span class="muted">›</span></button>`
+    : (g.items = g.items.filter(Boolean)).length ? `<div class="card mgrp"><div class="mgh">${I(g.ic, 20)}<b>${g.t}</b></div><div class="mgi">${g.items.map(x => `<button data-go="${x[0]}">${x[0]}</button>`).join('')}</div></div>` : '').join('') +
+    `<button class="card mrow1" id="lo" style="color:var(--red)">${I(IC.logout, 22)}<b class="grow">ออกจากระบบ</b></button><div class="tiny muted center">v.${APP_VER}</div>
+    <style>.mrow1{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;cursor:pointer;margin-bottom:10px}.mgh{display:flex;align-items:center;gap:10px;margin-bottom:8px;color:var(--ink2)}.mgh b{color:var(--ink)}.mgi{display:flex;flex-wrap:wrap;gap:8px}.mgi button{all:unset;cursor:pointer;padding:9px 14px;border-radius:999px;background:var(--bg);box-shadow:inset 0 0 0 1.5px var(--line);font-size:15px}.mgi button:active{background:#0000000f}</style>`;
+  const flat = []; G.filter(Boolean).forEach(g => Array.isArray(g) ? flat.push(g) : g.items.forEach(x => flat.push(x)));
+  $$('[data-go]', el).forEach(b => b.onclick = () => { const x = flat.find(f => f[0] === b.dataset.go); x && x[2](); });
   $('#lo', el).onclick = () => logout();
 };
 
@@ -2460,20 +2540,20 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.36"></script>
-<script src="logic.js?v=2.6.36"></script>
-<script src="cache.js?v=2.6.36"></script>
-<script src="offline.js?v=2.6.36"></script>
-<script src="scanner.js?v=2.6.36"></script>
-<script src="printer.js?v=2.6.36"></script>
-<script src="pos.js?v=2.6.36"></script>
-<script src="display.js?v=2.6.36"></script>
-<script src="reports.js?v=2.6.36"></script>
-<script src="inventory.js?v=2.6.36"></script>
-<script src="people.js?v=2.6.36"></script>
-<script src="quality.js?v=2.6.36"></script>
-<script src="services.js?v=2.6.36"></script>
-<script src="owner.js?v=2.6.36"></script>
+<script src="qr.js?v=2.6.38"></script>
+<script src="logic.js?v=2.6.38"></script>
+<script src="cache.js?v=2.6.38"></script>
+<script src="offline.js?v=2.6.38"></script>
+<script src="scanner.js?v=2.6.38"></script>
+<script src="printer.js?v=2.6.38"></script>
+<script src="pos.js?v=2.6.38"></script>
+<script src="display.js?v=2.6.38"></script>
+<script src="reports.js?v=2.6.38"></script>
+<script src="inventory.js?v=2.6.38"></script>
+<script src="people.js?v=2.6.38"></script>
+<script src="quality.js?v=2.6.38"></script>
+<script src="services.js?v=2.6.38"></script>
+<script src="owner.js?v=2.6.38"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
