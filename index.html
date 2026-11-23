@@ -151,8 +151,9 @@ body.navdock #app{padding-left:min(330px,86vw)}body.navdock .nav{left:min(330px,
 .drw .dbad{background:var(--red);color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:2px 8px;min-width:22px;text-align:center}
 .drw .df{border-top:1px solid var(--line);padding:6px 0 calc(8px + var(--safe-b))}.drw .df .ver{padding:4px 18px;color:var(--ink3);font-size:12.5px}
 .scan{position:fixed;inset:0;background:#000;z-index:80;display:flex;flex-direction:column}
-.scan.inline{position:relative;inset:auto;z-index:1;height:clamp(150px,24vh,200px);border-radius:16px;overflow:hidden;margin:0 0 10px}.scan.inline .bot{display:none}.scan.inline .frame{top:24%;height:52%}.scan.inline .bar{padding:8px 10px}
-.scan video{flex:1;width:100%;object-fit:cover;min-height:0}.scan .cam{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}.scan.split .cam{flex:none;height:44vh}.scan.split .frame{top:22%;height:36%}.scan.split .last{display:none}.scan.split .bot{padding-bottom:10px}.scan .spane{flex:1;min-height:0;background:var(--bg,#f6f3f2);display:flex;flex-direction:column}
+.scan.inline{position:relative;inset:auto;z-index:1;height:clamp(120px,19vh,165px);border-radius:16px;overflow:hidden;margin:0 0 10px}.scan.inline .bot{display:none}.scan.inline .frame{top:30%;height:54%;left:8%;right:8%}.scan.inline .bar{padding:6px 10px}.scan.inline .bar .disp{font-size:15px!important}
+.scanhost{margin:0 0 10px}.scanhost .scan.inline{margin:0}.scanlast{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:6px;font-size:15px}
+.scan video{flex:1;width:100%;object-fit:cover;min-height:0}.scan .cam{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}.scan.split .cam{flex:none;height:clamp(130px,22vh,190px)}.scan.split .frame{top:30%;height:54%;left:8%;right:8%}.scan.split .bot{display:none}.scan.split .last{display:none}.scan.split .bot{padding-bottom:10px}.scan .spane{flex:1;min-height:0;background:var(--bg,#f6f3f2);display:flex;flex-direction:column}
 .scan .frame{position:absolute;left:10%;right:10%;top:30%;height:22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
 .scan .frame:after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff3049;box-shadow:0 0 8px #ff3049;animation:ln 1.6s ease-in-out infinite}
 @keyframes ln{0%,100%{transform:translateY(-34px)}50%{transform:translateY(34px)}}
@@ -213,7 +214,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.42';
+const APP_VER = '2.6.46';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -468,19 +469,40 @@ function toggleKeySnd() { const on = !keySndOn(); LS.set('keySnd', on); $$('.snd
 // ทุกแป้นตัวเลขในระบบ: มีเสียงกด
 document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.kp button, .kpg button, .npad button, .cpad button, .pinpad button, .qcash button, [data-q]'); if (b && !b.disabled) tick(); }, true);
 // แท็บเล็ต/มือถือ: แตะช่องตัวเลข → แป้นตัวเลขลอยขึ้นมา (ไม่เด้งคีย์บอร์ดของเครื่อง)
-document.addEventListener('pointerdown', e => {
-  const el = e.target;
-  if (!el || el.tagName !== 'INPUT' || el.readOnly || el.disabled || el.hasAttribute('data-nokp') || !window.keypad || typeof touchUI !== 'function' || !touchUI()) return;
+// เปิดเมื่อ "แตะแล้วยกนิ้ว" เท่านั้น — นิ้วเลื่อนจอผ่านช่อง / แตะเพื่อหยุดจอที่กำลังเลื่อน = ไม่เปิด
+const numInput = el => {
+  if (!el || el.tagName !== 'INPUT' || el.readOnly || el.disabled || el.hasAttribute('data-nokp') || !window.keypad || typeof touchUI !== 'function' || !touchUI()) return false;
   const im = (el.getAttribute('inputmode') || '').toLowerCase();
-  if (!(el.type === 'number' || im === 'decimal' || im === 'numeric' || el.type === 'tel' || im === 'tel')) return;
-  if (el.closest('.kpov')) return;
-  e.preventDefault();
-  const tel = el.type === 'tel' || im === 'tel' || im === 'numeric';
+  return (el.type === 'number' || im === 'decimal' || im === 'numeric' || el.type === 'tel' || im === 'tel') && !el.closest('.kpov');
+};
+function openNumKp(el) {
+  const im = (el.getAttribute('inputmode') || '').toLowerCase(), tel = el.type === 'tel' || im === 'tel' || im === 'numeric';
   const lb = el.closest('label'), cap = (lb && lb.querySelector('span') ? lb.querySelector('span').textContent : '') || el.placeholder || el.getAttribute('aria-label') || 'ใส่ตัวเลข';
   const ttl = (el.closest('.ov') && el.closest('.ov').querySelector('h3, .sh h3, .ttl')) ? el.closest('.ov').querySelector('h3, .sh h3, .ttl').textContent : '';
   keypad(ttl ? cap.trim() + ' — ' + ttl.trim() : cap.trim(), el.value, v => {
     el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
   }, { raw: true, noDot: tel, maxLen: tel ? 20 : 12, money: /ราคา|ทุน|ยอด|เงิน|ค่า/.test(cap) });
+}
+const KPT = { el: null, x: 0, y: 0, t: 0, moved: false, lastScroll: 0 };
+document.addEventListener('scroll', () => { KPT.lastScroll = Date.now(); if (KPT.el) KPT.moved = true; }, true);
+document.addEventListener('touchstart', e => {
+  const el = e.target, t = e.touches[0];
+  KPT.el = e.touches.length === 1 && numInput(el) ? el : null; if (!KPT.el) return;
+  KPT.x = t.clientX; KPT.y = t.clientY; KPT.t = Date.now();
+  KPT.moved = Date.now() - KPT.lastScroll < 180;   // แตะเพื่อหยุดจอที่กำลังไหล ไม่นับเป็นการแตะช่อง
+}, { capture: true, passive: true });
+document.addEventListener('touchmove', e => { if (!KPT.el) return; const t = e.touches[0]; if (Math.abs(t.clientX - KPT.x) > 8 || Math.abs(t.clientY - KPT.y) > 8) KPT.moved = true; }, { capture: true, passive: true });
+document.addEventListener('touchcancel', () => { KPT.el = null; }, true);
+document.addEventListener('touchend', e => {
+  const el = KPT.el; KPT.el = null; if (!el || !numInput(el)) return;
+  e.preventDefault();   // ไม่ให้ช่องถูกเลือก/คีย์บอร์ดเครื่องเด้ง (ทั้งกรณีแตะ และกรณีเลื่อนจอผ่าน)
+  if (KPT.moved || Date.now() - KPT.t > 700) return;
+  openNumKp(el);
+}, { capture: true, passive: false });
+// เมาส์/ปากกา บนเครื่องจอสัมผัส: คลิกแล้วเปิดแป้นเหมือนเดิม
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'touch' || !numInput(e.target)) return;
+  e.preventDefault(); openNumKp(e.target);
 }, true);
 // เตรียมระบบเสียงตั้งแต่แตะจอครั้งแรก → สแกนครั้งแรกมีเสียงทันที ไม่หน่วง
 addEventListener('pointerdown', () => { try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); } catch (e) { } }, { once: true, capture: true });
@@ -635,7 +657,7 @@ async function loadSettings() {
   try {
     const r = await api('bootstrap');
     if (window.OfflineAuth && r.activeUsers) OfflineAuth.prune(r.activeUsers);
-    S.settings = r.settings; S.perms = r.perms; S.defs = r.defs; S.categories = r.categories.sort((a, b) => num(a.sort) - num(b.sort)); S.shift = r.shift;
+    S.settings = r.settings; S.perms = r.perms; S.defs = r.defs; S.categories = r.categories.sort((a, b) => num(a.sort) - num(b.sort)); S.shift = r.shift || (LS.get('clockbox', []).some(b => S.user && b.uid === S.user.id) ? Clock.get(S.user.id) : null);
     LS.set('settings', S.settings); LS.set('perms', S.perms); LS.set('categories', S.categories);
     document.dispatchEvent(new Event('mm:settings'));
   } catch (e) { if (!e.offline) toast(e.message, 1); }
@@ -967,7 +989,34 @@ function renderLabel(cv, o) {
 /* =========================================================
    Camera scanner (BarcodeDetector → ZXing fallback)
    ========================================================= */
+// มือถือ/แท็บเล็ต: กล้องสแกนเป็นหน้าต่างเล็กแทรกในหน้า (ไม่เต็มจอ) ใกล้ปุ่มที่กด → เห็นผลด้านล่างได้
+let LAST_TAP = null, AUTO_SCAN = null;
+document.addEventListener('pointerdown', e => { LAST_TAP = e.target; }, true);
+const coarseUI = () => matchMedia("(pointer: coarse)").matches;
+function scanHost() {
+  const a = LAST_TAP && LAST_TAP.isConnected ? LAST_TAP : null, ovs = $$('.ov'), top = ovs[ovs.length - 1];
+  const host = document.createElement('div'); host.className = 'scanhost';
+  const root = top || $('#view'); if (!root) return null;
+  const card = a && root.contains(a) ? a.closest('.card') : null;
+  if (card && root.contains(card) && card.parentElement) card.before(host);
+  else if (top) { const sb = $('.sb', top); if (!sb) return null; sb.prepend(host); }
+  else { const h = $('.vhead', root); h ? h.after(host) : root.prepend(host); }
+  return host;
+}
 async function openScanner(onCode, opts = {}) {
+  if (!opts.inline && !opts.panel && coarseUI()) {
+    if (AUTO_SCAN) AUTO_SCAN();
+    const host = scanHost();
+    if (host) {
+      const lastEl = document.createElement('div'); lastEl.className = 'scanlast hidden';
+      const uc = opts.onClose;
+      opts = { ...opts, inline: host, lastEl, onClose: () => { host.remove(); if (AUTO_SCAN === cl) AUTO_SCAN = null; uc && uc(); } };
+      let cl = null; const p = openScanner(onCode, opts); host.appendChild(lastEl);
+      cl = await p; AUTO_SCAN = cl;
+      try { host.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { }
+      return cl;
+    }
+  }
   const el = document.createElement('div'); el.className = 'scan';
   el.innerHTML = `<div class="cam"><video playsinline muted></video><div class="frame"></div>
    <div class="bar"><button class="iconbtn" data-x>${I(IC.x, 26)}</button><div class="grow disp" style="font-size:17px">${esc(opts.title || 'สแกนบาร์โค้ด')}</div><button class="iconbtn" data-torch title="ไฟฉาย">${I(IC.bolt, 24)}</button></div>
@@ -988,7 +1037,7 @@ async function openScanner(onCode, opts = {}) {
     if (!manual && code === last && now - seenAt < 700) { seenAt = now; return; }
     last = code; lastAt = seenAt = now; beep();
     try { const fr = $('.frame', el); fr.style.borderColor = '#4ade80'; fr.style.boxShadow = '0 0 0 9999px #00000066, 0 0 0 6px #4ade80'; setTimeout(() => { fr.style.borderColor = ''; fr.style.boxShadow = ''; }, 250); navigator.vibrate && navigator.vibrate(30); } catch (e) { }
-    const r = onCode(code, { showLast: html => { const b = $('.last', el); b.innerHTML = html; b.classList.remove('hidden'); } });
+    const r = onCode(code, { showLast: html => { const b = opts.lastEl || $('.last', el); b.innerHTML = html; b.classList.remove('hidden'); } });
     if (!opts.continuous || r === 'close') close();
   };
   $('[data-x]', el).onclick = close;
@@ -1018,6 +1067,7 @@ async function openScanner(onCode, opts = {}) {
     }
   } catch (e) {
     st.textContent = 'เปิดกล้องไม่ได้: ' + (e.name === 'NotAllowedError' ? 'ยังไม่อนุญาตให้ใช้กล้อง' : e.message) + ' — พิมพ์รหัสด้านบนแทนได้';
+    if (opts.lastEl) { opts.lastEl.textContent = st.textContent.replace(' — พิมพ์รหัสด้านบนแทนได้', ''); opts.lastEl.classList.remove('hidden'); }
     inp.focus();
   }
   return close;
@@ -1299,22 +1349,22 @@ function renderLogin(mode) {
         S.loginP = apiRaw('login', { username: '', pin: p0, device: dev });
         S.loginP.then(x => {
           OfflineAuth.remember(x.user, p0, x.token);
-          if (S.user && S.user.id === uid) { S.token = x.token; S.user = { ...S.user, ...x.user }; LS.set('token', x.token); LS.set('user', S.user); if (x.device) { S.device = { ...S.device, ...x.device }; LS.set('device', S.device); } if ('shift' in x && x.user.role !== 'owner') { Clock.setLocal(uid, x.shift); if (S.shift === undefined || !S.shift) S.shift = x.shift; } }
+          if (S.user && S.user.id === uid) { S.token = x.token; S.user = { ...S.user, ...x.user }; LS.set('token', x.token); LS.set('user', S.user); if (x.device) { S.device = { ...S.device, ...x.device }; LS.set('device', S.device); } if ('shift' in x && x.user.role !== 'owner') { const pend = LS.get('clockbox', []).some(b => b.uid === uid); if (x.shift || !pend) Clock.setLocal(uid, x.shift); if (!S.shift) S.shift = x.shift || Clock.get(uid); } }
         }).catch(e => {
           if (e.offline) return;
           if (/รหัส|ปิด|ไม่พบ/.test(e.message)) { OfflineAuth.forget(uid); if (S.user && S.user.id === uid) { toast('รหัสนี้ถูกเปลี่ยนหรือปิดใช้งานแล้ว — กรุณาเข้าใหม่', 1); logout(); } }
         });
       }
       busy(0);
-      if (r.user.role !== 'owner') {
-        // ไม่มีหน้าถาม — เข้าหน้าขายทันที · ถ้ากดปุ่มลงเวลา (สีเขียว) ไว้ก่อนใส่รหัส = ลงเวลาเข้างานทันที (ส่งขึ้นระบบเบื้องหลัง)
-        if ('shift' in r) { S.shift = r.shift; Clock.setLocal(r.user.id, r.shift); } else S.shift = Clock.get(r.user.id);
-        if (mode === 'clock') {
-          if (S.shift) toast(`ลงเวลาเข้างานไว้แล้ว ${hhmm(S.shift.inAt)} น.${S.shift.inAt.slice(0, 10) !== todayISO() ? ' (' + thDate(S.shift.inAt.slice(0, 10)) + ' — ยังไม่ได้ลงเวลาออก)' : ''}`, 0, 4000);
-          else { const sh = Clock.inFast(); toast(`✔️ ลงเวลาเข้างานแล้ว ${hhmm(sh.inAt)} น.`, 0, 4000); }
-        }
-      } else if (mode === 'clock') toast('เจ้าของร้านไม่ต้องลงเวลา');
+      // ลงเวลาเฉพาะเมื่อกดปุ่มลงเวลา (สีเขียว) ก่อนใส่รหัส → ลงเวลาเข้างาน + เข้าหน้าขาย · เข้าระบบปกติไม่บันทึกเวลาใด ๆ
+      if (r.user.role !== 'owner' && 'shift' in r) { S.shift = r.shift; Clock.setLocal(r.user.id, r.shift); } else S.shift = Clock.get(r.user.id);
+      if (mode === 'clock') {
+        LS.set('clockSess', r.user.id);
+        if (S.shift) toast(`ลงเวลาเข้างานไว้แล้ว ${hhmm(S.shift.inAt)} น.${S.shift.inAt.slice(0, 10) !== todayISO() ? ' (' + thDate(S.shift.inAt.slice(0, 10)) + ' — ยังไม่ได้ลงเวลาออก)' : ''}`, 0, 4000);
+        else { const sh = Clock.inFast(); toast(`✔️ ลงเวลาเข้างานแล้ว ${hhmm(sh.inAt)} น.`, 0, 4000); }
+      } else LS.del('clockSess');
       await boot();
+      if (mode === 'clock' && S.view !== 'pos') go('pos');
       if (r.mustChangePin) { toast('กรุณาเปลี่ยนรหัสเริ่มต้น 1234'); changePinDlg(); }
     } catch (e) { busy(0); pin = ''; dots(); toast(e.message, 1); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (x) { } }
     sending = false;
@@ -1358,7 +1408,8 @@ function changePinDlg() {
 async function logout(silent) {
   Elev.clear();
   // สลับผู้ใช้: ไม่ยกเลิก token บนเซิร์ฟเวอร์ (คนเดิมกลับมาเข้าแบบออฟไลน์ได้) · token หมดอายุเองใน 30 วัน หรือเจ้าของปิดอุปกรณ์/ผู้ใช้
-  S.token = ''; S.user = null; LS.del('token'); LS.del('user'); S.shift = null;
+  S.token = ''; S.user = null; LS.del('token'); LS.del('user'); LS.del('clockSess'); S.shift = null;
+  try { Drawer.close(true); } catch (e) { } $$('.drw,.drw-sc,.ov,.kpov').forEach(x => x.remove()); document.body.classList.remove('navdock');
   if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
   history.replaceState(null, '', location.pathname + location.search); document.body.classList.remove('full', 'kiosk'); renderLogin();
 }
@@ -1391,7 +1442,8 @@ const FS = {
 addEventListener('pointerdown', e => { if (LS.get('wantFS', false) && !FS.el && FS.supported && !(e.target.closest && e.target.closest('.fsb'))) FS.toggle(); }, { capture: true });
 async function switchUser() {
   const n = (window.Sync && Sync.box.length) || 0;
-  const u = S.user, sh = u && u.role !== 'owner' ? (S.shift || Clock.get(u.id)) : null;
+  // ถามลงเวลาออกงานเฉพาะรอบที่เข้าระบบด้วยปุ่มลงเวลา (สีเขียว) · เข้าระบบปกติ = ออกเลย
+  const u = S.user, sh = u && LS.get('clockSess', '') === u.id ? (S.shift || Clock.get(u.id)) : null;
   if (sh) {
     const now = nowLocal(), dur = durTxt(tms(now) - tms(sh.inAt));
     const choice = await new Promise(res => {
@@ -1412,7 +1464,7 @@ async function switchUser() {
 let PF = { q: '', cat: '', flag: '', limit: 60 };
 VIEWS.products = async (el, flag) => {
   if (flag) PF.flag = flag;
-  el.innerHTML = vhead('สินค้า', `<button class="btn ghost sm" onclick="prodIO()">⇅ นำเข้า/ส่งออก</button><button class="btn ghost sm" onclick="autoImages()">🖼 เติมรูปอัตโนมัติ</button><button class="btn sm" onclick="editProduct()">${I(IC.plus, 18)} เพิ่ม</button>`) +
+  el.innerHTML = vhead('สินค้า', `${isOwner() ? '<button class="btn ghost sm" onclick="prodIO()">⇅ นำเข้า/ส่งออก</button>' : ''}<button class="btn ghost sm" onclick="autoImages()">🖼 เติมรูปอัตโนมัติ</button><button class="btn sm" onclick="editProduct()">${I(IC.plus, 18)} เพิ่ม</button>`) +
     `<div class="search"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาชื่อ / รหัส / บาร์โค้ด" value="${esc(PF.q)}"><button class="scanbtn" id="sc">${I(IC.scan, 20)}</button></div>
      <div class="chips" id="flags" style="margin-top:10px"></div><div class="chips" id="cats"></div>
      <div class="row small muted" style="margin:2px 4px 8px"><span id="cnt" class="grow"></span><button class="btn ghost sm" id="rf">รีเฟรช</button></div>
@@ -2397,6 +2449,7 @@ async function prodExport(kind, done) {
 }
 /* ปุ่ม "นำเข้า/ส่งออก" บนหน้าสินค้า */
 function prodIO() {
+  if (!isOwner()) return toast('ส่งออก/นำเข้าสินค้าได้เฉพาะเจ้าของร้าน', 1);
   const canImp = isOwner();
   const ov = sheet('นำเข้า / ส่งออกสินค้า', `<div class="grid2" style="margin-bottom:10px"><button class="btn ghost" id="pe1" style="min-height:64px;flex-direction:column;gap:2px">⬆ ส่งออก Excel<span class="tiny muted" style="font-weight:400">.xlsx</span></button><button class="btn ghost" id="pe2" style="min-height:64px;flex-direction:column;gap:2px">⬆ ส่งออก CSV<span class="tiny muted" style="font-weight:400">รูปแบบ Loyverse</span></button></div>
     ${canImp ? `<label class="btn block" style="min-height:56px">${I(IC.io, 18)} ⬇ นำเข้าไฟล์ Excel / CSV<input type="file" id="pfi" accept=".csv,.xlsx,.xls,text/csv" hidden></label>
@@ -2620,21 +2673,21 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.42"></script>
-<script src="logic.js?v=2.6.42"></script>
-<script src="cache.js?v=2.6.42"></script>
-<script src="offline.js?v=2.6.42"></script>
-<script src="scanner.js?v=2.6.42"></script>
-<script src="printer.js?v=2.6.42"></script>
-<script src="pos.js?v=2.6.42"></script>
-<script src="idle.js?v=2.6.42"></script>
-<script src="display.js?v=2.6.42"></script>
-<script src="reports.js?v=2.6.42"></script>
-<script src="inventory.js?v=2.6.42"></script>
-<script src="people.js?v=2.6.42"></script>
-<script src="quality.js?v=2.6.42"></script>
-<script src="services.js?v=2.6.42"></script>
-<script src="owner.js?v=2.6.42"></script>
+<script src="qr.js?v=2.6.46"></script>
+<script src="logic.js?v=2.6.46"></script>
+<script src="cache.js?v=2.6.46"></script>
+<script src="offline.js?v=2.6.46"></script>
+<script src="scanner.js?v=2.6.46"></script>
+<script src="printer.js?v=2.6.46"></script>
+<script src="pos.js?v=2.6.46"></script>
+<script src="idle.js?v=2.6.46"></script>
+<script src="display.js?v=2.6.46"></script>
+<script src="reports.js?v=2.6.46"></script>
+<script src="inventory.js?v=2.6.46"></script>
+<script src="people.js?v=2.6.46"></script>
+<script src="quality.js?v=2.6.46"></script>
+<script src="services.js?v=2.6.46"></script>
+<script src="owner.js?v=2.6.46"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

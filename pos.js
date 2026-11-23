@@ -917,7 +917,7 @@ window.addEventListener('resize', () => { if (S.view !== 'pos') return; clearTim
 /* ---------- ลงเวลาทำงาน ---------- */
 async function clockToggle() {
   if (S.shift || Clock.get(S.user.id)) { if (await clockOutFlow()) S.shift = null; }
-  else { try { const r = await Clock.act('clockIn'); toast('ลงเวลาเข้างานแล้ว ' + hhmm(r.inAt) + ' น.'); } catch (e) { toast(e.message, 1); } }
+  else { try { const r = await Clock.act('clockIn'); LS.set('clockSess', S.user.id); toast('ลงเวลาเข้างานแล้ว ' + hhmm(r.inAt) + ' น.'); } catch (e) { toast(e.message, 1); } }
   if (S.view === 'home') go('home');
 }
 
