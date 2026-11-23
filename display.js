@@ -49,14 +49,14 @@ const Display = {
     if (this.A && this.A.sig === sig) return this.A;
     const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
     let h = 0; for (let i = 0; i < sig.length; i++) h = (Math.imul(h, 31) + sig.charCodeAt(i)) | 0;
-    return this.A = { sig, k: 'a' + (h >>> 0).toString(36) + sig.length.toString(36), v: { shop: st.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: st.brandLogo || '', ads: adsCfg() } };
+    return this.A = { sig, k: 'a' + (h >>> 0).toString(36) + sig.length.toString(36), v: { shop: st.shopName || 'ร้านเมย์ มินิมาร์ท', welcome: dc.welcome, promo: dc.promo, logoMode: dc.logoMode || 'mark', logo: dc.logoMode === 'image' ? dc.logo || '' : '', brandW: Brand.custom() ? Brand.white() : '', brandC: st.brandLogo || '', ads: adsCfg(), idle: idleCfg(dc) } };
   },
   dev: (() => { let d = ''; try { d = localStorage.getItem('mm_dispSrc') || ''; if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem('mm_dispSrc', d); } } catch (e) { } return d; })(),
   seq: 0,
   push(state) {
     const A = this.assets();
     this.seq = Math.max(this.seq + 1, Date.now());
-    const { shop, welcome, promo, logoMode, logo, brandW, brandC, ads, ...dyn } = state || {};   // repush ส่งของเดิมกลับมา → ตัดส่วนใหญ่ออกก่อน
+    const { shop, welcome, promo, logoMode, logo, brandW, brandC, ads, idle, ...dyn } = state || {};   // repush ส่งของเดิมกลับมา → ตัดส่วนใหญ่ออกก่อน
     const s = { ...dyn, ak: A.k, src: this.dev, seq: this.seq, cashier: (S.user && S.user.name) || '', ver: APP_VER, at: Date.now(), ask: this.askSt || null, pv: this.askSt ? null : (this.pvSt || null) };
     const full = { ...s, ...A.v };
     this.last = full;
@@ -70,7 +70,7 @@ const Display = {
     // สำรองผ่าน Google: ส่งโลโก้เฉพาะเมื่อเปลี่ยน หรือทุก 60 วิ (ให้จอที่เพิ่งเปิดได้โลโก้ด้วย)
     if (code && S.apiUrl) {
       clearTimeout(this.t);
-      this.t = setTimeout(() => { const f = this.rAK !== A.k || Date.now() - (this.rAt || 0) > 60000; api('displayPush', { code, state: f ? this.last : { ...this.last, shop: undefined, welcome: undefined, promo: undefined, logoMode: undefined, logo: undefined, brandW: undefined, brandC: undefined, ads: undefined } }).then(() => { if (f) { this.rAK = A.k; this.rAt = Date.now(); } }).catch(() => { }); }, s.mode === 'cart' ? 150 : 0);
+      this.t = setTimeout(() => { const f = this.rAK !== A.k || Date.now() - (this.rAt || 0) > 60000; api('displayPush', { code, state: f ? this.last : { ...this.last, shop: undefined, welcome: undefined, promo: undefined, logoMode: undefined, logo: undefined, brandW: undefined, brandC: undefined, ads: undefined, idle: undefined } }).then(() => { if (f) { this.rAK = A.k; this.rAt = Date.now(); } }).catch(() => { }); }, s.mode === 'cart' ? 150 : 0);
     }
   },
   // ---- ให้ลูกค้ากรอกที่จอลูกค้า ----
@@ -382,6 +382,18 @@ VIEWS.display = (root, hash) => {
     const cnt = $('#cnt', root); cnt.innerHTML = `<span class="dot ${Display.rx && Display.rx.readyState === 'open' ? 'on' : ''}" id="lk"></span>` + (s && s.mode !== 'idle' && s.mode !== 'done' && s.count ? `${s.count} รายการ` : '');
     if (!s || s.mode === 'idle' || !s.mode) {
       tt.hidden = true;
+      // หน้าจอว่างแบบใหม่ (ภาพเคลื่อนไหว) — ไม่วาดซ้ำถ้าเนื้อหาเดิม (ไม่ให้ภาพ/วิดีโอเริ่มใหม่ทุกครั้ง)
+      if (s && s.idle && s.idle.style !== 'off' && window.idleScene) {
+        const adsIdle = !s.idle.yt && s.ads && s.ads.on && s.ads.idle && s.ads.items && s.ads.items.length;
+        const ik = JSON.stringify([s.idle, s.welcome, s.promo, s.shop, (s.brandC || '').length, adsIdle ? s.ads : 0]);
+        if (bd.dataset.ik === ik && $('.idsc', bd)) return;
+        bd.dataset.ik = ik;
+        bd.innerHTML = idleScene(s);
+        if (adsIdle) { const r = $('.iright', bd); r.insertAdjacentHTML('afterbegin', '<div class="ivw"><div class="adslot" id="ads" style="width:100%;height:100%"></div></div>'); const h = $('.ihd', r); h && h.classList.add('sm'); AdPlayer.set(s.ads); AdPlayer.mount($('#ads', root)); }
+        idleAfter(bd);
+        return;
+      }
+      bd.dataset.ik = '';
       const idleAd = s && s.ads && s.ads.idle && AdPlayer.set(s.ads);
       bd.innerHTML = `<div class="cen${idleAd ? ' idl' : ''}"><img src="${(s && s.brandC) || 'logo.png'}" alt="ร้านเมย์ Mini Mart" style="width:auto;height:min(46vh,${s && s.ads && s.ads.on && s.ads.idle && s.ads.items.length ? '38vw' : '60vw'});max-width:80vw;object-fit:contain"><div style="font-size:6vmin;margin-top:1vmin">${esc((s && s.welcome) || 'ยินดีต้อนรับ')}</div>${s && s.promo ? `<div style="font-size:4.5vmin;background:var(--green);color:#fff;border-radius:2vmin;padding:1vmin 3vmin">${esc(s.promo)}</div>` : ''}</div>${idleAd ? '<div class="rp ad"><div class="adslot" id="ads"></div></div>' : ''}`;
       if (idleAd) AdPlayer.mount($('#ads', root));
@@ -409,7 +421,7 @@ VIEWS.display = (root, hash) => {
   };
   // โลโก้/โฆษณาที่ได้รับล่าสุด (ส่งมาเฉพาะตอนเปลี่ยน)
   let AS = null; try { AS = JSON.parse(localStorage.getItem('mm_dispAssets') || 'null'); } catch (e) { }
-  const AK = ['shop', 'welcome', 'promo', 'logoMode', 'logo', 'brandW', 'brandC', 'ads'];
+  const AK = ['shop', 'welcome', 'promo', 'logoMode', 'logo', 'brandW', 'brandC', 'ads', 'idle'];
   let lastSrc = '', lastSeq = 0;
   const accept = s => {
     // เครื่องขายใช้เวอร์ชันใหม่กว่า → จอลูกค้าโหลดตัวเองใหม่ (ไม่ต้องไปกดรีเฟรชที่จอลูกค้า)
@@ -523,7 +535,7 @@ VIEWS.displayset = el => {
      <label class="row" style="margin-bottom:6px"><input type="radio" name="lgm" value="image" ${dc.logoMode === 'image' ? 'checked' : ''}> รูปโลโก้ของร้าน (แนวนอน · พื้นโปร่งใสจะสวยที่สุด)</label>
      <label class="row" style="margin-bottom:8px"><input type="radio" name="lgm" value="name" ${dc.logoMode === 'name' ? 'checked' : ''}> ชื่อร้านแบบตัวอักษร</label>
      <div id="lgup" style="margin-bottom:8px"><label class="btn ghost sm">อัปโหลดรูปโลโก้<input type="file" accept="image/*" id="lgf" hidden></label></div>
-     <div id="lgp"></div><div class="tiny muted" style="margin-top:6px">กดบันทึกด้านล่าง แล้วจอลูกค้าจะเปลี่ยนตอนขายบิลถัดไป</div></div><div class="card" id="cic"></div><div class="card" id="adc"></div><div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
+     <div id="lgp"></div><div class="tiny muted" style="margin-top:6px">กดบันทึกด้านล่าง แล้วจอลูกค้าจะเปลี่ยนตอนขายบิลถัดไป</div></div><div class="card" id="idc"></div><div class="card" id="cic"></div><div class="card" id="adc"></div><div class="card"><h3>ข้อความบนจอ</h3><label class="f"><span>ข้อความต้อนรับ</span><input class="in" id="wc" value="${esc(dc.welcome)}"></label><label class="f"><span>ข้อความโปรโมชัน (แสดงตอนว่าง)</span><input class="in" id="pm" value="${esc(dc.promo)}" placeholder="เช่น ส่งฟรี! สั่งครบ 300 บาท โทร 092-806-5163"></label><button class="btn green block" id="sv">บันทึก</button></div>` : ''}`;
   $('#op', el).onclick = async () => {
     // ถ้ามีจอที่สอง: เปิดหน้าต่างจอลูกค้าเต็มพื้นที่จอนั้นเลย (Chrome จะถามสิทธิ์ "จัดการหน้าต่าง" ครั้งแรก)
     try { if ('getScreenDetails' in window) { const sd = await window.getScreenDetails(); const ext = sd.screens.find(x => x !== sd.currentScreen) || null; if (ext) { const w2 = window.open(base + '#display', 'mmdisplay', `popup,left=${ext.availLeft},top=${ext.availTop},width=${ext.availWidth},height=${ext.availHeight}`); if (w2) { toast('เปิดจอลูกค้าบนจอที่สองแล้ว — คลิกที่จอลูกค้า 1 ครั้งเพื่อเต็มจอ'); return; } } } } catch (e) { }
@@ -541,13 +553,111 @@ VIEWS.displayset = el => {
     pv();
   }
   const adc = $('#adc', el); if (adc) adSettings(adc);
+  const idc = $('#idc', el); if (idc) idleSettings(idc);
   const cic = $('#cic', el);
   if (cic) { const dr = () => { cic.innerHTML = `<h3>ลูกค้ากรอกข้อมูลบนจอลูกค้า</h3><label class="row" style="margin:4px 0"><input type="checkbox" id="ci" ${custInputOn() ? 'checked' : ''}> <b>เปิดให้ลูกค้ากดกรอกเลขบัญชี / เบอร์โทร / เลขบิล ที่จอลูกค้า</b></label>
       <div class="small muted">ใช้ได้เมื่อจอลูกค้าเป็นจอทัชสกรีน (แท็บเล็ต/มือถือ) · ถ้าเป็นจอเสริมที่แตะไม่ได้ ให้ปิด — จอลูกค้าจะแสดงเลขบัญชี ธนาคาร เครือข่าย เบอร์ และยอด ที่พนักงานกรอก ให้ลูกค้าตรวจสอบอย่างเดียว (แสดงทั้งเปิดและปิด)</div>`;
       $('#ci', cic).onchange = async e => { try { busy(1); await saveSetting('custInput', e.target.checked ? 'Y' : 'N'); busy(0); toast(e.target.checked ? 'เปิดให้ลูกค้ากรอกบนจอลูกค้าแล้ว' : 'ปิดแล้ว — จอลูกค้าแสดงข้อมูลให้ตรวจสอบอย่างเดียว'); } catch (x) { busy(0); toast(x.message, 1); dr(); } }; };
     dr(); }
-  const sv = $('#sv', el); if (sv) sv.onclick = async () => { try { busy(1); await saveSetting('displayCfg', { welcome: $('#wc', el).value, promo: $('#pm', el).value, logoMode: ($('[name=lgm]:checked', el) || {}).value || 'mark', logo: lgImg }); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
+  const sv = $('#sv', el); if (sv) sv.onclick = async () => { try { busy(1); await saveSetting('displayCfg', { ...cfg('displayCfg', {}), welcome: $('#wc', el).value, promo: $('#pm', el).value, logoMode: ($('[name=lgm]:checked', el) || {}).value || 'mark', logo: lgImg }); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
 };
+
+// หน้าจอตอนว่าง (เจ้าของร้าน): ข้อความ เบอร์ QR วิดีโอ YouTube + ตัวอย่างสด
+function idleSettings(box) {
+  const dc0 = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
+  let c = idleCfg(dc0);
+  const F = (k, label, ph, ta) => `<label class="f"><span>${label}</span>${ta ? `<textarea class="in" data-k="${k}" rows="3" placeholder="${esc(ph || '')}">${esc(c[k] || '')}</textarea>` : `<input class="in" data-k="${k}" value="${esc(c[k] || '')}" placeholder="${esc(ph || '')}">`}</label>`;
+  box.innerHTML = `<h3>หน้าจอตอนว่าง (ยังไม่มีการขาย)</h3>
+    <div class="seg" id="ist" style="margin-bottom:8px;flex-wrap:wrap"><button data-s="festive">เทศกาล</button><button data-s="clean">เรียบ</button><button data-s="slides">ภาพของร้าน (สไลด์โชว์)</button><button data-s="off">แบบเดิม</button></div>
+    <div id="ipv" style="aspect-ratio:16/9;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px #0002;margin-bottom:10px"></div>
+    <div id="isl"></div>
+    <div id="ifn"><label class="f"><span>ฟอนต์ข้อความ (แบบไม่มีหัว)</span><select class="in" id="ifont"><option value="prompt">Prompt (ค่าเริ่มต้น)</option><option value="kanit">Kanit</option><option value="mitr">Mitr (มน)</option><option value="anuphan">Anuphan</option><option value="baij">Bai Jamjuree</option><option value="custom">ไฟล์ฟอนต์ของร้าน${c.fontName ? ' — ' + esc(c.fontName) : ''}</option></select></label>
+      <div class="row small" style="gap:8px;margin:-4px 0 10px"><label class="btn ghost sm">อัปโหลดไฟล์ฟอนต์ (.ttf .otf .woff2)<input type="file" id="iff" accept=".ttf,.otf,.woff,.woff2" hidden></label><span class="tiny muted">เช่น PSL Omyim — ใช้ไฟล์ที่ร้านมีสิทธิ์ใช้งาน</span></div></div>
+    <div id="ifs">
+    <div class="grid2">${F('top', 'ข้อความบรรทัดบน (สีเขียว)', 'เช่น พิเศษ บริการส่ง')}${F('big', 'ข้อความตัวใหญ่', 'เช่น ฟรี*')}</div>
+    <div class="grid2">${F('tag', 'ป้ายเอียงข้างตัวใหญ่', 'เช่น DELIVERY')}${F('phone', 'เบอร์โทรสั่งสินค้า', 'เช่น 092-806-5163')}</div>
+    ${F('sub', 'ข้อความตัวหนาด้านล่าง', 'เช่น *สั่งสินค้าตั้งแต่ 300 บาท ขึ้นไป')}${F('note', 'หมายเหตุตัวเล็ก', 'เช่น *ในระยะทางไม่เกิน 5 กิโลเมตร')}
+    ${F('info', 'ข้อความใต้โลโก้ (บรรทัดละ 1 ข้อ เช่น ที่อยู่ เวลาเปิด-ปิด)', 'บ้านกะเลา ต.หมื่นศรี อ.สำโรงทาบ จ.สุรินทร์\nเปิดทุกวัน 06.00 - 20.00 น.', true)}
+    ${F('qr', 'QR มุมขวาล่าง (ลิงก์ LINE / เพจ)', 'https://lin.ee/...')}
+    ${F('yt', 'วิดีโอ (ลิงก์ YouTube หรือไฟล์ .mp4 จากเว็บ) — ว่าง = ไม่แสดง', 'https://youtu.be/...')}
+    <div class="tiny muted" style="margin:-4px 0 8px">วิดีโอเล่นบนเครื่องจอลูกค้าเท่านั้น (ปิดเสียง วนซ้ำ) ไม่โหลดผ่านเครื่องขาย จึงไม่ทำให้การขายช้า · เครื่องจอลูกค้าต้องต่อเน็ต · ข้อความ "ยินดีต้อนรับ" และ "โปรโมชัน" ตั้งที่การ์ด ข้อความบนจอ ด้านล่าง</div>
+    <label class="row small" style="margin-bottom:8px"><input type="checkbox" id="iride" ${c.ride !== false ? 'checked' : ''}> รถส่งของวิ่งผ่าน</label></div>
+    <button class="btn green block" id="isv">บันทึกหน้าจอตอนว่าง</button>`;
+  const read = () => { $$('[data-k]', box).forEach(i => c[i.dataset.k] = i.value.trim()); c.info = ($('[data-k=info]', box).value || '').trim(); c.ride = $('#iride', box).checked; return c; };
+  const pv = () => {
+    read();
+    const dc = cfg('displayCfg', { welcome: 'ยินดีต้อนรับ', promo: '' });
+    $$('#ist button', box).forEach(b => b.classList.toggle('on', b.dataset.s === c.style));
+    $('#ifs', box).style.display = c.style === 'off' || c.style === 'slides' ? 'none' : '';
+    $('#ifn', box).style.display = c.style === 'off' ? 'none' : '';
+    drawSlides();
+    const p = $('#ipv', box);
+    if (c.style === 'off') { p.innerHTML = '<div class="center muted" style="height:100%;display:flex;align-items:center;justify-content:center">แบบเดิม: โลโก้ร้าน + ข้อความต้อนรับ + โปรโมชัน</div>'; return; }
+    p.innerHTML = idleScene({ idle: { ...c, yt: c.yt ? '' : '' }, welcome: dc.welcome, promo: dc.promo, shop: S.settings.shopName, brandC: S.settings.brandLogo }, true);
+    if (c.yt) { const r = $('.iright', p); const ok = !!idleVideoHTML(c.yt); r.insertAdjacentHTML('afterbegin', `<div class="ivw" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:3cqmin">${ok ? '▶ วิดีโอจะเล่นตรงนี้บนจอลูกค้า' : '⚠ ลิงก์วิดีโอไม่ถูกต้อง'}</div>`); const h = $('.ihd', r); h && h.classList.add('sm'); }
+    idleAfter(p);
+  };
+  // ---- สไลด์โชว์ภาพของร้าน ----
+  const saveNow = async () => { await saveSetting('displayCfg', { ...cfg('displayCfg', {}), idle: { ...c } }); Display.repush && Display.repush(); };
+  const drawSlides = () => {
+    const w = $('#isl', box); if (c.style !== 'slides') { w.innerHTML = ''; return; }
+    const L = c.slides || (c.slides = []);
+    w.innerHTML = `<div class="small muted" style="margin-bottom:6px">อัปโหลดภาพที่ออกแบบไว้ (แนวนอน 16:9 เช่น 1920×1080) — แสดงเต็มจอ เปลี่ยนภาพแบบค่อย ๆ จาง ซูมช้า ๆ และมีเอฟเฟกต์เคลื่อนไหวซ้อนด้านบน</div>
+      ${L.map((x, i) => `<div class="row" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><div class="slt" data-id="${esc(x.id)}" style="width:96px;height:54px;border-radius:6px;background:#eee;overflow:hidden;flex:none"></div><div class="grow small" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.name || 'ภาพ ' + (i + 1))}</div><button class="btn ghost sm" data-up="${i}" ${i ? '' : 'disabled'}>▲</button><button class="btn ghost sm" data-dn="${i}" ${i < L.length - 1 ? '' : 'disabled'}>▼</button><button class="btn ghost sm" data-rm="${i}" style="color:var(--red)">ลบ</button></div>`).join('')}
+      <div class="row" style="gap:8px;margin:8px 0;flex-wrap:wrap"><label class="btn sm">＋ เพิ่มภาพ<input type="file" id="isf" accept="image/*" multiple hidden></label>
+        <label class="row small" style="gap:6px">เปลี่ยนภาพทุก <input class="in" id="isec" type="number" min="3" max="60" value="${c.sec || 8}" style="width:70px;min-height:36px"> วินาที</label>
+        <select class="in" id="ifit" style="width:auto;min-height:36px"><option value="contain">แสดงทั้งภาพ</option><option value="cover">เต็มจอ (ตัดขอบ)</option></select>
+        <label class="row small" style="gap:6px"><input type="checkbox" id="ifx" ${c.fx !== false ? 'checked' : ''}> เอฟเฟกต์ พลุ·กระดาษสี·ประกาย</label>
+        <input class="in" id="iphs" placeholder="เบอร์โทรมุมขวาล่าง (ไม่ใส่ก็ได้)" value="${esc(c.phone || '')}" style="max-width:240px;min-height:36px"></div>`;
+    $('#ifit', w).value = c.fit || 'contain';
+    $$('.slt', w).forEach(t => AdFiles.url(t.dataset.id).then(u => t.innerHTML = `<img src="${u}" style="width:100%;height:100%;object-fit:cover">`).catch(() => { }));
+    const mv = (i, j) => { const L2 = c.slides; [L2[i], L2[j]] = [L2[j], L2[i]]; saveNow().then(pv).catch(e => toast(e.message, 1)); };
+    $$('[data-up]', w).forEach(b => b.onclick = () => mv(+b.dataset.up, +b.dataset.up - 1));
+    $$('[data-dn]', w).forEach(b => b.onclick = () => mv(+b.dataset.dn, +b.dataset.dn + 1));
+    $$('[data-rm]', w).forEach(b => b.onclick = async () => { const x = c.slides[+b.dataset.rm]; if (!(await confirmDlg('ลบภาพนี้?', 'ลบ', true))) return; c.slides.splice(+b.dataset.rm, 1); try { busy(1); await saveNow(); api('adDelete', { id: x.id }).catch(() => { }); AdFiles.drop(x.id); busy(0); pv(); } catch (e) { busy(0); toast(e.message, 1); } });
+    $('#isec', w).onchange = e => { c.sec = Math.max(3, Math.min(60, +e.target.value || 8)); saveNow().then(pv).catch(er => toast(er.message, 1)); };
+    $('#ifit', w).onchange = e => { c.fit = e.target.value; saveNow().then(pv).catch(er => toast(er.message, 1)); };
+    $('#ifx', w).onchange = e => { c.fx = e.target.checked; saveNow().then(pv).catch(er => toast(er.message, 1)); };
+    $('#iphs', w).onchange = e => { c.phone = e.target.value.trim(); const ph = $('[data-k=phone]', box); if (ph) ph.value = c.phone; saveNow().then(pv).catch(er => toast(er.message, 1)); };
+    $('#isf', w).onchange = async e => {
+      const files = [...e.target.files]; if (!files.length) return;
+      try {
+        for (let k = 0; k < files.length; k++) {
+          busy(1, `กำลังอัปโหลดภาพ ${k + 1}/${files.length}...`);
+          const im = await loadImg(URL.createObjectURL(files[k])), sc = Math.min(1, 1920 / im.width, 1080 / im.height), cv = document.createElement('canvas');
+          cv.width = Math.round(im.width * sc); cv.height = Math.round(im.height * sc); const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(im, 0, 0, cv.width, cv.height);
+          const du = cv.toDataURL('image/jpeg', .88);
+          const up = await api('upload', { kind: 'ad', name: files[k].name, mime: 'image/jpeg', base64: du });
+          await AdFiles.put(up.fileId, du);
+          (c.slides || (c.slides = [])).push({ id: up.fileId, name: files[k].name });
+        }
+        await saveNow(); busy(0); toast('เพิ่มภาพแล้ว'); pv();
+      } catch (er) { busy(0); toast(er.message, 1); }
+    };
+  };
+  $('#ifont', box).value = c.font || 'prompt';
+  $('#ifont', box).onchange = e => { if (e.target.value === 'custom' && !c.fontId) { e.target.value = c.font || 'prompt'; return toast('อัปโหลดไฟล์ฟอนต์ก่อน', 1); } c.font = e.target.value; pv(); };
+  $('#iff', box).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const ext = (f.name.split('.').pop() || '').toLowerCase(), mime = { ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2' }[ext];
+    if (!mime) return toast('รองรับไฟล์ .ttf .otf .woff .woff2', 1);
+    if (f.size > 4e6) return toast('ไฟล์ฟอนต์ใหญ่เกิน 4 MB', 1);
+    try {
+      busy(1, 'กำลังอัปโหลดฟอนต์...');
+      const du = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).replace(/^data:[^,]*,/, 'data:' + mime + ';base64,')); r.onerror = rej; r.readAsDataURL(f); });
+      const up = await api('upload', { kind: 'ad', name: f.name, mime, base64: du });
+      await AdFiles.put(up.fileId, du);
+      if (c.fontId) api('adDelete', { id: c.fontId }).catch(() => { });
+      c.font = 'custom'; c.fontId = up.fileId; c.fontName = f.name; delete IdleFont.loaded['custom:' + up.fileId];
+      await saveNow(); busy(0); toast('อัปโหลดฟอนต์แล้ว'); idleSettings(box);
+    } catch (er) { busy(0); toast(er.message, 1); }
+  };
+  let t; box.addEventListener('input', () => { clearTimeout(t); t = setTimeout(pv, 300); });
+  $('#iride', box).onchange = pv;
+  $$('#ist button', box).forEach(b => b.onclick = () => { c.style = b.dataset.s; pv(); });
+  $('#isv', box).onclick = async () => { read(); if (c.yt && !idleVideoHTML(c.yt)) return toast('ลิงก์วิดีโอไม่ถูกต้อง (ใช้ลิงก์ YouTube หรือไฟล์ .mp4)', 1); try { busy(1); await saveSetting('displayCfg', { ...cfg('displayCfg', {}), idle: { ...c } }); busy(0); toast('บันทึกแล้ว — จอลูกค้าเปลี่ยนภายในไม่กี่วินาที'); Display.repush && Display.repush(); } catch (e) { busy(0); toast(e.message, 1); } };
+  pv();
+}
 
 // ตั้งค่าโฆษณาฝั่งขวาของจอลูกค้า (เจ้าของร้าน) — เปลี่ยนแล้วบันทึกทันที
 function adSettings(box) {

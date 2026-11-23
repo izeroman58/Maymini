@@ -50,21 +50,30 @@ var Logic = (function () {
     return out;
   }
   // ตรวจรหัสเจ้าของร้าน (ส่งมาเป็น payload.ownerPin)
-  function pinOk(db) {
+  // รหัสอนุญาตพนักงาน (แยกจากรหัสเจ้าของ) ใช้ได้เฉพาะงานสินค้า: แก้ไขสินค้า · นับสต็อก · รับของเข้า
+  var AP_SCOPE = { editProducts: 1, stockCount: 1, receiveGoods: 1 };
+  function pinKind(db) {
     if (PINOK !== null) return PINOK;
-    if (!OWNERPIN) return (PINOK = false);
+    if (!OWNERPIN) return (PINOK = '');
     var h = db.hash(String(OWNERPIN)), ap = (db.settings() || {}).secretApprovePin;
-    // รับได้ทั้งรหัสเข้าระบบของเจ้าของ และ "รหัสอนุมัติ" ที่เจ้าของตั้งแยกไว้ (ให้พนักงานที่ไว้ใจได้ใช้นับสต็อก/แก้สินค้า โดยไม่ต้องรู้รหัสเข้าระบบเจ้าของ)
-    PINOK = (ap && ap === h) || db.read('Users', {}).some(function (x) { return x.role === 'owner' && x.active !== 'N' && x.pinHash === h; });
-    if (!PINOK) err('PIN_BAD: รหัสเจ้าของร้านไม่ถูกต้อง');
-    return PINOK;
+    if (db.read('Users', {}).some(function (x) { return x.role === 'owner' && x.active !== 'N' && x.pinHash === h; })) return (PINOK = 'owner');
+    if (ap && ap === h) return (PINOK = 'ap');
+    err('PIN_BAD: รหัสไม่ถูกต้อง');
+  }
+  // ตรวจรหัส (ส่งมาเป็น payload.ownerPin) — รหัสเจ้าของร้านใช้ได้ทุกเรื่อง · รหัสอนุญาตใช้ได้เฉพาะงานสินค้า
+  function pinOk(db, perm) {
+    var k = pinKind(db);
+    if (k === 'owner') return true;
+    if (k === 'ap' && (!perm || AP_SCOPE[perm])) return true;
+    if (k === 'ap') err('PIN_BAD: รหัสอนุญาตใช้ได้เฉพาะ แก้ไขสินค้า / นับสต็อก / รับของ — เรื่องนี้ต้องใช้รหัสเจ้าของร้าน');
+    return false;
   }
   function can(db, u, p) {
     if (!u) return false;
     if (u.role === 'owner' || p === 'all') return true;
     if (p === 'owner' || p === 'none') return false;
     var v = perms(db)[p];
-    return v === true || (v === 'pin' && pinOk(db));
+    return v === true || (v === 'pin' && pinOk(db, p));
   }
   function need(db, u, p) {
     if (can(db, u, p)) return;
@@ -584,7 +593,7 @@ var Logic = (function () {
     OWNERPIN = p && p.ownerPin || null; PINOK = null;
     switch (a) {
       case 'setApprovePin': return setApprovePin(db, u, p.pin);
-      case 'checkPin': pinOk(db); if (!PINOK) err('PIN_BAD: กรุณาใส่รหัสเจ้าของร้าน'); return { ok: true };
+      case 'checkPin': if (!pinOk(db, p.scope)) err('PIN_BAD: กรุณาใส่รหัสเจ้าของร้าน'); return { ok: true, kind: PINOK };
       case 'list': return { rows: list(db, u, p.table, p.opt) };
       case 'upsert': return { rows: upsert(db, u, p.table, p.rows) };
       case 'remove': return { removed: remove(db, u, p.table, p.ids) };

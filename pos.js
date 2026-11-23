@@ -345,17 +345,19 @@ window.keypad = keypad;
 // ยืนยันแบบลอยเหนือหน้ากล้องสแกน
 function confirmDlgZ(msg) { return new Promise(res => { const ov = sheet('ยืนยัน', `<p>${esc(msg)}</p>`, `<button class="btn ghost grow" id="n">ยกเลิก</button><button class="btn grow" id="y" style="background:var(--red)">ตกลง</button>`); ov.style.zIndex = 90; $('#n', ov).onclick = () => { ov.remove(); res(false); }; $('#y', ov).onclick = () => { ov.remove(); res(true); }; }); }
 async function ownerGate(reason, scope) {
-  if (!S.user || S.user.role === 'owner' || Elev.ok) return true;
-  const pin = await ownerPinDlg(reason); if (!pin) return false;
-  try { busy(1, 'กำลังตรวจรหัส...'); await apiRaw('checkPin', { ownerPin: pin }); busy(0); Elev.set(pin, scope); OfflineAuth.rememberOwnerPin(pin); return true; }
+  const perm = scope === 'stock' ? 'stockCount' : 'editProducts';
+  if (!S.user || S.user.role === 'owner' || Elev.covers(perm)) return true;
+  const pin = await ownerPinDlg(reason, true); if (!pin) return false;
+  try { busy(1, 'กำลังตรวจรหัส...'); const r = await apiRaw('checkPin', { ownerPin: pin, scope: perm }); busy(0); Elev.set(pin, scope, r.kind); if (r.kind !== 'ap') OfflineAuth.rememberOwnerPin(pin); return true; }
   catch (e) { busy(0); if (e.offline && await OfflineAuth.checkOwnerPin(pin)) { Elev.set(pin, scope); toast('อนุมัติแบบออฟไลน์'); return true; } toast(String(e.message).replace(/^PIN_\w+:\s*/, ''), 1); return false; }
 }
 async function gate(perm) {
-  if (canStrict(perm) || Elev.ok) return true;
+  if (canStrict(perm) || Elev.covers(perm)) return true;
   if (S.perms[perm] !== 'pin') { toast('ไม่มีสิทธิ์: ' + ((S.defs[perm] || [])[0] || perm), 1); return false; }
-  const pin = await ownerPinDlg((S.defs[perm] || [])[0] || '');
+  const apOK = ['editProducts', 'stockCount', 'receiveGoods'].includes(perm);
+  const pin = await ownerPinDlg((S.defs[perm] || [])[0] || '', apOK);
   if (!pin) return false;
-  try { busy(1, 'กำลังตรวจรหัส...'); await apiRaw('checkPin', { ownerPin: pin }); busy(0); Elev.set(pin, perm === 'editProducts' && ELEV_AREA.includes(S.view) ? 'products' : ''); OfflineAuth.rememberOwnerPin(pin); return true; }
+  try { busy(1, 'กำลังตรวจรหัส...'); const r = await apiRaw('checkPin', { ownerPin: pin, scope: perm }); busy(0); Elev.set(pin, perm === 'editProducts' && ELEV_AREA.includes(S.view) ? 'products' : '', r.kind); if (r.kind !== 'ap') OfflineAuth.rememberOwnerPin(pin); return true; }
   catch (e) {
     busy(0);
     if (e.offline && await OfflineAuth.checkOwnerPin(pin)) { Elev.set(pin, perm === 'editProducts' && ELEV_AREA.includes(S.view) ? 'products' : ''); toast('อนุมัติแบบออฟไลน์'); return true; }
@@ -697,7 +699,7 @@ const POS = {
       const it = this.t.items[i];
       return popMenu($$('.titem', this.el)[i], [[`ลบ “${esc(it.name)}”`, async () => { if (!(await gate('clearTicket'))) return; const k = it.svc; this.t.items = this.t.items.filter(x => !(x.svc === k && (x === it || x.sku === 'SVC-FEE' && x.svc === k))); if (k === 'in') this.t.cashOut = 0; this.save(); }]], 'right');
     }
-    const it = this.t.items[i]; const pe = canStrict('priceEdit') || Elev.ok, pePin = !pe && S.perms.priceEdit === 'pin';
+    const it = this.t.items[i]; const pe = canStrict('priceEdit') || Elev.covers('priceEdit'), pePin = !pe && S.perms.priceEdit === 'pin';
     const ov = sheet(esc(it.name), `<div class="row" style="justify-content:center;gap:14px;margin:6px 0 14px"><button class="btn ghost" id="m" style="width:60px;font-size:24px">−</button><input class="in center" id="q" type="number" inputmode="decimal" step="any" value="${it.qty}" style="width:120px;font-size:24px;font-family:var(--fh)"><button class="btn ghost" id="p" style="width:60px;font-size:24px">+</button></div>
       <label class="f"><span>ราคาต่อหน่วย ${pe ? '' : pePin ? '' : '(ไม่มีสิทธิ์แก้ราคา)'}</span><div class="row"><input class="in grow" id="pr" type="number" inputmode="decimal" step="any" value="${it.price}" ${pe ? '' : 'readonly'}>${pePin ? `<button class="btn ghost sm" id="unl">🔒 แก้ราคา</button>` : ''}</div></label>`,
       `${can('clearTicket') ? `<button class="btn ghost grow" id="rm" style="color:var(--red)">${I(IC.trash, 18)} ลบ</button>` : ''}<button class="btn grow green" id="ok">ตกลง</button>`);
@@ -762,7 +764,7 @@ const POS = {
       { t: 'ขาย & บิล', ic: IC.receipt, items: [
         ['ใบเสร็จรับเงิน' + (seesSales() ? '' : ' (วันนี้)'), IC.receipt, () => go('salesreceipts')],
         ['เช็คราคา', IC.scan, () => go('scan')],
-        ['บริการ โอน / เติม / บิล', IC.sale, () => svcMenu()],
+        ['บริการ โอน / เติม / บิล', '<path d="M7 7h11l-3-3M17 17H6l3 3"/>', () => svcMenu()],
         ['สถานะงานโอน / บิล', IC.alert, () => go('jobs')],
         ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true), Sync.box.length || '']] },
       { t: 'สินค้า', ic: IC.box, items: [
@@ -772,13 +774,13 @@ const POS = {
         can('customers') && ['ลูกค้า', IC.user, () => go('customers')]] },
       { t: 'อุปกรณ์', ic: IC.print, items: [
         ['เครื่องพิมพ์ใบเสร็จ', IC.print, () => go('printer')],
-        pconn().drawer && ['เปิดลิ้นชัก', IC.sale, () => RP.kick().then(() => toast('เปิดลิ้นชักแล้ว'), e => toast(e.message, 1))],
+        pconn().drawer && ['เปิดลิ้นชัก', '<rect x="2.5" y="10" width="19" height="10" rx="1.5"/><path d="M4.5 10l2-5.5h11l2 5.5"/><path d="M9.5 15h5"/>', () => RP.kick().then(() => toast('เปิดลิ้นชักแล้ว'), e => toast(e.message, 1))],
         ['เครื่องยิงบาร์โค้ด', IC.scan, () => go('scannerset')],
         ['จอลูกค้า', IC.monitor, () => go('displayset')]] },
       { t: 'หน้าขาย', ic: IC.grid, items: [
-        [this.edit ? 'ปิดโหมดแก้ไขปุ่ม' : 'แก้ไขปุ่มลัด', IC.edit, () => this.toggleEdit()],
-        [dk ? 'โทนสว่าง' : 'โทนมืด', IC.monitor, () => { LS.set('posDark', !dk); $('#pos', this.el).classList.toggle('dk', !dk); }],
-        [sy ? 'ปิดซิงค์ตั๋ว (ชื่อเดียวกัน)' : 'เปิดซิงค์ตั๋ว (ชื่อเดียวกัน)', IC.wifi, () => { LS.set('tkSync', !sy); toast(!sy ? 'เปิดซิงค์ตั๋วแล้ว — เครื่องที่ล็อกอินชื่อเดียวกันเห็นตั๋วเดียวกัน' : 'ปิดซิงค์ตั๋วแล้ว — เครื่องนี้ใช้ตั๋วแยก'); if (!sy) TSync.out(); TSync.badge(); }]] },
+        [this.edit ? 'ปิดโหมดแก้ไขปุ่ม' : 'แก้ไขปุ่มลัด', IC.edit, () => this.toggleEdit(), '', false, 'editlayout'],
+        [dk ? 'โทนสว่าง' : 'โทนมืด', dk ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>' : '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', () => { LS.set('posDark', !dk); $('#pos', this.el).classList.toggle('dk', !dk); }, '', false, 'tone'],
+        [sy ? 'ปิดซิงค์ตั๋ว (ชื่อเดียวกัน)' : 'เปิดซิงค์ตั๋ว (ชื่อเดียวกัน)', IC.wifi, () => { LS.set('tkSync', !sy); toast(!sy ? 'เปิดซิงค์ตั๋วแล้ว — เครื่องที่ล็อกอินชื่อเดียวกันเห็นตั๋วเดียวกัน' : 'ปิดซิงค์ตั๋วแล้ว — เครื่องนี้ใช้ตั๋วแยก'); if (!sy) TSync.out(); TSync.badge(); }, '', false, 'tksync']] },
       Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }]
     ];
     Drawer.open({ mode: 'overlay', key: 'pos', head: drawerHead(), groups: G,

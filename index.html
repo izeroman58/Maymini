@@ -143,12 +143,15 @@ body.navdock #app{padding-left:min(330px,86vw)}body.navdock .nav{left:min(330px,
 .drw .dic{width:24px;display:flex;justify-content:center;color:var(--ink2)}.drw .dt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .drw .dch{color:var(--ink3);transition:transform .18s;display:flex}.drw .dgrp.open .dch{transform:rotate(180deg)}.drw .dgrp.open>.dg{color:var(--red)}.drw .dgrp.open>.dg .dic{color:var(--red)}
 .drw .dsub{display:none;padding:2px 0 8px;background:#FAF7F5}.drw .dgrp.open .dsub{display:block}
-.drw .di{min-height:46px;padding:0 14px 0 56px;font-size:15.5px;color:var(--ink)}.drw .di .dic{display:none}
+.drw .di{min-height:46px;padding:0 14px 0 34px;gap:12px;font-size:15.5px;color:var(--ink)}.drw .di .dic{color:var(--ink3)}.drw .di.on .dic{color:var(--red)}
+.drw .drag{background:#fff!important;box-shadow:0 6px 18px rgba(0,0,0,.22);border-radius:10px;position:relative;z-index:2;opacity:.95}.drw .dhint{font-size:11.5px;color:var(--ink3);padding:4px 18px 8px}
+.drw.inl{position:static;transform:none;width:auto;box-shadow:none;border-radius:18px;overflow:hidden;background:#fff;z-index:auto;padding:0}.drw.inl .db{overflow:visible}
+.drw .dg,.drw .di{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .drw .di.on,.drw .dg.one.on{color:var(--red);font-weight:700;background:#D6001C0d}
 .drw .dbad{background:var(--red);color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:2px 8px;min-width:22px;text-align:center}
 .drw .df{border-top:1px solid var(--line);padding:6px 0 calc(8px + var(--safe-b))}.drw .df .ver{padding:4px 18px;color:var(--ink3);font-size:12.5px}
 .scan{position:fixed;inset:0;background:#000;z-index:80;display:flex;flex-direction:column}
-.scan.inline{position:relative;inset:auto;z-index:1;height:min(40vh,320px);border-radius:16px;overflow:hidden;margin:0 0 10px}.scan.inline .bot{display:none}.scan.inline .bar{padding:8px 10px}
+.scan.inline{position:relative;inset:auto;z-index:1;height:clamp(150px,24vh,200px);border-radius:16px;overflow:hidden;margin:0 0 10px}.scan.inline .bot{display:none}.scan.inline .frame{top:24%;height:52%}.scan.inline .bar{padding:8px 10px}
 .scan video{flex:1;width:100%;object-fit:cover;min-height:0}.scan .cam{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}.scan.split .cam{flex:none;height:44vh}.scan.split .frame{top:22%;height:36%}.scan.split .last{display:none}.scan.split .bot{padding-bottom:10px}.scan .spane{flex:1;min-height:0;background:var(--bg,#f6f3f2);display:flex;flex-direction:column}
 .scan .frame{position:absolute;left:10%;right:10%;top:30%;height:22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
 .scan .frame:after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff3049;box-shadow:0 0 8px #ff3049;animation:ln 1.6s ease-in-out infinite}
@@ -210,7 +213,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.38';
+const APP_VER = '2.6.41';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -318,25 +321,65 @@ const menuKey = it => it[3] || String(it[0]).replace(/<[^>]*>/g, '').replace(/\s
    mode 'dock'   : จอกว้าง เมนูค้างด้านซ้าย หน้าที่เลือกแสดงด้านขวา · ปิดด้วยลูกศร ‹ มุมขวาบนของเมนู (เพิ่มเติม)
    ========================================================= */
 const Drawer = {
+  // id คงที่ของรายการ (ใช้จำลำดับที่ลากจัดไว้) — ป้ายที่เปลี่ยนตามสถานะ เช่น "(3)" ไม่มีผล
+  kid(it) { return it[5] || String(it[0]).replace(/\s*\(.*\)\s*$/, '').trim(); },
+  order(key) { return LS.get('drwOrd_' + key, { g: [], i: {} }); },
+  sortBy(list, ids, idf) { if (!ids || !ids.length) return list; const pos = new Map(ids.map((x, i) => [x, i])); return list.map((x, i) => [x, i]).sort((a, b) => { const pa = pos.has(idf(a[0])) ? pos.get(idf(a[0])) : 1e3 + a[1], pb = pos.has(idf(b[0])) ? pos.get(idf(b[0])) : 1e3 + b[1]; return pa - pb; }).map(x => x[0]); },
+  // วาดเมนูลงในกล่อง d (ใช้ทั้งลิ้นชักและหน้าเพิ่มเติม)
+  build(d, o, inline) {
+    const key = o.key || 'm', openKey = 'drwOpen_' + key, ord = this.order(key);
+    let openG = LS.get(openKey, '');
+    const gid = g => Array.isArray(g) ? 'i:' + this.kid(g) : 'g:' + g.t;
+    let groups = o.groups.filter(Boolean).map(g => Array.isArray(g) ? g : { ...g, items: this.sortBy(g.items.filter(Boolean), ord.i[g.t], it => this.kid(it)) }).filter(g => Array.isArray(g) || g.items.length);
+    groups = this.sortBy(groups, ord.g, gid);
+    const flat = []; const reg = it => { it._i = flat.length; flat.push(it); return it._i; };
+    const row = (it, sub) => { const [t, ic, , badge, on] = it; return `<button class="${sub ? 'di' : 'dg one'}${on ? ' on' : ''}" data-i="${reg(it)}" data-k="${esc(sub ? this.kid(it) : gid(it))}"><span class="dic">${I(ic || IC.dots, sub ? 19 : 20)}</span><span class="dt">${t}</span>${badge ? `<span class="dbad">${badge}</span>` : ''}</button>`; };
+    d.innerHTML = (inline ? '' : `<div class="dh"><div class="dlogo">${o.head || ''}</div><button class="iconbtn dx" title="ปิดเมนู">${o.closeIcon === 'arrow' ? I('<path d="M15 6l-6 6 6 6"/>', 26) : I(IC.x, 24)}</button></div>`) +
+      `<div class="db">${groups.map(g => Array.isArray(g) ? row(g) : `<div class="dgrp${openG === g.t ? ' open' : ''}" data-k="${esc(gid(g))}" data-t="${esc(g.t)}"><button class="dg" data-g="${esc(g.t)}"><span class="dic">${I(g.ic || IC.dots, 20)}</span><span class="dt">${g.t}</span>${g.badge ? `<span class="dbad">${g.badge}</span>` : ''}<span class="dch">${I('<path d="M6 9l6 6 6-6"/>', 18)}</span></button><div class="dsub">${g.items.map(it => row(it, 1)).join('')}</div></div>`).join('')}</div>
+      <div class="dhint">กดค้างที่หัวข้อหรือรายการ แล้วลากเพื่อย้ายตำแหน่ง</div>` + (o.foot ? `<div class="df">${o.foot}</div>` : '');
+    const dx = $('.dx', d); if (dx) dx.onclick = () => this.close();
+    // กาง/พับ: อ้างอิงชื่อกลุ่ม (ไม่ใช้ลำดับ → ไม่กางผิดกลุ่ม)
+    $$('[data-g]', d).forEach(b => b.onclick = () => { if (d._dragged) return; const t = b.dataset.g; openG = openG === t ? '' : t; LS.set(openKey, openG); $$('.dgrp', d).forEach(x => x.classList.toggle('open', x.dataset.t === openG)); });
+    $$('[data-i]', d).forEach(b => b.onclick = () => { if (d._dragged) return; const it = flat[+b.dataset.i]; if (!it) return; if (!inline && !this.isDock()) this.close(); else $$('[data-i]', d).forEach(x => x.classList.toggle('on', x === b)); setTimeout(() => it[2](), !inline && !this.isDock() ? 120 : 0); });
+    this.dragify(d, key);
+  },
+  // กดค้าง 0.45 วิ แล้วลาก: หัวข้อหลักย้ายระหว่างหัวข้อหลัก · รายการย่อยย้ายในกลุ่มเดียวกัน
+  dragify(d, key) {
+    const body = $('.db', d); if (!body) return;
+    let tm = null, st = null, drag = null;
+    const end = () => { clearTimeout(tm); tm = null; st = null; };
+    body.addEventListener('pointerdown', e => {
+      const b = e.target.closest('.di, .dg'); if (!b) return;
+      const item = b.classList.contains('di') ? b : (b.closest('.dgrp') || b);
+      st = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      tm = setTimeout(() => { drag = { el: item, par: item.parentElement, id: e.pointerId, y0: st.y }; item.classList.add('drag'); d._dragged = true; try { navigator.vibrate && navigator.vibrate(25); } catch (x) { } }, 450);
+    });
+    body.addEventListener('pointermove', e => {
+      if (!drag) { if (st && (Math.abs(e.clientX - st.x) > 8 || Math.abs(e.clientY - st.y) > 8)) end(); return; }
+      e.preventDefault();
+      const sib = [...drag.par.children].filter(x => x !== drag.el && (drag.el.classList.contains('di') ? x.classList.contains('di') : (x.classList.contains('dgrp') || x.classList.contains('one'))));
+      const after = sib.find(x => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+      if (after) drag.par.insertBefore(drag.el, after); else if (sib.length) sib[sib.length - 1].after(drag.el);
+    }, { passive: false });
+    body.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
+    const up = () => {
+      end(); if (!drag) return;
+      const el = drag.el; el.classList.remove('drag'); drag = null;
+      const ord = this.order(key);
+      ord.g = [...body.children].filter(x => x.dataset && x.dataset.k).map(x => x.dataset.k);
+      $$('.dgrp', body).forEach(g => { ord.i[g.dataset.t] = $$('.di', g).map(x => x.dataset.k); });
+      LS.set('drwOrd_' + key, ord);
+      setTimeout(() => { d._dragged = false; }, 50);
+    };
+    body.addEventListener('pointerup', up); body.addEventListener('pointercancel', up);
+    body.addEventListener('contextmenu', e => e.preventDefault());
+  },
   open(o) {
     this.close(true);
     const dock = o.mode === 'dock' && innerWidth >= 1000;
     const sc = document.createElement('div'); sc.className = 'drw-sc';
     const d = document.createElement('aside'); d.className = 'drw' + (dock ? ' dock' : '');
-    const openKey = 'drwOpen_' + (o.key || 'm');
-    let openG = LS.get(openKey, -1);
-    const row = (it, sub) => { const [t, ic, , badge, on] = it; return `<button class="${sub ? 'di' : 'dg one'}${on ? ' on' : ''}" data-i="${it._i}"><span class="dic">${I(ic || IC.dots, 20)}</span><span class="dt">${t}</span>${badge ? `<span class="dbad">${badge}</span>` : ''}</button>`; };
-    let n = 0; const flat = [];
-    const groups = o.groups.filter(Boolean).map(g => { if (Array.isArray(g)) { g._i = n++; flat.push(g); return g; } const items = g.items.filter(Boolean); items.forEach(it => { it._i = n++; flat.push(it); }); return { ...g, items }; }).filter(g => Array.isArray(g) || g.items.length);
-    const draw = () => {
-      d.innerHTML = `<div class="dh"><div class="dlogo">${o.head || ''}</div><button class="iconbtn dx" title="ปิดเมนู">${o.closeIcon === 'arrow' ? I('<path d="M15 6l-6 6 6 6"/>', 26) : I(IC.x, 24)}</button></div>
-        <div class="db">${groups.map((g, gi) => Array.isArray(g) ? row(g) : `<div class="dgrp${openG === gi ? ' open' : ''}"><button class="dg" data-g="${gi}"><span class="dic">${I(g.ic || IC.dots, 20)}</span><span class="dt">${g.t}</span>${g.badge ? `<span class="dbad">${g.badge}</span>` : ''}<span class="dch">${I('<path d="M6 9l6 6 6-6"/>', 18)}</span></button><div class="dsub">${g.items.map(it => row(it, 1)).join('')}</div></div>`).join('')}</div>
-        ${o.foot ? `<div class="df">${o.foot}</div>` : ''}`;
-      $('.dx', d).onclick = () => this.close();
-      $$('[data-g]', d).forEach(b => b.onclick = () => { const gi = +b.dataset.g; openG = openG === gi ? -1 : gi; LS.set(openKey, openG); $$('.dgrp', d).forEach((x, i) => x.classList.toggle('open', i === openG)); });
-      $$('[data-i]', d).forEach(b => b.onclick = () => { const it = flat[+b.dataset.i]; if (!it) return; if (!this.isDock()) this.close(); else { $$('[data-i]', d).forEach(x => x.classList.toggle('on', x === b)); } setTimeout(() => it[2](), this.isDock() ? 0 : 120); });
-    };
-    draw();
+    this.build(d, o, false);
     if (!dock) { document.body.appendChild(sc); sc.onclick = () => this.close(); }
     document.body.appendChild(d);
     this.el = d; this.sc = sc; this.dock = dock; this.o = o;
@@ -470,12 +513,14 @@ async function compressImage(file, max = 1800, q = .82) {
 const ELEV_AREA = ['products', 'scan', 'labels', 'categories'];
 const ELEV_AREAS = { products: ELEV_AREA, stock: ['stockcount'] };
 const Elev = {
-  pin: null, until: 0, scope: '',
+  pin: null, until: 0, scope: '', kind: '',
   get ok() { return this.pin && Date.now() < this.until; },
-  clear() { this.pin = null; this.until = 0; this.scope = ''; clearInterval(this.t); const b = $('#elev'); b && b.remove(); },
+  // รหัสอนุญาต (kind 'ap') ใช้ได้เฉพาะงานสินค้า
+  covers(perm) { return this.ok && (this.kind !== 'ap' || ['editProducts', 'stockCount', 'receiveGoods'].includes(perm)); },
+  clear() { this.pin = null; this.until = 0; this.scope = ''; this.kind = ''; clearInterval(this.t); const b = $('#elev'); b && b.remove(); },
   touch() { if (this.scope && this.ok) this.until = Date.now() + 600e3; },
-  set(pin, scope) {
-    this.pin = pin; this.scope = scope || ''; this.until = Date.now() + (this.scope ? 600e3 : 180e3);
+  set(pin, scope, kind) {
+    this.pin = pin; this.scope = scope || ''; this.kind = kind || ''; this.until = Date.now() + (this.scope ? 600e3 : 180e3);
     let b = $('#elev'); if (!b) { b = document.createElement('div'); b.id = 'elev'; b.style.cssText = 'background:#7B3FB8;color:#fff;border-radius:12px;padding:7px 12px;margin:8px auto 0;max-width:960px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;box-shadow:var(--sh)'; b.onclick = () => { this.clear(); toast('ล็อกสิทธิ์เจ้าของแล้ว'); }; }
     // แถบอยู่เหนือเนื้อหาหน้า (ไม่ลอยทับหัวข้อ)
     const vw = $('#view'); if (vw && b.nextElementSibling !== vw) vw.before(b);
@@ -484,10 +529,10 @@ const Elev = {
   }
 };
 document.addEventListener('pointerdown', () => Elev.touch(), true);
-function ownerPinDlg(reason) {
+function ownerPinDlg(reason, apOK) {
   return new Promise(res => {
     let pin = '';
-    const ov = sheet('ใส่รหัสเจ้าของร้าน / รหัสอนุมัติ', `<div class="center small muted" style="margin-bottom:4px">${esc(reason || '')}</div><div class="dots">${'<i></i>'.repeat(4)}</div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:#7B3FB8;color:#fff;font-size:15px">ยืนยัน</button></div>`, '', { onClose: () => res(null) });
+    const ov = sheet(apOK ? 'ใส่รหัสอนุญาต หรือรหัสเจ้าของร้าน' : 'ใส่รหัสเจ้าของร้าน', `<div class="center small muted" style="margin-bottom:4px">${esc(reason || '')}</div><div class="dots">${'<i></i>'.repeat(4)}</div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-n="${n}">${n}</button>`).join('')}<button data-c style="font-size:14px">ล้าง</button><button data-n="0">0</button><button data-ok style="background:#7B3FB8;color:#fff;font-size:15px">ยืนยัน</button></div>`, '', { onClose: () => res(null) });
     const dots = () => $$('.dots i', ov).forEach((d, i) => d.classList.toggle('on', i < pin.length));
     const ok = () => { if (pin.length < 4) return; ov.remove(); res(pin); };
     const add = d => { if (pin.length >= 4) return; pin += d; dots(); if (pin.length === 4) setTimeout(ok, 120); };
@@ -1400,6 +1445,9 @@ VIEWS.products = async (el, flag) => {
     camClose = await openScanner(code => { showCode(code); if (!findByCode(code)) Scanner.err(); }, { inline: camw, continuous: true, title: 'สแกนเพื่อค้นหาสินค้า', onClose: () => { camClose = null; } });
   };
   Scanner.on('products', code => { if (findByCode(code)) beep(); else Scanner.err(); showCode(code); });
+  // แตะช่องค้นหาเพื่อพิมพ์ → ปิดกล้อง (เปิดใหม่ด้วยปุ่มสแกน)
+  $('#q', el).addEventListener('pointerdown', () => { if (camClose) camClose(); });
+  $('#q', el).addEventListener('focus', () => { if (camClose) camClose(); });
   $('#rf', el).onclick = async () => { busy(1, 'กำลังโหลดสินค้า...'); try { await loadProducts(true); draw(); } catch (e) { toast(e.message, 1); } busy(0); };
   if (!S.products.length) { try { await loadProducts(true); } catch (e) { toast(e.message, 1); } } else { buildIndex(); loadProducts().then(draw).catch(() => { }); }
   draw();
@@ -1867,7 +1915,7 @@ function moreGroups() {
     { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
     { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
     { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', 1), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
-    { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ · PIN', 1), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ โอน/เติม/บิล', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
+    { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ', 1), it('pins', IC.shield, 'รหัสเจ้าของ · รหัสอนุญาต', own), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ โอน/เติม/บิล', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
   ];
 }
 function drawerHead() { return `<div style="display:flex;align-items:center;gap:10px"><img src="${Brand.white ? Brand.white() : 'logo-white.png'}" alt="" style="height:34px;width:auto" onerror="this.remove()"><div style="min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(S.user ? S.user.name : '')}</div><div style="font-size:12px;opacity:.85">${S.user && S.user.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน'}</div></div></div>`; }
@@ -1878,16 +1926,33 @@ function openMore() {
   const lo = $('#dlo', Drawer.el); if (lo) lo.onclick = () => { Drawer.close(); logout(); };
 }
 window.openMore = openMore;
+
+// 🔐 รหัสอนุญาตพนักงาน — แยกจากรหัสเจ้าของร้าน ใช้ได้เฉพาะ แก้ไขสินค้า / นับสต็อก / รับของ
+function apCard(apc) {
+  if (!apc) return;
+  const apDraw = () => { const on = !!S.settings.secretApprovePin;
+    apc.innerHTML = `<div class="row" style="gap:8px"><div class="grow"><b>🔐 รหัสอนุญาตพนักงาน</b><div class="small muted">ให้พนักงานที่ไว้ใจใช้ <b>แก้ไขสินค้า · นับสต็อก · รับของเข้า</b> โดยไม่ต้องรู้รหัสเจ้าของร้าน · ใช้กับเรื่องอื่น (คืนเงิน แก้ราคา ฯลฯ) ไม่ได้</div></div><span class="tag ${on ? 'green' : 'gray'}">${on ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง'}</span></div>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" id="aps">${on ? 'เปลี่ยนรหัสอนุญาต' : 'ตั้งรหัสอนุญาต'}</button>${on ? '<button class="btn ghost" id="apx">ยกเลิก</button>' : ''}</div>
+      <div class="tiny muted" style="margin-top:6px">${on ? 'งานสินค้า: ใช้ได้ทั้งรหัสอนุญาต และรหัสเจ้าของร้าน · เรื่องอื่น: รหัสเจ้าของร้านเท่านั้น' : 'ตอนนี้ทุกเรื่องใช้รหัสเจ้าของร้านอนุมัติ'}</div>`;
+    $('#aps', apc).onclick = () => { const ov = sheet('ตั้งรหัสอนุญาตพนักงาน (ตัวเลข 4 หลัก)', `<label class="f"><span>รหัสอนุญาตใหม่</span><input class="in" id="p1" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-nokp></label><label class="f"><span>ยืนยันอีกครั้ง</span><input class="in" id="p2" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-nokp></label><div class="tiny muted">ต้องไม่ซ้ำกับรหัสเข้าระบบของใคร (รวมรหัสเจ้าของร้าน)</div>`, `<button class="btn block" id="ok">บันทึก</button>`);
+      $('#ok', ov).onclick = async () => { const a = $('#p1', ov).value.trim(), b = $('#p2', ov).value.trim(); if (!/^\d{4}$/.test(a)) return toast('ใส่ตัวเลข 4 หลัก', 1); if (a !== b) return toast('รหัสทั้ง 2 ช่องไม่ตรงกัน', 1);
+        try { busy(1); await api('setApprovePin', { pin: a }); await loadSettings(true).catch(() => { }); S.settings.secretApprovePin = S.settings.secretApprovePin || 'set'; busy(0); ov.remove(); toast('ตั้งรหัสอนุญาตแล้ว'); apDraw(); } catch (e) { busy(0); toast(e.message, 1); } }; };
+    const x = $('#apx', apc); if (x) x.onclick = async () => { if (!(await confirmDlg('ยกเลิกรหัสอนุญาต? (กลับไปใช้รหัสเจ้าของร้านอนุมัติทุกเรื่อง)', 'ยกเลิกรหัส', true))) return; try { busy(1); await api('setApprovePin', { pin: '' }); S.settings.secretApprovePin = ''; busy(0); toast('ยกเลิกแล้ว'); apDraw(); } catch (e) { busy(0); toast(e.message, 1); } };
+  };
+  apDraw();
+}
+VIEWS.pins = el => {
+  if (!isOwner()) return go('home');
+  el.innerHTML = vhead('รหัสผ่าน', '', 'more') + `<div class="card"><div class="row" style="gap:8px"><div class="grow"><b>🔑 รหัสเจ้าของร้าน</b><div class="small muted">ใช้เข้าระบบในชื่อเจ้าของร้าน และอนุมัติได้ทุกเรื่อง — ไม่ควรบอกพนักงาน</div></div></div><button class="btn ghost block" id="cp" style="margin-top:8px">เปลี่ยนรหัสเจ้าของร้าน</button></div>
+    <div class="card" id="apc"></div>
+    <div class="card small muted">เรื่องที่ต้องใช้รหัส (🔒) ตั้งได้ที่ พนักงาน › สิทธิ์ · รหัสพนักงานแต่ละคน ตั้งที่ พนักงาน › ผู้ใช้</div>`;
+  $('#cp', el).onclick = () => changePinDlg();
+  apCard($('#apc', el));
+};
 VIEWS.more = el => {
-  const G = moreGroups();
-  el.innerHTML = vhead('เพิ่มเติม') + G.filter(Boolean).map(g => Array.isArray(g)
-    ? `<button class="card mrow1" data-go="${g[0]}">${I(g[1], 22)}<b class="grow">${g[0]}</b>${g[3] ? `<span class="tag red">${g[3]}</span>` : ''}<span class="muted">›</span></button>`
-    : (g.items = g.items.filter(Boolean)).length ? `<div class="card mgrp"><div class="mgh">${I(g.ic, 20)}<b>${g.t}</b></div><div class="mgi">${g.items.map(x => `<button data-go="${x[0]}">${x[0]}</button>`).join('')}</div></div>` : '').join('') +
-    `<button class="card mrow1" id="lo" style="color:var(--red)">${I(IC.logout, 22)}<b class="grow">ออกจากระบบ</b></button><div class="tiny muted center">v.${APP_VER}</div>
-    <style>.mrow1{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;cursor:pointer;margin-bottom:10px}.mgh{display:flex;align-items:center;gap:10px;margin-bottom:8px;color:var(--ink2)}.mgh b{color:var(--ink)}.mgi{display:flex;flex-wrap:wrap;gap:8px}.mgi button{all:unset;cursor:pointer;padding:9px 14px;border-radius:999px;background:var(--bg);box-shadow:inset 0 0 0 1.5px var(--line);font-size:15px}.mgi button:active{background:#0000000f}</style>`;
-  const flat = []; G.filter(Boolean).forEach(g => Array.isArray(g) ? flat.push(g) : g.items.forEach(x => flat.push(x)));
-  $$('[data-go]', el).forEach(b => b.onclick = () => { const x = flat.find(f => f[0] === b.dataset.go); x && x[2](); });
-  $('#lo', el).onclick = () => logout();
+  el.innerHTML = vhead('เพิ่มเติม') + '<aside class="drw inl" id="mdr"></aside><div class="tiny muted center" style="margin-top:8px">v.' + APP_VER + '</div>';
+  Drawer.build($('#mdr', el), { key: 'more', groups: moreGroups(), foot: `<button class="dg one" id="dlo" style="color:var(--red)"><span class="dic" style="color:var(--red)">${I(IC.logout, 20)}</span><span class="dt">ออกจากระบบ</span></button>` }, true);
+  $('#dlo', el).onclick = () => logout();
 };
 
 /* ---------- SALES (รายเดือน: POS + นำเข้าจาก Loyverse/Excel) ---------- */
@@ -2398,17 +2463,7 @@ VIEWS.users = async el => {
     $$('#ul [data-id]', el).forEach(x => x.onclick = () => userForm(us.find(u => u.id === x.dataset.id), draw));
   };
   $('#add', el).onclick = () => userForm(null, draw); draw();
-  // รหัสอนุมัติ: แยกจากรหัสเข้าระบบเจ้าของ — ใช้อนุมัติ นับสต็อก / แก้ไขสินค้า / คืนเงิน ฯลฯ
-  const apc = $('#apc', el), apDraw = () => { const on = !!S.settings.secretApprovePin;
-    apc.innerHTML = `<div class="row" style="gap:8px"><div class="grow"><b>🔐 รหัสอนุมัติของเจ้าของร้าน</b><div class="small muted">ใช้ตอนพนักงานขออนุมัติ (นับสต็อก แก้ไขสินค้า คืนเงิน ฯลฯ) แทนรหัสเข้าระบบของเจ้าของ · ให้คนที่ไว้ใจรู้ได้โดยไม่ต้องบอกรหัสเข้าระบบ</div></div><span class="tag ${on ? 'green' : 'gray'}">${on ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง'}</span></div>
-      <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" id="aps">${on ? 'เปลี่ยนรหัสอนุมัติ' : 'ตั้งรหัสอนุมัติ'}</button>${on ? '<button class="btn ghost" id="apx">ยกเลิกรหัสอนุมัติ</button>' : ''}</div>
-      <div class="tiny muted" style="margin-top:6px">${on ? 'อนุมัติได้ทั้งรหัสอนุมัติ และรหัสเข้าระบบของเจ้าของ' : 'ตอนนี้ใช้รหัสเข้าระบบของเจ้าของอนุมัติ'}</div>`;
-    $('#aps', apc).onclick = () => { const ov = sheet('ตั้งรหัสอนุมัติ (ตัวเลข 4 หลัก)', `<label class="f"><span>รหัสอนุมัติใหม่</span><input class="in" id="p1" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label><label class="f"><span>ยืนยันอีกครั้ง</span><input class="in" id="p2" type="password" inputmode="numeric" maxlength="4" autocomplete="off"></label><div class="tiny muted">ต้องไม่ซ้ำกับรหัสเข้าระบบของใคร</div>`, `<button class="btn block" id="ok">บันทึก</button>`);
-      $('#ok', ov).onclick = async () => { const a = $('#p1', ov).value.trim(), b = $('#p2', ov).value.trim(); if (!/^\d{4}$/.test(a)) return toast('ใส่ตัวเลข 4 หลัก', 1); if (a !== b) return toast('รหัสทั้ง 2 ช่องไม่ตรงกัน', 1);
-        try { busy(1); await api('setApprovePin', { pin: a }); await loadSettings(true).catch(() => { }); S.settings.secretApprovePin = S.settings.secretApprovePin || 'set'; busy(0); ov.remove(); toast('ตั้งรหัสอนุมัติแล้ว'); apDraw(); } catch (e) { busy(0); toast(e.message, 1); } }; };
-    const x = $('#apx', apc); if (x) x.onclick = async () => { if (!(await confirmDlg('ยกเลิกรหัสอนุมัติ? (กลับไปใช้รหัสเข้าระบบเจ้าของอนุมัติ)', 'ยกเลิกรหัส', true))) return; try { busy(1); await api('setApprovePin', { pin: '' }); S.settings.secretApprovePin = ''; busy(0); toast('ยกเลิกแล้ว'); apDraw(); } catch (e) { busy(0); toast(e.message, 1); } };
-  };
-  apDraw();
+  apCard($('#apc', el));
 };
 function userForm(u, done) {
   const isNew = !u; u = u || { role: 'staff', active: 'Y' };
@@ -2455,7 +2510,7 @@ VIEWS.settings = el => {
 /* ---------- BOOT ---------- */
 /* ตรวจว่าไฟล์ระบบโหลดครบ ถ้าไม่ครบ (เช่นเบราว์เซอร์ยังจำไฟล์เก่า) ล้างแคชแล้วโหลดใหม่ 1 ครั้ง ถ้ายังไม่ครบ แจ้งชื่อไฟล์ที่ขาด */
 function missingFiles() {
-  const chk = { 'logic.js': () => typeof Logic !== 'undefined', 'cache.js': () => typeof Cache !== 'undefined', 'offline.js': () => typeof OfflineAuth !== 'undefined', 'scanner.js': () => typeof Scanner !== 'undefined', 'printer.js': () => typeof RP !== 'undefined', 'pos.js': () => typeof POS !== 'undefined', 'display.js': () => !!VIEWS.displayset, 'reports.js': () => !!VIEWS.reports, 'inventory.js': () => !!VIEWS.stockcount, 'people.js': () => !!VIEWS.staff, 'quality.js': () => !!VIEWS.dataquality, 'services.js': () => typeof svcMenu !== 'undefined', 'owner.js': () => !!VIEWS.home };
+  const chk = { 'logic.js': () => typeof Logic !== 'undefined', 'cache.js': () => typeof Cache !== 'undefined', 'offline.js': () => typeof OfflineAuth !== 'undefined', 'scanner.js': () => typeof Scanner !== 'undefined', 'printer.js': () => typeof RP !== 'undefined', 'pos.js': () => typeof POS !== 'undefined', 'display.js': () => !!VIEWS.displayset, 'idle.js': () => typeof idleScene !== 'undefined', 'reports.js': () => !!VIEWS.reports, 'inventory.js': () => !!VIEWS.stockcount, 'people.js': () => !!VIEWS.staff, 'quality.js': () => !!VIEWS.dataquality, 'services.js': () => typeof svcMenu !== 'undefined', 'owner.js': () => !!VIEWS.home };
   return Object.keys(chk).filter(f => { try { return !chk[f](); } catch (e) { return true; } });
 }
 async function selfHeal(miss) {
@@ -2540,20 +2595,21 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.38"></script>
-<script src="logic.js?v=2.6.38"></script>
-<script src="cache.js?v=2.6.38"></script>
-<script src="offline.js?v=2.6.38"></script>
-<script src="scanner.js?v=2.6.38"></script>
-<script src="printer.js?v=2.6.38"></script>
-<script src="pos.js?v=2.6.38"></script>
-<script src="display.js?v=2.6.38"></script>
-<script src="reports.js?v=2.6.38"></script>
-<script src="inventory.js?v=2.6.38"></script>
-<script src="people.js?v=2.6.38"></script>
-<script src="quality.js?v=2.6.38"></script>
-<script src="services.js?v=2.6.38"></script>
-<script src="owner.js?v=2.6.38"></script>
+<script src="qr.js?v=2.6.41"></script>
+<script src="logic.js?v=2.6.41"></script>
+<script src="cache.js?v=2.6.41"></script>
+<script src="offline.js?v=2.6.41"></script>
+<script src="scanner.js?v=2.6.41"></script>
+<script src="printer.js?v=2.6.41"></script>
+<script src="pos.js?v=2.6.41"></script>
+<script src="idle.js?v=2.6.41"></script>
+<script src="display.js?v=2.6.41"></script>
+<script src="reports.js?v=2.6.41"></script>
+<script src="inventory.js?v=2.6.41"></script>
+<script src="people.js?v=2.6.41"></script>
+<script src="quality.js?v=2.6.41"></script>
+<script src="services.js?v=2.6.41"></script>
+<script src="owner.js?v=2.6.41"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
