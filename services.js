@@ -8,9 +8,13 @@ const SVC_DEF = {
   transferIn: [[1, 1000, 10], [1001, 3000, 20], [3001, 4999, 40], [5000, 10000, 50]],
   topupFee: 5, topupMode: 'flat', topupStep: 100,
   billFee: 10, billTypes: ['ค่าไฟฟ้า', 'ค่าน้ำประปา', 'ค่าอินเทอร์เน็ต', 'ค่าโทรศัพท์', 'บัตรเครดิต/สินเชื่อ', 'อื่นๆ'],
-  networks: ['AIS', 'True', 'dtac', 'NT', 'อื่นๆ']
+  networks: ['AIS', 'True', 'dtac', 'NT', 'อื่นๆ'],
+  // ถ่ายเอกสาร / พิมพ์เอกสาร: ราคาต่อหน้า + ต้นทุนต่อหน้า (กระดาษ+หมึก ไว้คิดกำไร)
+  copy: { copyBW: 1, copyColor: 5, printBW: 3, printColor: 10, costCopyBW: 0, costCopyColor: 0, costPrintBW: 0, costPrintColor: 0 },
+  // ผ่อนสินค้า: ค่าเริ่มต้นตอนเปิดสัญญา
+  inst: { rate: 0, rateMode: 'period', period: 'month', count: 6, downPct: 0 }
 };
-const svcCfg = () => cfg('svcCfg', SVC_DEF);
+const svcCfg = () => { const c = cfg('svcCfg', SVC_DEF) || {}; return { ...SVC_DEF, ...c, copy: { ...SVC_DEF.copy, ...(c.copy || {}) }, inst: { ...SVC_DEF.inst, ...(c.inst || {}) } }; };
 function tierFee(tiers, amt) {
   const T = (tiers || []).slice().sort((x, y) => x[0] - y[0]);
   for (let i = 0; i < T.length; i++) { const [a, b, f] = T[i], up = Math.min(i < T.length - 1 ? T[i + 1][0] : Infinity, b + 1); if (amt >= a && amt < up) return f; }
@@ -26,7 +30,11 @@ const SVC = {
   out: { key: 'out', name: 'โอนออก', desc: 'ลูกค้าให้เงินสด → ร้านโอนเข้าบัญชีปลายทาง', icon: '⬆️', color: '#1E88E5' },
   in: { key: 'in', name: 'โอนเข้า', desc: 'ลูกค้าโอนเข้าบัญชีร้าน → ร้านจ่ายเงินสดให้ลูกค้า', icon: '⬇️', color: '#00897B' },
   topup: { key: 'topup', name: 'เติมเงิน', desc: 'AIS / True / dtac / NT / TrueMoney', icon: '📱', color: '#8E24AA' },
-  bill: { key: 'bill', name: 'ชำระบิล', desc: 'ค่าไฟ ค่าน้ำ ค่าเน็ต ฯลฯ', icon: '🧾', color: '#E07A00' }
+  bill: { key: 'bill', name: 'ชำระบิล', desc: 'ค่าไฟ ค่าน้ำ ค่าเน็ต ฯลฯ', icon: '🧾', color: '#E07A00' },
+  debt: { key: 'debt', name: 'ใช้หนี้', desc: 'รับชำระเงินเชื่อ / ค่างวด ตัดยอดอัตโนมัติ', icon: '💰', color: '#C62828' },
+  copy: { key: 'copy', name: 'ถ่ายเอกสาร', desc: 'ขาวดำ / สี คิดตามจำนวนหน้า', icon: '📠', color: '#455A64' },
+  print: { key: 'print', name: 'พิมพ์เอกสาร', desc: 'ขาวดำ / สี คิดตามจำนวนหน้า', icon: '🖨️', color: '#5D4037' },
+  inst: { key: 'inst', name: 'ผ่อนสินค้า', desc: 'เปิดสัญญาผ่อน (สมาชิกเท่านั้น)', icon: '📆', color: '#2E7D32' }
 };
 function svcFee(kind, amt) {
   const c = svcCfg();
@@ -38,10 +46,15 @@ function svcFee(kind, amt) {
 }
 /* เมนูบริการ (เปิดจากปุ่มบนแถบหน้าขาย) */
 function svcMenu() {
-  const ov = sheet('บริการ', `<div class="grid2">${Object.values(SVC).map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color};min-height:92px;flex-direction:column;gap:2px;font-size:18px"><span style="font-size:26px">${s.icon}</span>${s.name}<span class="tiny" style="font-weight:400;opacity:.9">${s.desc}</span></button>`).join('')}</div>`);
+  const ov = sheet('บริการ', `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${Object.values(SVC).map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color};min-height:92px;flex-direction:column;gap:2px;font-size:18px"><span style="font-size:26px">${s.icon}</span>${s.name}<span class="tiny" style="font-weight:400;opacity:.9">${s.desc}</span></button>`).join('')}</div>`);
   $$('[data-k]', ov).forEach(b => b.onclick = () => { ov.remove(); svcDialog(b.dataset.k); });
 }
-function svcDialog(kind) { return kind === 'in' ? svcDialogIn(kind) : svcDialog2(kind); }
+function svcDialog(kind) {
+  if (kind === 'debt') return svcDebt();
+  if (kind === 'copy' || kind === 'print') return svcCopy(kind);
+  if (kind === 'inst') return svcInst();
+  return kind === 'in' ? svcDialogIn(kind) : svcDialog2(kind);
+}
 function svcDialogIn(kind) {
   const s = SVC[kind], c = svcCfg();
   let amt = '', feeOverride = null, mode = 'add', extra = kind === 'topup' ? (c.networks[0] || '') : kind === 'bill' ? (c.billTypes[0] || '') : '';
@@ -201,11 +214,13 @@ VIEWS.svcset = el => {
   if (ownerOnly(el)) return;
   const c = svcCfg();
   const tierTbl = (id, tiers) => `<table class="t" id="${id}"><tr><th>ตั้งแต่ (บาท)</th><th>ถึง (บาท)</th><th>ค่าบริการ</th><th></th></tr>${tiers.map(t => `<tr><td><input class="in" type="number" value="${t[0]}"></td><td><input class="in" type="number" value="${t[1]}"></td><td><input class="in" type="number" value="${t[2]}"></td><td><button class="iconbtn" data-rm>${I(IC.x, 16)}</button></td></tr>`).join('')}</table><button class="btn ghost sm" data-add="${id}" style="margin-top:6px">+ เพิ่มช่วง</button>`;
-  el.innerHTML = vhead('ค่าบริการหน้าร้าน', '', 'more') + `
+  el.innerHTML = vhead('ค่าบริการ · ถ่ายเอกสาร · ผ่อน', '', 'more') + `
    <div class="card"><h3>⬆️ โอนออก (ลูกค้าให้เงินสด ร้านโอนให้)</h3>${tierTbl('to', c.transferOut)}</div>
    <div class="card"><h3>⬇️ โอนเข้า (ลูกค้าโอนให้ร้าน รับเงินสด)</h3>${tierTbl('ti', c.transferIn)}</div>
    <div class="card"><h3>📱 เติมเงินมือถือ</h3><div class="grid3"><label class="f"><span>ค่าบริการ (บาท)</span><input class="in" type="number" id="tf" value="${c.topupFee}"></label><label class="f"><span>วิธีคิด</span><select class="in" id="tm"><option value="flat">ครั้งละเท่ากัน</option><option value="per">ทุกๆ ... บาท</option></select></label><label class="f"><span>ทุกๆ (บาท)</span><input class="in" type="number" id="ts" value="${c.topupStep}"></label></div><label class="f"><span>เครือข่าย (คั่นด้วย ,)</span><input class="in" id="nw" value="${esc(c.networks.join(', '))}"></label></div>
    <div class="card"><h3>🧾 ชำระบิล</h3><label class="f"><span>ค่าบริการต่อบิล (บาท)</span><input class="in" type="number" id="bf" value="${c.billFee}"></label><label class="f"><span>ประเภทบิล (คั่นด้วย ,)</span><input class="in" id="bt" value="${esc(c.billTypes.join(', '))}"></label></div>
+   <div class="card"><h3>📠 ถ่ายเอกสาร / 🖨️ พิมพ์เอกสาร (บาท ต่อหน้า)</h3><table class="t" id="cpt"><tr><th></th><th class="right">ราคาขาย</th><th class="right">ต้นทุน (กระดาษ+หมึก)</th></tr>${[['copyBW', 'ถ่ายเอกสาร ขาวดำ'], ['copyColor', 'ถ่ายเอกสาร สี'], ['printBW', 'พิมพ์เอกสาร ขาวดำ'], ['printColor', 'พิมพ์เอกสาร สี']].map(([k, n]) => `<tr><td>${n}</td><td><input class="in right" type="number" step="any" data-cp="${k}" value="${c.copy[k]}"></td><td><input class="in right" type="number" step="any" data-cp="cost${k[0].toUpperCase() + k.slice(1)}" value="${c.copy['cost' + k[0].toUpperCase() + k.slice(1)]}"></td></tr>`).join('')}</table><div class="tiny muted" style="margin-top:6px">ต้นทุนไม่บังคับ — ใส่ไว้เพื่อให้รายงานคิดกำไรได้ถูก</div></div>
+   <div class="card"><h3>📆 ผ่อนสินค้า (ค่าเริ่มต้นตอนเปิดสัญญา แก้ได้ทุกครั้ง)</h3><div class="grid3"><label class="f"><span>ดอกเบี้ย %</span><input class="in" type="number" step="any" id="ir" value="${c.inst.rate}"></label><label class="f"><span>คิดดอกเบี้ย</span><select class="in" id="im"><option value="period">% ต่องวด</option><option value="total">% ทั้งสัญญา</option></select></label><label class="f"><span>ระยะงวด</span><select class="in" id="ip"><option value="month">รายเดือน</option><option value="week">รายสัปดาห์</option><option value="day">รายวัน</option></select></label><label class="f"><span>จำนวนงวด</span><input class="in" type="number" id="ic" value="${c.inst.count}"></label><label class="f"><span>เงินดาวน์ขั้นต่ำ %</span><input class="in" type="number" step="any" id="id" value="${c.inst.downPct}"></label></div><div class="tiny muted">ดอกเบี้ยแบบคงที่ (flat) คิดจากยอดจัดผ่อน = ราคา − เงินดาวน์ · ค่างวด ดาวน์ และดอกเบี้ย นับเป็นรายได้ร้าน</div></div>
    <div class="alert blue small">${I(IC.alert, 18)}<div>ในรายงาน: ยอดโอน/เติม/บิล นับเป็น <b>เงินรับแทน (ต้นทุน)</b> ค่าบริการนับเป็น <b>กำไร</b> · ยอดรับแทนไม่นับรวมรายรับเทียบเกณฑ์ VAT และรายงานเงินสดรับ-จ่าย (แยกไว้ในหมายเหตุ)</div></div>
    <button class="btn block green" id="sv">บันทึก</button>
    <div class="card" style="margin-top:12px"><h3>🔔 แจ้งเตือนเจ้าของร้าน</h3><div class="small muted" style="margin:-4px 0 8px">เมื่อพนักงานรับเงินโอนออก / เติม TrueMoney / ชำระบิล ระบบส่งรายละเอียด (ธนาคาร เลขบัญชี ยอด) ให้เจ้าของร้านทันที และขึ้นในเมนู “งานรอดำเนินการ”</div>
@@ -217,6 +232,7 @@ VIEWS.svcset = el => {
    <div class="card" style="margin-top:12px"><h3>โลโก้ธนาคาร / เครือข่าย (ไม่บังคับ)</h3><div class="small muted" style="margin:-4px 0 8px">ปกติแสดงเป็นป้ายสี + ชื่อ · ถ้าต้องการรูปโลโก้ แตะป้ายแล้วเลือกรูปที่ร้านมีเอง (ย่อเหลือไม่กี่ KB แสดงทั้งเครื่องขายและจอลูกค้า)</div>
     <div id="lg" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px"></div></div>`;
   $('#tm', el).value = c.topupMode;
+  $('#im', el).value = c.inst.rateMode; $('#ip', el).value = c.inst.period;
   const drawLogos = () => { const L = [...BANKS, ...CARRIERS.filter(x => !BANKS.some(b => b.code === x.code))].map(x => ({ ...x, logo: svcLogo(x.code) }));
     $('#lg', el).innerHTML = L.map(x => `<div style="display:flex;flex-direction:column;gap:4px"><label style="cursor:pointer">${pickTile(x)}<input type="file" accept="image/*" data-lu="${x.code}" hidden></label>${x.logo ? `<button class="btn ghost sm" data-lr="${x.code}" style="min-height:28px;padding:2px 6px;font-size:12px">ลบรูป</button>` : ''}</div>`).join('');
     $$('[data-lu]', el).forEach(i => i.onchange = async e => { const f = e.target.files[0]; if (!f) return; try { busy(1); await Img.save('LOGO-' + i.dataset.lu, await Img.shrink(f, 96, 'contain')); busy(0); drawLogos(); toast('บันทึกรูปแล้ว'); } catch (x) { busy(0); toast(x.message, 1); } });
@@ -252,7 +268,8 @@ VIEWS.svcset = el => {
   $('#sv', el).onclick = async () => {
     const iss = tierIssues(read('to'), 'โอนออก').concat(tierIssues(read('ti'), 'โอนเข้า'));
     if (iss.length && !(await confirmDlg('ตรวจพบ:<br>• ' + iss.join('<br>• ') + '<br><br>บันทึกต่อหรือไม่? (ยอดที่ไม่มีค่าบริการ พนักงานต้องกำหนดเองตอนขาย)', 'บันทึกต่อ'))) return;
-    const o = { transferOut: read('to'), transferIn: read('ti'), topupFee: num($('#tf', el).value), topupMode: $('#tm', el).value, topupStep: num($('#ts', el).value) || 100, billFee: num($('#bf', el).value), networks: $('#nw', el).value.split(',').map(x => x.trim()).filter(Boolean), billTypes: $('#bt', el).value.split(',').map(x => x.trim()).filter(Boolean) };
+    const o = { transferOut: read('to'), transferIn: read('ti'), topupFee: num($('#tf', el).value), topupMode: $('#tm', el).value, topupStep: num($('#ts', el).value) || 100, billFee: num($('#bf', el).value), networks: $('#nw', el).value.split(',').map(x => x.trim()).filter(Boolean), billTypes: $('#bt', el).value.split(',').map(x => x.trim()).filter(Boolean),
+      copy: Object.fromEntries($$('[data-cp]', el).map(i => [i.dataset.cp, num(i.value)])), inst: { rate: num($('#ir', el).value), rateMode: $('#im', el).value, period: $('#ip', el).value, count: Math.max(1, Math.round(num($('#ic', el).value)) || 6), downPct: num($('#id', el).value) } };
     try { busy(1); await saveSetting('svcCfg', o); busy(0); toast('บันทึกค่าบริการแล้ว'); } catch (e) { busy(0); toast(e.message, 1); }
   };
 };
@@ -317,3 +334,275 @@ VIEWS.jobs = async el => {
   $('#rf', el).onclick = load; load();
   clearInterval(VIEWS.jobs.t); VIEWS.jobs.t = setInterval(() => { if (S.view === 'jobs' && !document.hidden && !$('.ov')) load(); else if (S.view !== 'jobs') clearInterval(VIEWS.jobs.t); }, 30000);
 };
+
+/* =========================================================
+   ใช้หนี้ · ถ่าย/พิมพ์เอกสาร · ผ่อนสินค้า
+   ทุกอย่างเพิ่มเป็นรายการในบิล → ชำระเงินตามปกติ (ลิ้นชัก ใบเสร็จ ออฟไลน์ได้)
+   ระบบตัดยอดหนี้/ค่างวดให้เองตอนบิลเข้าระบบ (Logic: applyOrderEffects / applyInst)
+   ========================================================= */
+const PERIOD_T = { day: 'วัน', week: 'สัปดาห์', month: 'เดือน' };
+const r2c = v => Math.round(v * 100) / 100;
+const ticketCust = () => POS.t.customer;
+// ผูกลูกค้ากับบิล (ใช้หนี้/ผ่อน ต้องมีลูกค้าในบิล)
+async function bindCustomer(c) {
+  const T = POS.t, cur = T.customer;
+  if (cur && cur.id !== c.id) {
+    if (T.items.some(it => it.debt || it.inst)) { toast(`บิลนี้มีรายการใช้หนี้/ผ่อนของ ${cur.name} อยู่แล้ว — ชำระบิลนี้ก่อน แล้วค่อยทำของลูกค้าคนอื่น`, 1, 5000); return false; }
+    if (T.items.length && !(await confirmDlg(`เปลี่ยนลูกค้าในบิลจาก ${esc(cur.name)} เป็น ${esc(c.name)}?`, 'เปลี่ยน'))) return false;
+  }
+  if (!cur || cur.id !== c.id) { T.customer = { id: c.id, name: c.name, phone: c.phone, points: c.points, credit: c.credit, creditLimit: c.creditLimit }; T.pointsUse = 0; }
+  return true;
+}
+const withCustomer = cb => { const c = ticketCust(); if (c) return cb((S.customers || []).find(x => x.id === c.id) || c); loadCustomers().then(() => pickCustomer(x => x && cb(x))); };
+
+/* ---------- สัญญาผ่อน: ข้อมูลในเครื่อง ---------- */
+const Inst = {
+  rows: null,
+  cache() { return this.rows || (this.rows = LS.get('instCache', [])); },
+  save() { LS.set('instCache', this.rows || []); },
+  merge(list) { const m = {}; this.cache().forEach(r => m[r.id] = r); (list || []).forEach(r => m[r.id] = { ...(m[r.id] || {}), ...r }); this.rows = Object.values(m); this.save(); },
+  // บิลที่ยังไม่ส่งเข้าระบบ → คิดผลไว้ก่อน (ไม่ให้เห็นยอดเก่า)
+  pendingOps() { const ops = []; (Sync.box || []).forEach(o => Logic.J(o.items, []).forEach(it => { if (it && it.inst) ops.push({ o, it }); })); return ops; },
+  view(rows) {
+    const m = {}; rows.forEach(r => m[r.id] = { ...r });
+    this.pendingOps().forEach(({ o, it }) => {
+      const x = it.inst;
+      if (x.op === 'new' && x.plan && !m[x.plan.id]) m[x.plan.id] = { ...x.plan, date: o.date, customerId: o.customerId, customerName: o.customerName, paid: '0', status: 'active', orderId: o.id, _pending: 1 };
+      if (x.op === 'pay' && m[x.id] && !m[x.id]._seen) { const r = m[x.id]; r.paid = String(r2c(num(r.paid) + num(it.qty) * num(it.price))); r.lastPayAt = o.date; r._pending = 1; if (num(r.paid) >= num(r.total) - .009) r.status = 'done'; }
+    });
+    return Object.values(m);
+  },
+  applyLocal() { /* บิลใหม่อยู่ใน outbox แล้ว view() คิดให้เอง */ },
+  async list(force) {
+    if (force || !this.at || Date.now() - this.at > 30e3) {
+      try { this.rows = (await api('list', { table: 'Installments' })).rows; this.at = Date.now(); this.save(); }
+      catch (e) { this.cache(); }
+    }
+    return this.view(this.cache());
+  },
+  // ตารางงวด: [{no, due, amt, paid, left, st}] — ตัดยอดที่ชำระแล้วจากงวดแรกไปงวดหลัง
+  schedule(p) {
+    const n = Math.max(1, num(p.count)), per = num(p.per), tot = num(p.total), out = [];
+    let paid = num(p.paid), d = String(p.firstDue || String(p.date || todayISO()).slice(0, 10)), t = todayISO();
+    for (let i = 1; i <= n; i++) {
+      const amt = i < n ? per : r2c(tot - per * (n - 1)), pd = Math.min(amt, Math.max(0, paid)); paid = r2c(paid - pd);
+      const left = r2c(amt - pd);
+      out.push({ no: i, due: d, amt, paid: pd, left, st: left <= .009 ? 'paid' : d < t ? 'late' : d === t ? 'today' : 'wait' });
+      d = instNext(d, p.period);
+    }
+    return out;
+  },
+  stat(p) {
+    const sc = this.schedule(p), late = sc.filter(x => x.st === 'late'), next = sc.find(x => x.left > .009);
+    return { sc, late, lateAmt: r2c(late.reduce((a, x) => a + x.left, 0)), next, left: r2c(Math.max(0, num(p.total) - num(p.paid))), paidN: sc.filter(x => x.st === 'paid').length };
+  }
+};
+window.Inst = Inst;
+function instNext(iso, period) {
+  const d = new Date(iso + 'T12:00:00');
+  if (period === 'day') d.setDate(d.getDate() + 1);
+  else if (period === 'week') d.setDate(d.getDate() + 7);
+  else { const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + 1); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); }
+  return isoDay(d);
+}
+// คำนวณสัญญาผ่อน (ดอกเบี้ยคงที่ flat)
+function instCalc(f) {
+  const price = num(f.price), down = Math.min(price, num(f.down)), count = Math.max(1, Math.round(num(f.count)) || 1), financed = r2c(price - down);
+  const interest = Math.ceil(financed * num(f.rate) / 100 * (f.rateMode === 'total' ? 1 : count));
+  const total = r2c(financed + interest), per = count ? Math.ceil(total / count) : total;
+  return { price, down, count, financed, interest, total, per, last: r2c(total - per * (count - 1)) };
+}
+
+/* ---------- 💰 ใช้หนี้ ---------- */
+function svcDebt() {
+  withCustomer(async c => {
+    const ov0 = sheet(`💰 ใช้หนี้ · ${esc(c.name)}`, '<div class="center" style="padding:20px"><span class="spin dark"></span></div>');
+    await loadCustomers(true).catch(() => { });
+    const cu = (S.customers || []).find(x => x.id === c.id) || c;
+    const inTk = POS.t.customer && POS.t.customer.id === cu.id ? POS.t.items.filter(it => it.debt).reduce((a, it) => a + num(it.qty) * num(it.price), 0) : 0;
+    const owe = r2c(Math.max(0, num(cu.credit) - inTk));
+    const plans = (await Inst.list(true)).filter(p => p.customerId === cu.id && p.status === 'active');
+    ov0.remove();
+    let amt = owe;
+    const ov = sheet(`💰 ใช้หนี้ · ${esc(cu.name)}`, `<div class="small muted" style="margin:-4px 0 10px">${esc(cu.phone || '')} · ระบบตัดยอดค้างให้อัตโนมัติเมื่อรับเงินแล้ว</div>
+      <div class="card" style="padding:12px"><div class="kv"><span>ยอดเงินเชื่อค้างชำระ</span><b style="font-size:20px;color:${owe ? 'var(--red)' : 'var(--green)'}">${bahtL(owe)}</b></div>
+       ${inTk ? `<div class="tiny muted">หักรายการใช้หนี้ที่อยู่ในบิลนี้แล้ว ${money(inTk)}</div>` : ''}
+       ${owe ? `<div class="small" style="margin-top:8px">จำนวนที่ชำระ</div><button class="kpv" id="da" style="width:100%;text-align:right;border:0;cursor:pointer">${money(amt)}</button>
+        <div class="row wrap" style="gap:6px;margin-top:8px"><button class="btn ghost sm" data-q="all">ทั้งหมด</button>${[100, 200, 500, 1000].filter(v => v < owe).map(v => `<button class="btn ghost sm" data-q="${v}">${v}</button>`).join('')}<button class="btn ghost sm" data-q="half">ครึ่งหนึ่ง</button></div>
+        <div class="kv" style="margin-top:8px"><span>คงค้างหลังชำระ</span><b id="dl"></b></div>
+        <button class="btn block green" id="dok" style="min-height:56px;font-size:18px;margin-top:10px">เพิ่มลงบิล</button>` : '<div class="alert green small" style="margin-top:8px">ไม่มียอดเงินเชื่อค้าง</div>'}</div>
+      ${plans.length ? `<h3 style="margin:14px 0 6px">📆 สัญญาผ่อนที่ยังไม่ปิด</h3>${plans.map(p => instRow(p)).join('')}` : ''}`);
+    const draw = () => { const a = $('#da', ov); if (!a) return; a.textContent = money(amt); $('#dl', ov).innerHTML = money(r2c(owe - amt)); };
+    const da = $('#da', ov); if (da) da.onclick = () => keypad('ยอดชำระหนี้', amt, v => { amt = Math.min(owe, Math.max(0, num(v))); draw(); });
+    $$('[data-q]', ov).forEach(b => b.onclick = () => { const q = b.dataset.q; amt = q === 'all' ? owe : q === 'half' ? Math.ceil(owe / 2) : +q; draw(); });
+    const ok = $('#dok', ov); if (ok) ok.onclick = async () => {
+      if (amt <= 0) return toast('ใส่จำนวนเงิน', 1);
+      if (!(await gate('credit'))) return;
+      if (!(await bindCustomer(cu))) return;
+      POS.t.items.push({ sku: 'SVC-DEBT', name: `ใช้หนี้ ${cu.name} (คงค้าง ${money(r2c(owe - amt), 0)})`, price: amt, qty: 1, cost: amt, cat: 'รับชำระหนี้', pass: 1, debt: 1, svc: 'debt' });
+      ov.remove(); POS.save(); beep(); toast('เพิ่มรายการใช้หนี้แล้ว — รับเงินตามปกติ ระบบตัดยอดค้างให้เอง');
+    };
+    $$('[data-ip]', ov).forEach(b => b.onclick = () => { const p = plans.find(x => x.id === b.dataset.ip); ov.remove(); instPay(p); });
+    draw();
+  });
+}
+function instRow(p, btn = true) {
+  const st = Inst.stat(p), pct = Math.min(100, num(p.paid) / Math.max(1, num(p.total)) * 100);
+  return `<div class="card" style="padding:10px 12px;margin-bottom:8px"${btn ? '' : ` data-iv="${esc(p.id)}"`}><div class="row" style="gap:8px"><div class="grow" style="min-width:0"><b>${esc(p.product)}</b>${p._pending ? ' <span class="tag gray">รอส่ง</span>' : ''}${p.status === 'done' ? ' <span class="tag green">ปิดแล้ว</span>' : p.status === 'cancelled' ? ' <span class="tag gray">ยกเลิก</span>' : st.late.length ? ` <span class="tag red">ค้าง ${st.late.length} งวด</span>` : ''}
+      <div class="tiny muted">${btn ? '' : esc(p.customerName || '') + ' · '}งวดละ ${money(p.per, 0)} × ${p.count} ${PERIOD_T[p.period] || ''} · จ่ายแล้ว ${st.paidN}/${p.count} งวด${st.next && p.status === 'active' ? ` · ครบกำหนดถัดไป ${thDate(st.next.due)}` : ''}</div></div>
+      <div class="right"><div class="tiny muted">คงเหลือ</div><b>${p.status === 'cancelled' ? '-' : money(st.left, 0)}</b></div>${btn && p.status === 'active' ? `<button class="btn sm green" data-ip="${esc(p.id)}">ชำระงวด</button>` : ''}</div>
+      <div style="height:6px;border-radius:3px;background:#EEF0F2;margin-top:8px"><div style="height:6px;border-radius:3px;width:${pct}%;background:${st.late.length && p.status === 'active' ? 'var(--red)' : 'var(--green)'}"></div></div></div>`;
+}
+
+/* ---------- 📠 ถ่ายเอกสาร / 🖨️ พิมพ์เอกสาร ---------- */
+function svcCopy(kind) {
+  const s = SVC[kind], cc = svcCfg().copy, key = m => kind + (m === 'bw' ? 'BW' : 'Color');
+  let mode = 'bw', pages = '', priceOv = null;
+  const unit = () => priceOv != null ? priceOv : num(cc[key(mode)]);
+  const ov = sheet(`${s.icon} ${s.name}`, `<div class="seg" id="cm" style="margin-bottom:10px"><button data-m="bw" style="min-height:52px">⚫ ขาวดำ <span class="tiny">${money(cc[key('bw')])}/หน้า</span></button><button data-m="color" style="min-height:52px">🌈 สี <span class="tiny">${money(cc[key('color')])}/หน้า</span></button></div>
+    <div class="small">จำนวนหน้า</div><div class="kpv" id="kv" style="margin-bottom:4px">0</div>
+    <div class="kp">${[7, 8, 9, 4, 5, 6, 1, 2, 3].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button data-k="00">00</button><button data-k="0">0</button><button data-k="del">⌫</button></div>
+    <div class="row wrap" style="gap:6px;margin-top:8px">${[1, 2, 5, 10, 20, 50, 100].map(v => `<button class="btn ghost sm" data-q="${v}">${v}</button>`).join('')}</div>
+    <div class="card" style="margin-top:10px;padding:10px 12px" id="sum"></div>`,
+    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`);
+  const draw = () => {
+    $$('#cm button', ov).forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+    $('#kv', ov).textContent = pages || '0';
+    $('#sum', ov).innerHTML = `<div class="kv"><span>ราคาต่อหน้า</span><span><b>${money(unit())}</b> <a href="javascript:void 0" id="ep" class="small">แก้</a></span></div><div class="kv" style="font-size:20px"><span>รวม</span><b class="num">${bahtL(r2c(num(pages) * unit()))}</b></div>`;
+    $('#ep', ov).onclick = async () => { if (!(await gate('priceEdit'))) return; keypad('ราคาต่อหน้า', unit(), v => { priceOv = num(v); draw(); }); };
+  };
+  $$('#cm button', ov).forEach(b => b.onclick = () => { mode = b.dataset.m; priceOv = null; draw(); });
+  $$('.kp [data-k]', ov).forEach(b => b.onclick = () => { const v = b.dataset.k; if (v === 'del') pages = pages.slice(0, -1); else if (pages.length < 5) pages = (pages === '0' ? '' : pages) + v; draw(); });
+  $$('[data-q]', ov).forEach(b => b.onclick = () => { pages = b.dataset.q; draw(); });
+  ov.addEventListener('keydown', e => { if (/^\d$/.test(e.key)) { pages += e.key; draw(); } else if (e.key === 'Backspace') { pages = pages.slice(0, -1); draw(); } else if (e.key === 'Enter') $('#ok', ov).click(); }); ov.tabIndex = 0; ov.focus();
+  $('#ok', ov).onclick = () => {
+    const q = Math.round(num(pages)); if (!q) return toast('ใส่จำนวนหน้า', 1);
+    const sku = `SVC-${kind.toUpperCase()}-${mode.toUpperCase()}`, price = unit(), cost = num(cc['cost' + key(mode)[0].toUpperCase() + key(mode).slice(1)]);
+    const name = `${s.name} ${mode === 'bw' ? 'ขาวดำ' : 'สี'}`;
+    const ex = POS.t.items.find(it => it.sku === sku && num(it.price) === price);
+    if (ex) ex.qty = num(ex.qty) + q; else POS.t.items.push({ sku, name, price, qty: q, cost, cat: 'ค่าบริการ', svc: kind });
+    ov.remove(); POS.save(); beep();
+  };
+  draw();
+}
+
+/* ---------- 📆 ผ่อนสินค้า: เปิดสัญญาใหม่ ---------- */
+function svcInst() {
+  withCustomer(async cu => {
+    const ic = svcCfg().inst, t0 = todayISO();
+    const plans = (await Inst.list().catch(() => [])).filter(p => p.customerId === cu.id && p.status === 'active');
+    const f = { product: '', sku: '', price: '', down: '', count: ic.count, period: ic.period, rate: ic.rate, rateMode: ic.rateMode, adv: '', firstDue: instNext(t0, ic.period), note: '' };
+    const ov = sheet(`📆 ผ่อนสินค้า · ${esc(cu.name)}`, `<div class="small muted" style="margin:-4px 0 10px">${esc(cu.phone || 'ไม่มีเบอร์')} · สมาชิก${num(cu.credit) ? ` · เงินเชื่อค้าง ${money(cu.credit)}` : ''}${plans.length ? ` · <b style="color:var(--amber)">มีสัญญาผ่อนอยู่ ${plans.length} สัญญา</b> <a href="javascript:void 0" id="opay">ชำระงวด</a>` : ''}</div>
+      <label class="f"><span>ชื่อสินค้า</span><input class="in" id="ipn" list="ipl" placeholder="พิมพ์ชื่อ หรือเลือกจากสินค้าในร้าน" autocomplete="off"></label><datalist id="ipl"></datalist>
+      <div class="grid2"><label class="f"><span>ราคาสินค้า (บาท)</span><input class="in" id="ipr" type="number" step="any" inputmode="decimal"></label><label class="f"><span>เงินดาวน์ (บาท)</span><input class="in" id="ipd" type="number" step="any" inputmode="decimal"></label></div>
+      <div class="row wrap" style="gap:6px;margin:-4px 0 8px"><span class="tiny muted">ดาวน์</span>${[0, 10, 20, 30, 50].map(v => `<button class="btn ghost sm" data-dp="${v}" style="min-height:30px;padding:2px 10px">${v}%</button>`).join('')}</div>
+      <div class="grid2"><label class="f"><span>จำนวนงวด</span><input class="in" id="ipc" type="number" inputmode="numeric"></label><label class="f"><span>ระยะงวด</span><select class="in" id="ipp"><option value="month">รายเดือน</option><option value="week">รายสัปดาห์</option><option value="day">รายวัน</option></select></label></div>
+      <div class="grid2"><label class="f"><span>ดอกเบี้ย %</span><input class="in" id="ipi" type="number" step="any" inputmode="decimal"></label><label class="f"><span>คิดดอกเบี้ย</span><select class="in" id="ipm"><option value="period">% ต่องวด</option><option value="total">% ทั้งสัญญา</option></select></label></div>
+      <div class="grid2"><label class="f"><span>ชำระล่วงหน้า (บาท ไม่บังคับ)</span><input class="in" id="ipa" type="number" step="any" inputmode="decimal" placeholder="0"></label><label class="f"><span>ครบกำหนดงวดแรก</span><input class="in" id="ipf" type="date" data-nokp></label></div>
+      <label class="f"><span>หมายเหตุ (เช่น เลขเครื่อง/สี/ผู้ค้ำ)</span><input class="in" id="ipo"></label>
+      <div class="card" id="ips" style="padding:10px 12px"></div>`,
+      `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เปิดสัญญา · เพิ่มลงบิล</button>`);
+    const V = { ipn: 'product', ipr: 'price', ipd: 'down', ipc: 'count', ipp: 'period', ipi: 'rate', ipm: 'rateMode', ipa: 'adv', ipf: 'firstDue', ipo: 'note' };
+    Object.entries(V).forEach(([id, k]) => { const i = $('#' + id, ov); i.value = f[k]; i.oninput = i.onchange = () => { f[k] = i.value; if (k === 'period') { f.firstDue = instNext(t0, f.period); $('#ipf', ov).value = f.firstDue; } if (k === 'product') pickProd(); draw(); }; });
+    const pl = $('#ipl', ov); setTimeout(() => { pl.innerHTML = (S.products || []).filter(p => !String(p.sku).startsWith('SVC')).slice(0, 4000).map(p => `<option value="${esc(p.name)}">`).join(''); }, 50);
+    const pickProd = () => { const p = (S.products || []).find(x => x.name === f.product.trim()); f.sku = p ? p.sku : ''; if (p && !num(f.price)) { f.price = num(p.price); $('#ipr', ov).value = f.price; } };
+    $$('[data-dp]', ov).forEach(b => b.onclick = () => { f.down = Math.ceil(num(f.price) * +b.dataset.dp / 100); $('#ipd', ov).value = f.down; draw(); });
+    const op = $('#opay', ov); if (op) op.onclick = () => { ov.remove(); plans.length === 1 ? instPay(plans[0]) : svcDebt(); };
+    const draw = () => {
+      const k = instCalc(f), adv = Math.min(num(f.adv), k.total), minDown = Math.ceil(k.price * num(ic.downPct) / 100);
+      const sc = k.price ? Inst.schedule({ count: k.count, per: k.per, total: k.total, paid: adv, firstDue: f.firstDue, period: f.period }) : [];
+      $('#ips', ov).innerHTML = k.price ? `<div class="kv"><span>ยอดจัดผ่อน (ราคา − ดาวน์)</span><b>${money(k.financed)}</b></div><div class="kv"><span>ดอกเบี้ย ${num(f.rate)}%${f.rateMode === 'total' ? ' ทั้งสัญญา' : ' × ' + k.count + ' งวด'}</span><b>${money(k.interest)}</b></div>
+        <div class="kv"><span>รวมต้องผ่อน</span><b>${money(k.total)}</b></div><div class="kv" style="font-size:18px"><span>ค่างวด</span><b style="color:var(--green)">${money(k.per, 0)} × ${k.count} ${PERIOD_T[f.period]}${k.last !== k.per ? ` <span class="tiny muted">(งวดสุดท้าย ${money(k.last, 0)})</span>` : ''}</b></div>
+        ${num(f.down) < minDown ? `<div class="alert amber small">เงินดาวน์ต่ำกว่าขั้นต่ำที่ตั้งไว้ ${ic.downPct}% (${money(minDown, 0)})</div>` : ''}
+        <div class="kv" style="font-size:20px;border-top:1px solid var(--line);padding-top:6px;margin-top:4px"><span>ลูกค้าจ่ายวันนี้</span><b class="num">${bahtL(k.down + adv)}</b></div><div class="tiny muted">เงินดาวน์ ${money(k.down, 0)}${adv ? ` + ชำระล่วงหน้า ${money(adv, 0)}` : ''} · หลังจากนี้คงเหลือ ${money(k.total - adv, 0)}</div>
+        <details style="margin-top:6px"><summary class="small" style="cursor:pointer">ตารางผ่อน ${k.count} งวด</summary><div class="scroll-x" style="max-height:200px;overflow:auto"><table class="t"><tr><th>งวด</th><th>ครบกำหนด</th><th class="right">ยอด</th><th class="right">ชำระแล้ว</th></tr>${sc.map(x => `<tr><td>${x.no}</td><td>${thDate(x.due)}</td><td class="right">${money(x.amt, 0)}</td><td class="right">${x.paid ? money(x.paid, 0) : '-'}</td></tr>`).join('')}</table></div></details>` : '<div class="muted small">ใส่ราคาสินค้าเพื่อคำนวณค่างวด</div>';
+    };
+    $('#ok', ov).onclick = async () => {
+      const k = instCalc(f), adv = r2c(Math.min(num(f.adv), k.total));
+      if (!f.product.trim()) return toast('ใส่ชื่อสินค้า', 1);
+      if (!k.price) return toast('ใส่ราคาสินค้า', 1);
+      if (num(f.down) > k.price) return toast('เงินดาวน์มากกว่าราคาสินค้า', 1);
+      if (!k.financed) return toast('ดาวน์เต็มราคาแล้ว — ขายปกติได้เลย ไม่ต้องผ่อน', 1);
+      if (!(await gate('credit'))) return;
+      if (!(await bindCustomer(cu))) return;
+      const id = 'IN' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1296).toString(36).toUpperCase();
+      const plan = { id, customerId: cu.id, customerName: cu.name, phone: cu.phone || '', product: f.product.trim(), price: k.price, down: k.down, financed: k.financed, rate: num(f.rate), rateMode: f.rateMode, interest: k.interest, total: k.total, count: k.count, period: f.period, per: k.per, firstDue: f.firstDue || instNext(t0, f.period), note: f.note.trim() };
+      const p = f.sku && IDX.bySku[f.sku];
+      // ถ้าเป็นสินค้าในร้าน → ตัดสต็อก 1 ชิ้นพร้อมเงินดาวน์ (ต้นทุนสินค้าเข้าวันที่ส่งมอบ)
+      POS.t.items.push({ sku: p ? p.sku : 'SVC-INST', name: `ผ่อน ${plan.product} · เงินดาวน์ (${k.count} งวด × ${money(k.per, 0)})`, price: k.down, qty: 1, cost: p ? num(p.cost) : 0, cat: p ? p.category : 'ผ่อนสินค้า', svc: 'inst', inst: { op: 'new', plan } });
+      if (adv) POS.t.items.push({ sku: 'SVC-INSTPAY', name: `ค่างวด ${plan.product} (ชำระล่วงหน้า)`, price: adv, qty: 1, cost: 0, cat: 'ผ่อนสินค้า', svc: 'inst', inst: { op: 'pay', id } });
+      ov.remove(); POS.save(); beep(); toast('เพิ่มสัญญาผ่อนลงบิลแล้ว — รับเงินดาวน์ตามปกติ สัญญาจะบันทึกเมื่อชำระเงินเสร็จ', 0, 5000);
+    };
+    draw();
+  });
+}
+
+/* ---------- 📆 ชำระค่างวด ---------- */
+function instPay(p) {
+  const st = Inst.stat(p);
+  const inTk = POS.t.items.filter(it => it.inst && it.inst.op === 'pay' && it.inst.id === p.id).reduce((a, it) => a + num(it.qty) * num(it.price), 0);
+  const left = r2c(Math.max(0, st.left - inTk));
+  if (!left) return toast(inTk ? 'ยอดงวดของสัญญานี้อยู่ในบิลครบแล้ว' : 'สัญญานี้ชำระครบแล้ว', 1);
+  let amt = Math.min(left, st.lateAmt > inTk ? r2c(st.lateAmt - inTk) : (st.next ? st.next.left : num(p.per)));
+  const ov = sheet(`📆 ชำระค่างวด · ${esc(p.product)}`, `<div class="small muted" style="margin:-4px 0 10px">${esc(p.customerName)} · งวดละ ${money(p.per, 0)} · จ่ายแล้ว ${st.paidN}/${p.count} งวด</div>
+    ${st.late.length ? `<div class="alert red small">ค้างชำระ ${st.late.length} งวด รวม ${money(st.lateAmt, 0)} (เกินกำหนดตั้งแต่ ${thDate(st.late[0].due)})</div>` : st.next ? `<div class="alert blue small">งวดที่ ${st.next.no} ครบกำหนด ${thDate(st.next.due)}</div>` : ''}
+    <div class="card" style="padding:12px"><div class="kv"><span>ยอดคงเหลือทั้งสัญญา</span><b>${money(left)}</b></div>
+      <div class="small" style="margin-top:8px">จำนวนที่ชำระ</div><button class="kpv" id="ia" style="width:100%;text-align:right;border:0;cursor:pointer"></button>
+      <div class="row wrap" style="gap:6px;margin-top:8px">${[1, 2, 3].filter(n => n * num(p.per) < left).map(n => `<button class="btn ghost sm" data-q="${n * num(p.per)}">${n} งวด</button>`).join('')}${st.lateAmt > inTk ? `<button class="btn ghost sm" data-q="${r2c(st.lateAmt - inTk)}">ยอดค้าง</button>` : ''}<button class="btn ghost sm" data-q="${left}">ปิดยอดทั้งหมด</button></div>
+      <div class="kv" style="margin-top:8px"><span>คงเหลือหลังชำระ</span><b id="il"></b></div></div>`,
+    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`);
+  const draw = () => { $('#ia', ov).textContent = money(amt); $('#il', ov).textContent = money(r2c(left - amt)); };
+  $('#ia', ov).onclick = () => keypad('ยอดชำระค่างวด', amt, v => { amt = Math.min(left, Math.max(0, num(v))); draw(); });
+  $$('[data-q]', ov).forEach(b => b.onclick = () => { amt = Math.min(left, +b.dataset.q); draw(); });
+  $('#ok', ov).onclick = async () => {
+    if (amt <= 0) return toast('ใส่จำนวนเงิน', 1);
+    const c = (S.customers || []).find(x => x.id === p.customerId) || { id: p.customerId, name: p.customerName, phone: p.phone };
+    if (!(await bindCustomer(c))) return;
+    const from = Math.min(num(p.count), Math.floor((num(p.paid) + inTk + .009) / Math.max(1, num(p.per))) + 1), to = Math.min(num(p.count), Math.ceil((num(p.paid) + inTk + amt - .009) / Math.max(1, num(p.per))));
+    POS.t.items.push({ sku: 'SVC-INSTPAY', name: `ค่างวด ${p.product} งวดที่ ${from === to ? from : from + '–' + to}/${p.count}${amt >= left ? ' (ปิดสัญญา)' : ''}`, price: amt, qty: 1, cost: 0, cat: 'ผ่อนสินค้า', svc: 'inst', inst: { op: 'pay', id: p.id } });
+    ov.remove(); POS.save(); beep(); toast('เพิ่มค่างวดลงบิลแล้ว — รับเงินตามปกติ ระบบตัดยอดให้เอง');
+  };
+  draw();
+}
+window.instPay = instPay; window.svcInst = svcInst; window.svcDebt = svcDebt;
+
+/* ---------- หน้า "สัญญาผ่อนสินค้า" ---------- */
+const IV = { f: 'active', q: '', cust: '' };
+VIEWS.inst = async el => {
+  if (!can('customers') && !can('credit')) { el.innerHTML = vhead('สัญญาผ่อนสินค้า', '', 'more') + '<div class="card empty">ไม่มีสิทธิ์</div>'; return; }
+  el.innerHTML = vhead('สัญญาผ่อนสินค้า', `<button class="btn sm" id="nw">${I(IC.plus, 18)} เปิดสัญญาใหม่</button>`, 'more') + `<div id="ik"></div>
+    <div class="search"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาชื่อลูกค้า / สินค้า / เบอร์" value="${esc(IV.q)}"></div>
+    <div class="chips" id="fl" style="margin-top:10px"></div><div id="il"><div class="card center"><span class="spin dark"></span></div></div>`;
+  $('#nw', el).onclick = () => { go('pos'); setTimeout(svcInst, 250); };
+  let rows = [];
+  const draw = () => {
+    const S2 = rows.map(p => ({ p, st: Inst.stat(p) })), act = S2.filter(x => x.p.status === 'active'), late = act.filter(x => x.st.late.length);
+    const k = (t, v, s2, c) => `<div class="stat"><div class="k">${t}</div><div class="v" ${c ? `style="color:${c}"` : ''}>${v}</div>${s2 ? `<div class="tiny muted">${s2}</div>` : ''}</div>`;
+    $('#ik', el).innerHTML = `<div class="grid3" style="margin-bottom:12px">${k('กำลังผ่อน', act.length + ' สัญญา', 'ยอดคงเหลือ ' + money(act.reduce((a, x) => a + x.st.left, 0), 0))}${k('ค้างชำระ', late.length + ' สัญญา', 'รวม ' + money(late.reduce((a, x) => a + x.st.lateAmt, 0), 0), late.length ? 'var(--red)' : '')}${k('ครบกำหนด 7 วันนี้', act.filter(x => x.st.next && x.st.next.due <= addDays(todayISO(), 7) && x.st.next.st !== 'late').length + ' สัญญา', '')}</div>`;
+    const F = [['active', 'กำลังผ่อน'], ['late', 'ค้างชำระ'], ['done', 'ปิดแล้ว'], ['cancelled', 'ยกเลิก'], ['', 'ทั้งหมด']];
+    $('#fl', el).innerHTML = F.map(([v, n]) => `<button class="chip ${IV.f === v ? 'on' : ''}" data-f="${v}">${n}</button>`).join('') + (IV.cust ? `<button class="chip on" data-cx>ลูกค้า: ${esc((rows.find(p => p.customerId === IV.cust) || {}).customerName || '')} ✕</button>` : '');
+    $$('[data-f]', el).forEach(b => b.onclick = () => { IV.f = b.dataset.f; draw(); });
+    const cx = $('[data-cx]', el); if (cx) cx.onclick = () => { IV.cust = ''; draw(); };
+    const t = norm(IV.q);
+    const L = S2.filter(x => (!IV.cust || x.p.customerId === IV.cust) && (IV.f === '' || (IV.f === 'late' ? x.p.status === 'active' && x.st.late.length : x.p.status === IV.f)) && (!t || norm(x.p.customerName + x.p.product + (x.p.phone || '')).includes(t)))
+      .sort((a, b) => (b.st.late.length - a.st.late.length) || String((a.st.next || {}).due || '9').localeCompare((b.st.next || {}).due || '9') || String(b.p.date).localeCompare(a.p.date));
+    $('#il', el).innerHTML = L.length ? L.map(x => instRow(x.p, false)).join('') : '<div class="card empty">ไม่มีสัญญาผ่อน</div>';
+    $$('[data-iv]', el).forEach(r => r.onclick = () => instDetail(rows.find(p => p.id === r.dataset.iv), () => load(true)));
+  };
+  const load = async force => { rows = await Inst.list(force); if (el.isConnected) draw(); };
+  let tt; $('#q', el).oninput = e => { clearTimeout(tt); tt = setTimeout(() => { IV.q = e.target.value; draw(); }, 150); };
+  load(true);
+};
+function instDetail(p, reload) {
+  const st = Inst.stat(p), SC = { paid: ['ชำระแล้ว', 'green'], late: ['เกินกำหนด', 'red'], today: ['ครบวันนี้', 'amber'], wait: ['รอชำระ', 'gray'] };
+  const ov = sheet(`📆 ${esc(p.product)}`, `<div class="small muted" style="margin:-4px 0 10px">${esc(p.customerName)}${p.phone ? ' · ' + esc(p.phone) : ''} · เปิดสัญญา ${thDate(p.date)}${p.createdBy ? ' โดย ' + esc(p.createdBy) : ''}${p.orderId ? ' · บิล ' + esc(p.orderId) : ''}</div>
+    <div class="card" style="padding:10px 12px"><div class="kv"><span>ราคาสินค้า</span><b>${money(p.price)}</b></div><div class="kv"><span>เงินดาวน์</span><b>${money(p.down)}</b></div><div class="kv"><span>ยอดจัดผ่อน</span><b>${money(p.financed)}</b></div><div class="kv"><span>ดอกเบี้ย ${num(p.rate)}% ${p.rateMode === 'total' ? 'ทั้งสัญญา' : 'ต่องวด'}</span><b>${money(p.interest)}</b></div>
+      <div class="kv"><span>รวมต้องผ่อน</span><b>${money(p.total)}</b></div><div class="kv"><span>ชำระแล้ว</span><b style="color:var(--green)">${money(p.paid)}</b></div><div class="kv" style="font-size:18px"><span>คงเหลือ</span><b style="color:${st.left ? 'var(--red)' : 'var(--green)'}">${money(st.left)}</b></div>${p.note ? `<div class="tiny muted" style="margin-top:4px">${esc(p.note)}</div>` : ''}</div>
+    <div class="scroll-x" style="margin-top:8px"><table class="t"><tr><th>งวด</th><th>ครบกำหนด</th><th class="right">ยอด</th><th class="right">ชำระแล้ว</th><th></th></tr>${st.sc.map(x => `<tr><td>${x.no}</td><td>${thDate(x.due)}</td><td class="right">${money(x.amt, 0)}</td><td class="right">${x.paid ? money(x.paid, 0) : '-'}</td><td>${p.status === 'active' || x.st === 'paid' ? `<span class="tag ${SC[x.st][1]}">${SC[x.st][0]}</span>` : ''}</td></tr>`).join('')}</table></div>`,
+    `${p.status === 'active' ? `${isOwner() && !p._pending ? '<button class="btn ghost" id="ix" style="color:var(--red)">ยกเลิกสัญญา</button>' : ''}<button class="btn grow green" id="ipay" style="min-height:52px">ชำระงวด (ไปหน้าขาย)</button>` : `<button class="btn grow ghost" onclick="this.closest('.ov').remove()">ปิด</button>`}`);
+  const pb = $('#ipay', ov); if (pb) pb.onclick = () => { ov.remove(); go('pos'); setTimeout(() => instPay(p), 250); };
+  const xb = $('#ix', ov); if (xb) xb.onclick = async () => {
+    if (!(await confirmDlg('ยกเลิกสัญญาผ่อนนี้? (เงินที่รับไปแล้วไม่ถูกคืนอัตโนมัติ — ถ้าจะคืนเงินดาวน์ ให้คืนเงินที่ใบเสร็จ)', 'ยกเลิกสัญญา', true))) return;
+    try { busy(1); await api('instCancel', { id: p.id }); Inst.at = 0; busy(0); ov.remove(); toast('ยกเลิกสัญญาแล้ว'); reload && reload(); } catch (e) { busy(0); toast(e.message, 1); }
+  };
+}

@@ -46,7 +46,9 @@ function aggregate(rows) {
     o._items.forEach(it => {
       const q = Math.abs(num(it.qty)) * sg, amt = q * num(it.price), c = q * num(it.cost);
       if (it.pass) A.pass = (A.pass || 0) + amt;
-      const pk = it.sku || it.name; const p = A.prod[pk] || (A.prod[pk] = { name: it.name, cat: it.cat || '', qty: 0, amt: 0, cost: 0 });
+      if (it.debt) A.debt = (A.debt || 0) + amt;
+      if (it.inst) A.inst = (A.inst || 0) + amt;
+      const pk = it.sku || it.name; const p = A.prod[pk] || (A.prod[pk] = { name: it.name, cat: it.cat || '', qty: 0, amt: 0, cost: 0, pass: !!(it.pass || it.debt) });
       p.qty += q; p.amt += amt; p.cost += c;
       const ck = it.cat || 'ไม่ระบุหมวด'; const cc = A.cat[ck] || (A.cat[ck] = { qty: 0, amt: 0, cost: 0 }); cc.qty += q; cc.amt += amt; cc.cost += c;
     });
@@ -55,65 +57,116 @@ function aggregate(rows) {
   return A;
 }
 function barChart(data, opt = {}) {
-  const W = 760, H = 220, pl = 54, pb = 34, pt = 10;
-  const max = Math.max(1, ...data.map(d => d.v)); const step = Math.pow(10, Math.floor(Math.log10(max))); const top = Math.ceil(max / step) * step;
-  const bw = (W - pl - 10) / Math.max(1, data.length);
+  // แท่งบาง ปลายมน · ถ้ามี d.p = ช่วงก่อนหน้า วาดเป็นแท่งสีเทาจาง ๆ ข้างหลังเพื่อเทียบ
+  const W = 760, H = opt.h || 220, pl = 54, pb = 34, pt = 10, hasP = data.some(d => d.p != null);
+  const max = Math.max(1, ...data.map(d => Math.max(d.v, d.p || 0))); const step = Math.pow(10, Math.floor(Math.log10(max))); const top = Math.ceil(max / step) * step;
+  const bw = (W - pl - 10) / Math.max(1, data.length), col = opt.color || '#7CB342';
   let g = '';
   for (let i = 0; i <= 4; i++) { const y = pt + (H - pt - pb) * (1 - i / 4); g += `<line x1="${pl}" x2="${W - 6}" y1="${y}" y2="${y}" stroke="#eee"/><text x="${pl - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="#888">${money(top * i / 4, 0)}</text>`; }
+  const bar = (x, w, v, fill) => { const h = (H - pt - pb) * Math.max(0, v) / top, y = H - pb - h, r = Math.min(4, w / 2, h); return h <= 0 ? '' : `<path d="M${x},${H - pb}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${H - pb}Z" fill="${fill}"/>`; };
   data.forEach((d, i) => {
-    const h = (H - pt - pb) * Math.max(0, d.v) / top, x = pl + i * bw + bw * .15, y = H - pb - h;
-    g += `<rect x="${x}" y="${y}" width="${bw * .7}" height="${h}" rx="2" fill="${opt.color || '#7CB342'}"><title>${esc(d.t)}: ${money(d.v)}</title></rect>`;
-    if (data.length <= 16 || i % Math.ceil(data.length / 16) === 0) g += `<text x="${x + bw * .35}" y="${H - pb + 14}" text-anchor="middle" font-size="10.5" fill="#666">${esc(d.l)}</text>`;
+    const x0 = pl + i * bw, w = Math.max(2, Math.min(hasP ? bw * .42 : bw * .62, 34)), cx = x0 + bw / 2;
+    const tip = `${esc(d.t)}: ${money(d.v)}${d.p != null ? ` · ${esc(opt.prevName || 'ช่วงก่อน')} ${money(d.p)}` : ''}`;
+    g += `<g><title>${tip}</title><rect x="${x0}" y="${pt}" width="${bw}" height="${H - pt - pb}" fill="transparent"/>`;
+    if (hasP) g += bar(cx - w - 1, w, d.p || 0, '#D5D9DE') + bar(cx + 1, w, d.v, col);
+    else g += bar(cx - w / 2, w, d.v, col);
+    g += '</g>';
+    if (data.length <= 16 || i % Math.ceil(data.length / 16) === 0) g += `<text x="${cx}" y="${H - pb + 14}" text-anchor="middle" font-size="10.5" fill="#666">${esc(d.l)}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${g}</svg>`;
+  const leg = hasP ? `<div class="row tiny muted" style="gap:14px;justify-content:center;margin-top:2px"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${col};vertical-align:-1px"></i> ${esc(opt.curName || 'ช่วงนี้')}</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#D5D9DE;vertical-align:-1px"></i> ${esc(opt.prevName || 'ช่วงก่อน')}</span></div>` : '';
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${g}</svg>${leg}`;
 }
+// แถบแนวนอน (อันดับ) — ชื่อ + แท่ง + ตัวเลข
+function hBars(list, color) {
+  const max = Math.max(1, ...list.map(x => x.v));
+  return list.map((x, i) => `<div style="margin-bottom:8px"><div class="row small" style="gap:6px"><span class="muted" style="width:16px">${i + 1}</span><span class="grow" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.n)}</span><b class="num">${money(x.v, 0)}</b></div><div style="height:8px;border-radius:4px;background:#F1F3F5;margin:3px 0 0 22px"><div style="height:8px;border-radius:4px;width:${x.v / max * 100}%;background:${x.c || color || '#7CB342'}"></div></div>${x.s ? `<div class="tiny muted" style="margin-left:22px">${x.s}</div>` : ''}</div>`).join('') || '<div class="empty small">ไม่มีข้อมูล</div>';
+}
+// แถบสัดส่วนแบบต่อกัน (ช่องทางชำระ) + คำอธิบาย
+function mixBar(parts) {
+  const tot = parts.reduce((s, p) => s + Math.max(0, p.v), 0) || 1;
+  return `<div style="display:flex;gap:2px;height:14px;border-radius:7px;overflow:hidden;background:#F1F3F5">${parts.filter(p => p.v > 0).map(p => `<div title="${esc(p.n)} ${money(p.v)}" style="width:${p.v / tot * 100}%;background:${p.c}"></div>`).join('')}</div>
+    <div style="margin-top:8px">${parts.map(p => `<div class="kv small"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${p.c};vertical-align:-1px"></i> ${esc(p.n)}</span><span><b class="num">${money(p.v, 0)}</b> <span class="muted" style="display:inline-block;width:48px;text-align:right">${(p.v / tot * 100).toFixed(1)}%</span></span></div>`).join('')}</div>`;
+}
+const pctChg = (a, b) => b ? (a - b) / Math.abs(b) * 100 : null;
+const chgTag = (a, b, inv) => { const c = pctChg(a, b); if (c == null || !isFinite(c)) return ''; const up = c >= 0, good = inv ? !up : up; return `<span style="color:${Math.abs(c) < 0.5 ? '#888' : good ? 'var(--green)' : 'var(--red)'};font-weight:600">${up ? '▲' : '▼'} ${Math.abs(c).toFixed(Math.abs(c) < 10 ? 1 : 0)}%</span>`; };
 function rangePicker(el, state, onChange) {
   el.innerHTML = `<div class="chips">${RANGES.map(([k, n]) => `<button class="chip ${state.r === k ? 'on' : ''}" data-r="${k}">${n}</button>`).join('')}</div>
     <div class="row ${state.r === 'custom' ? '' : 'hidden'}" id="cr" style="margin-bottom:8px"><input class="in" type="date" id="f" value="${state.from}"><span>ถึง</span><input class="in" type="date" id="t" value="${state.to}"><button class="btn sm" id="ok">ดู</button></div>`;
   $$('[data-r]', el).forEach(b => b.onclick = () => { state.r = b.dataset.r; const R = RANGES.find(x => x[0] === state.r); if (R[2]) [state.from, state.to] = R[2](); rangePicker(el, state, onChange); if (R[2]) onChange(); });
   $('#ok', el).onclick = () => { state.from = $('#f', el).value; state.to = $('#t', el).value; if (state.from > state.to) [state.from, state.to] = [state.to, state.from]; onChange(); };
 }
-const RS = { r: 'today', from: todayISO(), to: todayISO(), tab: 'day', staff: '' };
+const RS = { r: 'today', from: todayISO(), to: todayISO(), tab: 'day', staff: '', top: 'range' };
+const prevRange = (from, to) => { const n = Math.round((new Date(to + 'T12:00:00') - new Date(from + 'T12:00:00')) / 864e5) + 1; return [addDays(from, -n), addDays(from, -1)]; };
 
-/* ---------- สรุปยอดขาย ---------- */
+/* ---------- รายงาน/ยอดขาย (รวมสรุปตามช่วงเวลา + รายเดือน/รายปี ไว้หน้าเดียว) ---------- */
 VIEWS.reports = el => {
-  if (!seesSales()) { el.innerHTML = vhead('สรุปยอดขาย') + `<div class="card empty">${I(IC.shield, 40)}<p>รายงานยอดขายสำหรับเจ้าของร้าน</p></div>`; return; }
+  if (!seesSales()) { el.innerHTML = vhead('รายงาน/ยอดขาย') + `<div class="card empty">${I(IC.shield, 40)}<p>รายงานยอดขายสำหรับเจ้าของร้าน</p></div>`; return; }
+  const own = isOwner(); if (!own) RS.top = 'range';
+  el.innerHTML = vhead('รายงาน/ยอดขาย') + (own ? `<div class="seg" id="rtop" style="margin-bottom:12px"><button data-t="range" class="${RS.top === 'range' ? 'on' : ''}">📊 สรุปตามช่วงเวลา</button><button data-t="month" class="${RS.top === 'month' ? 'on' : ''}">📅 รายเดือน · รายปี</button></div>` : '') + '<div id="rbody"></div>';
+  const body = $('#rbody', el);
+  const show = () => RS.top === 'month' && own ? salesMonthlyView(body) : reportsRange(body);
+  $$('#rtop button', el).forEach(b => b.onclick = () => { if (RS.top === b.dataset.t) return; RS.top = b.dataset.t; $$('#rtop button', el).forEach(x => x.classList.toggle('on', x === b)); show(); });
+  show();
+};
+// เปิดจากลิงก์เก่า "ยอดขายรายเดือน" → หน้าเดียวกัน แท็บรายเดือน
+VIEWS.sales = el => { RS.top = 'month'; S.view = 'reports'; return VIEWS.reports(el); };
+
+function reportsRange(el) {
   const all = canStrict('reports'), vc = canStrict('viewCost');
-  el.innerHTML = vhead('สรุปยอดขาย', `<button class="btn ghost sm" id="ex">ส่งออก CSV</button>`) + `
+  el.innerHTML = `
     ${all ? '' : `<div class="alert blue">${I(IC.user, 18)}<div>แสดงเฉพาะยอดขายของคุณ (${esc(S.user.name)})</div></div>`}
     <div id="rp"></div><div id="sf"></div><div id="kpi"><div class="card center"><span class="spin dark"></span></div></div>
-    <div class="card"><div class="seg" id="tabs" style="margin-bottom:10px;overflow-x:auto">${[['day', 'ตามวัน'], ['prod', 'ตามสินค้า'], ['cat', 'ตามหมวดหมู่'], ['staff', 'ตามพนักงาน'], ['pay', 'ตามการชำระ']].map(([k, n]) => `<button data-t="${k}" class="${RS.tab === k ? 'on' : ''}" style="white-space:nowrap">${n}</button>`).join('')}</div><div id="tb"></div></div>
-    <div class="row wrap" style="gap:8px"><button class="btn ghost grow" onclick="go('salesreceipts')">${I(IC.receipt, 18)} ใบเสร็จรับเงิน</button>${vc ? `<button class="btn ghost grow" onclick="go('stockvalue')">${I(IC.box, 18)} มูลค่าสต็อก</button>` : ''}${isOwner() ? `<button class="btn ghost grow" onclick="go('sales')">${I(IC.chart, 18)} ยอดขายรายเดือน (ทุกปี)</button><button class="btn ghost grow" onclick="go('tax')">${I(IC.tax, 18)} ภาษี</button>` : ''}</div>`;
-  let rows = [], A = null, tableRows = [];
+    <div class="card"><div class="row" style="margin-bottom:6px"><h3 class="grow" id="cht">ยอดขาย</h3></div><div id="chart"></div></div>
+    <div class="grid2" id="hl"></div>
+    <div class="card"><div class="row" style="gap:8px;margin-bottom:10px"><div class="seg grow" id="tabs" style="overflow-x:auto">${[['day', 'ตามวัน'], ['prod', 'ตามสินค้า'], ['cat', 'ตามหมวดหมู่'], ['staff', 'ตามพนักงาน'], ['pay', 'ตามการชำระ']].map(([k, n]) => `<button data-t="${k}" class="${RS.tab === k ? 'on' : ''}" style="white-space:nowrap">${n}</button>`).join('')}</div><button class="btn ghost sm" id="ex">ส่งออก CSV</button></div><div id="tb"></div></div>
+    <div class="row wrap" style="gap:8px"><button class="btn ghost grow" onclick="go('salesreceipts')">${I(IC.receipt, 18)} ใบเสร็จรับเงิน</button>${vc ? `<button class="btn ghost grow" onclick="go('stockvalue')">${I(IC.box, 18)} มูลค่าสต็อก</button>` : ''}${isOwner() ? `<button class="btn ghost grow" onclick="go('tax')">${I(IC.tax, 18)} ภาษี</button>` : ''}</div>`;
+  let rows = [], prows = [], A = null, tableRows = [];
+  const single = () => RS.from === RS.to;
   const draw = () => {
-    const R = RS.staff ? rows.filter(o => (o.cashierName || o.cashier) === RS.staff) : rows;
-    A = aggregate(R);
-    const k = (t, v, s) => `<div class="stat"><div class="k">${t}</div><div class="v">${v}</div>${s ? `<div class="tiny muted">${s}</div>` : ''}</div>`;
-    $('#kpi', el).innerHTML = `<div class="grid3" style="margin-bottom:12px">${k('ยอดขาย', baht(A.gross))}${k('คืนเงิน', baht(A.refund), A.refunds + ' ใบ')}${k('ส่วนลด', baht(A.disc))}${k('ยอดขายสุทธิ', baht(A.net))}${vc ? k('กำไรขั้นต้น', baht(A.profit), A.net ? (A.profit / A.net * 100).toFixed(1) + '%' : '') : k('จำนวนบิล', A.bills)}${k('เฉลี่ย/บิล', baht(A.bills ? A.net / A.bills : 0), A.bills + ' บิล')}</div>`;
+    const f = o => !RS.staff || (o.cashierName || o.cashier) === RS.staff;
+    const R = rows.filter(f); A = aggregate(R); const P = aggregate(prows.filter(f));
+    const k = (t, v, s, cur, prv, inv) => `<div class="stat"><div class="k">${t}</div><div class="v">${v}</div><div class="tiny muted">${cur != null ? chgTag(cur, prv, inv) + ' ' : ''}${s || ''}</div></div>`;
+    const pn = single() ? 'เทียบวันก่อน' : 'เทียบช่วงก่อน';
+    const extra = [(A.pass || 0) - (A.debt || 0) > 0 && `เงินรับแทน (โอน/เติม/บิล) ${money((A.pass || 0) - (A.debt || 0), 0)}`, A.debt && `รับชำระหนี้ ${money(A.debt, 0)}`, A.inst && `ผ่อนสินค้า (ดาวน์/ค่างวด) ${money(A.inst, 0)}`].filter(Boolean);
+    $('#kpi', el).innerHTML = `<div class="grid3" style="margin-bottom:${extra.length ? 6 : 12}px">${k('ยอดขายสุทธิ', baht(A.net), pn, A.net, P.net)}${vc ? k('กำไรขั้นต้น', baht(A.profit), A.net ? 'อัตรา ' + (A.profit / A.net * 100).toFixed(1) + '%' : '', A.profit, P.profit) : k('จำนวนบิล', A.bills, '', A.bills, P.bills)}${k('เฉลี่ย/บิล', baht(A.bills ? A.net / A.bills : 0), A.bills + ' บิล', A.bills ? A.net / A.bills : 0, P.bills ? P.net / P.bills : 0)}${k('ยอดขาย (ก่อนหัก)', baht(A.gross), '', A.gross, P.gross)}${k('ส่วนลด', baht(A.disc), '', A.disc, P.disc, 1)}${k('คืนเงิน', baht(A.refund), A.refunds + ' ใบ', A.refund, P.refund, 1)}</div>
+      ${extra.length ? `<div class="tiny muted" style="margin:0 4px 12px">รวมอยู่ในยอดขายสุทธิ: ${extra.join(' · ')}</div>` : ''}`;
+    // กราฟหลัก: ช่วงนี้เทียบช่วงก่อนหน้า (แท่งเทา)
+    let data, ttl;
+    if (single()) { ttl = 'ยอดขายรายชั่วโมง'; data = []; for (let i = 5; i <= 23; i++) { const hh = String(i).padStart(2, '0'); data.push({ l: hh, t: hh + ':00 น.', v: A.hours[hh] || 0, p: P.hours[hh] || 0 }); } }
+    else { ttl = 'ยอดขายสุทธิรายวัน'; data = []; const off = Math.round((new Date(RS.from + 'T12:00:00') - new Date(prevRange(RS.from, RS.to)[0] + 'T12:00:00')) / 864e5); for (let d = RS.from; d <= RS.to; d = addDays(d, 1)) { const pd = addDays(d, -off); data.push({ l: d.slice(8) + '/' + d.slice(5, 7), t: thDate(d), v: (A.days[d] || { net: 0 }).net, p: (P.days[pd] || { net: 0 }).net }); if (data.length > 400) break; } }
+    $('#cht', el).textContent = ttl;
+    $('#chart', el).innerHTML = barChart(data, { curName: single() ? 'วันนี้ที่เลือก' : 'ช่วงนี้', prevName: single() ? 'วันก่อนหน้า' : 'ช่วงก่อนหน้า (จำนวนวันเท่ากัน)' });
+    // ไฮไลต์: สินค้าขายดี 5 อันดับ · ช่องทางชำระ · ช่วงเวลาขายดี
+    const top = Object.values(A.prod).filter(p => p.amt > 0 && !p.pass).sort((a, b) => b.amt - a.amt).slice(0, 5).map(p => ({ n: p.name, v: p.amt, s: `${Math.round(p.qty * 1000) / 1000} ชิ้น${vc ? ' · กำไร ' + money(p.amt - p.cost, 0) : ''}` }));
+    const pays = Object.entries(A.pay).filter(([, p]) => p.amt > 0).sort((a, b) => b[1].amt - a[1].amt).map(([k2, p]) => ({ n: PAYNAME[k2] || k2, v: p.amt, c: PAYCOLOR[k2] || '#999' }));
+    const hrs = Object.entries(A.hours).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    $('#hl', el).innerHTML = `<div class="card"><h3>🏆 สินค้าขายดี</h3>${hBars(top, '#E53935')}<a href="#" class="small" id="morep">ดูทั้งหมด ›</a></div>
+      <div class="card"><h3>💳 ช่องทางชำระ</h3>${pays.length ? mixBar(pays) : '<div class="empty small">ไม่มีข้อมูล</div>'}${hrs.length ? `<div class="kv small" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><span>⏰ ช่วงขายดีที่สุด</span><b>${hrs[0][0]}:00–${String(+hrs[0][0] + 1).padStart(2, '0')}:00 น.</b></div>` : ''}${A.bills ? `<div class="kv small"><span>🧾 สินค้าต่อบิล (เฉลี่ย)</span><b>${(R.filter(o => o.status !== 'refund').reduce((s, o) => s + num(o.itemCount), 0) / A.bills).toFixed(1)} ชิ้น</b></div>` : ''}</div>`;
+    $('#morep', el).onclick = e => { e.preventDefault(); RS.tab = 'prod'; $$('#tabs button', el).forEach(x => x.classList.toggle('on', x.dataset.t === 'prod')); drawTab(); $('#tabs', el).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    drawTab();
+  };
+  const drawTab = () => {
     const tab = RS.tab; let h = '';
     if (tab === 'day') {
-      const single = RS.from === RS.to;
-      const data = single ? Array.from({ length: 24 }, (_, i) => { const hh = String(i).padStart(2, '0'); return { l: hh, t: hh + ':00', v: A.hours[hh] || 0 }; }).filter((d, i) => i >= 5 && i <= 23)
-        : (() => { const out = []; for (let d = RS.from; d <= RS.to; d = addDays(d, 1)) { const x = A.days[d] || { net: 0 }; out.push({ l: d.slice(8) + '/' + d.slice(5, 7), t: thDate(d), v: x.net }); if (out.length > 400) break; } return out; })();
-      h = barChart(data) + `<div class="tiny muted center">${single ? 'ยอดขายรายชั่วโมง' : 'ยอดขายสุทธิรายวัน'}</div>`;
       tableRows = [['วันที่', 'บิล', 'ยอดขายสุทธิ'].concat(vc ? ['ต้นทุน', 'กำไร'] : [])].concat(Object.keys(A.days).sort().reverse().map(d => [d, A.days[d].bills, A.days[d].net].concat(vc ? [A.days[d].cost, A.days[d].net - A.days[d].cost] : [])));
-      h += tbl(tableRows, r => [thDate(r[0])].concat(r.slice(1).map((v, i) => i === 0 ? v : money(v))));
+      h = tbl(tableRows, r => [thDate(r[0])].concat(r.slice(1).map((v, i) => i === 0 ? v : money(v))));
     } else if (tab === 'prod') {
       const list = Object.values(A.prod).sort((a, b) => b.amt - a.amt);
       tableRows = [['สินค้า', 'หมวด', 'จำนวน', 'ยอดขาย'].concat(vc ? ['ต้นทุน', 'กำไร'] : [])].concat(list.map(p => [p.name, p.cat, round3(p.qty), p.amt].concat(vc ? [p.cost, p.amt - p.cost] : [])));
       h = tbl(tableRows.slice(0, 201), r => [esc(r[0]), `<span class="tiny muted">${esc(r[1])}</span>`, r[2]].concat(r.slice(3).map(v => money(v)))) + (list.length > 200 ? `<div class="tiny muted center">แสดง 200 จาก ${list.length} รายการ (ส่งออก CSV เพื่อดูทั้งหมด)</div>` : '');
     } else if (tab === 'cat') {
       const list = Object.entries(A.cat).sort((a, b) => b[1].amt - a[1].amt);
-      const tot = list.reduce((s, x) => s + x[1].amt, 0) || 1;
-      h = list.map(([n, c]) => `<div style="margin-bottom:10px"><div class="row small"><span class="grow"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${catColor(n)}"></span> ${esc(n)}</span><b>${baht(c.amt)}</b><span class="muted" style="width:52px;text-align:right">${(c.amt / tot * 100).toFixed(1)}%</span></div><div class="prog" style="margin-top:4px"><i style="width:${c.amt / tot * 100}%;background:${catColor(n)}"></i></div></div>`).join('') || '<div class="empty">ไม่มีข้อมูล</div>';
+      h = hBars(list.slice(0, 12).map(([n, c]) => ({ n, v: c.amt, c: catColor(n) })));
       tableRows = [['หมวดหมู่', 'จำนวน', 'ยอดขาย'].concat(vc ? ['ต้นทุน', 'กำไร'] : [])].concat(list.map(([n, c]) => [n, round3(c.qty), c.amt].concat(vc ? [c.cost, c.amt - c.cost] : [])));
       h += tbl(tableRows, r => [esc(r[0]), r[1]].concat(r.slice(2).map(v => money(v))));
     } else if (tab === 'staff') {
-      tableRows = [['พนักงาน', 'บิล', 'คืนเงิน', 'ยอดขายสุทธิ', 'เฉลี่ย/บิล'].concat(vc ? ['กำไร'] : [])].concat(Object.entries(A.staff).sort((a, b) => b[1].net - a[1].net).map(([n, s]) => [n, s.bills, s.refund, s.net, s.bills ? s.net / s.bills : 0].concat(vc ? [s.net - s.cost] : [])));
-      h = tbl(tableRows, r => [esc(r[0]), r[1]].concat(r.slice(2).map(v => money(v))));
+      const list = Object.entries(A.staff).sort((a, b) => b[1].net - a[1].net);
+      h = list.length > 1 ? hBars(list.map(([n, s2]) => ({ n, v: s2.net, s: s2.bills + ' บิล' })), '#1F5FBF') : '';
+      tableRows = [['พนักงาน', 'บิล', 'คืนเงิน', 'ยอดขายสุทธิ', 'เฉลี่ย/บิล'].concat(vc ? ['กำไร'] : [])].concat(list.map(([n, s2]) => [n, s2.bills, s2.refund, s2.net, s2.bills ? s2.net / s2.bills : 0].concat(vc ? [s2.net - s2.cost] : [])));
+      h += tbl(tableRows, r => [esc(r[0]), r[1]].concat(r.slice(2).map(v => money(v))));
     } else if (tab === 'pay') {
-      tableRows = [['ประเภทการชำระ', 'จำนวนบิล', 'ยอดเงิน']].concat(Object.entries(A.pay).sort((a, b) => b[1].amt - a[1].amt).map(([k, p]) => [PAYNAME[k] || k, p.n, p.amt]));
-      h = tbl(tableRows, r => [`<span style="color:${PAYCOLOR[Object.keys(PAYNAME).find(k => PAYNAME[k] === r[0])] || '#333'};font-weight:600">${esc(r[0])}</span>`, r[1], money(r[2])]);
+      tableRows = [['ประเภทการชำระ', 'จำนวนบิล', 'ยอดเงิน']].concat(Object.entries(A.pay).sort((a, b) => b[1].amt - a[1].amt).map(([k2, p]) => [PAYNAME[k2] || k2, p.n, p.amt]));
+      h = tbl(tableRows, r => [`<span style="font-weight:600">${esc(r[0])}</span>`, r[1], money(r[2])]);
     }
     $('#tb', el).innerHTML = h;
   };
@@ -121,13 +174,15 @@ VIEWS.reports = el => {
   const tbl = (rs, fmt) => rs.length > 1 ? `<div class="scroll-x" style="margin-top:10px"><table class="t"><tr>${rs[0].map((h, i) => `<th class="${i ? 'right' : ''}">${h}</th>`).join('')}</tr>${rs.slice(1).map(r => `<tr>${fmt(r).map((c, i) => `<td class="${i ? 'right num' : ''}">${c}</td>`).join('')}</tr>`).join('')}</table></div>` : '<div class="empty">ไม่มีข้อมูลในช่วงนี้</div>';
   const load = async force => {
     $('#kpi', el).innerHTML = '<div class="card center"><span class="spin dark"></span></div>';
-    try { rows = await fetchOrders(RS.from, RS.to, force); } catch (e) { rows = []; toast(e.message, 1); }
+    const [pf, pt] = prevRange(RS.from, RS.to);
+    try { [rows, prows] = await Promise.all([fetchOrders(RS.from, RS.to, force), fetchOrders(pf, pt).catch(() => [])]); } catch (e) { rows = []; prows = []; toast(e.message, 1); }
+    if (!el.isConnected) return;
     const staffs = [...new Set(rows.map(o => o.cashierName || o.cashier))];
-    $('#sf', el).innerHTML = all && staffs.length > 1 ? `<select class="in" id="st" style="margin-bottom:10px"><option value="">พนักงานทั้งหมด</option>${staffs.map(s => `<option ${RS.staff === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : '';
+    $('#sf', el).innerHTML = all && staffs.length > 1 ? `<select class="in" id="st" style="margin-bottom:10px"><option value="">พนักงานทั้งหมด</option>${staffs.map(x => `<option ${RS.staff === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>` : '';
     const st = $('#st', el); if (st) st.onchange = e => { RS.staff = e.target.value; draw(); };
     draw();
   };
-  $$('#tabs button', el).forEach(b => b.onclick = () => { RS.tab = b.dataset.t; $$('#tabs button', el).forEach(x => x.classList.toggle('on', x === b)); draw(); });
+  $$('#tabs button', el).forEach(b => b.onclick = () => { RS.tab = b.dataset.t; $$('#tabs button', el).forEach(x => x.classList.toggle('on', x === b)); drawTab(); });
   $('#ex', el).onclick = () => download(`sales_${RS.tab}_${RS.from}_${RS.to}.csv`, toCSV(tableRows.map(r => r.map(v => typeof v === 'number' ? Math.round(v * 100) / 100 : v))));
   rangePicker($('#rp', el), RS, () => load());
   load();
@@ -137,7 +192,7 @@ VIEWS.reports = el => {
     const thd = d => d ? thDate(d) : '—';
     OStore.info().then(i => { const o = $('#osi', el); if (!o) return; o.innerHTML = i.from ? `ข้อมูลในเครื่อง ${i.count.toLocaleString()} บิล ตั้งแต่ ${thd(i.from)}${i.busy ? ' · กำลังดึงย้อนหลัง…' : ''} · อัปเดต ${i.at ? new Date(i.at).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' }) + ' น.' : '—'} · <a href="#" id="osr">ดึงใหม่ทั้งหมด</a>` : 'กำลังเตรียมข้อมูลในเครื่อง (ครั้งแรก) — ระหว่างนี้ใช้ข้อมูลออนไลน์'; const r = $('#osr', el); if (r) r.onclick = async e => { e.preventDefault(); if (await confirmDlg('ลบข้อมูลบิลในเครื่องแล้วดึงใหม่ทั้งหมด (ใช้เวลาสักครู่ เบื้องหลัง)?', 'ดึงใหม่')) { await OStore.reset(); toast('เริ่มดึงข้อมูลใหม่แล้ว'); } }; });
   }
-};
+}
 
 /* ---------- ใบเสร็จรับเงินย้อนหลัง ---------- */
 const RR = { r: 'today', from: todayISO(), to: todayISO(), q: '' };

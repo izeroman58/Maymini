@@ -28,6 +28,7 @@ async function customerDetail(c) {
   const ov = sheet(esc(c.name), `<div class="grid2" style="margin-bottom:10px"><div class="stat"><div class="k">ยอดซื้อรวม</div><div class="v">${baht(c.totalSpent)}</div><div class="tiny muted">${num(c.visits)} ครั้ง</div></div><div class="stat"><div class="k">แต้มสะสม</div><div class="v">${num(c.points)}</div></div>
      <div class="stat"><div class="k">ยอดค้างชำระ (เชื่อ)</div><div class="v" style="color:${num(c.credit) > 0 ? 'var(--amber)' : 'inherit'}">${baht(c.credit)}</div>${num(c.creditLimit) ? `<div class="tiny muted">วงเงิน ${money(c.creditLimit)}</div>` : ''}</div><div class="stat"><div class="k">เบอร์โทร</div><div class="v" style="font-size:16px">${esc(c.phone || '-')}</div></div></div>
      ${c.note ? `<div class="small muted" style="margin-bottom:8px">${esc(c.note)}</div>` : ''}
+     <div id="cinst"></div>
      <div class="card"><h3>ความเคลื่อนไหว</h3><div id="tx"><span class="spin dark"></span></div></div>`,
     `<button class="btn ghost grow" id="ed">${I(IC.edit, 16)} แก้ไข</button><button class="btn ghost grow" id="pt">± แต้ม</button>${can('credit') && num(c.credit) > 0 ? `<button class="btn grow green" id="py">รับชำระหนี้</button>` : ''}`);
   $('#ed', ov).onclick = () => { ov.remove(); customerForm(c, () => go('customers')); };
@@ -36,6 +37,10 @@ async function customerDetail(c) {
     let sg = 1; $$('#sg button', o2).forEach(b => b.onclick = () => { sg = +b.dataset.s; $$('#sg button', o2).forEach(x => x.classList.toggle('on', x === b)); });
     $('#ok', o2).onclick = async () => { const v = Math.floor(num($('#pv', o2).value)); if (!v) return toast('ใส่จำนวนแต้ม', 1); try { busy(1); const r = await api('adjustPoints', { id: c.id, points: sg * v, note: $('#pn', o2).value || 'ปรับโดย ' + S.user.name }); busy(0); o2.remove(); ov.remove(); toast('แต้มคงเหลือ ' + r.points); await loadCustomers(true); if (S.view === 'customers') go('customers'); } catch (e) { busy(0); toast(e.message, 1); } };
   };
+  if (window.Inst) Inst.list().then(L => { const mine = L.filter(p => p.customerId === c.id && p.status === 'active'), b = $('#cinst', ov); if (!b || !mine.length) return;
+    b.innerHTML = `<div class="card"><div class="row"><h3 class="grow">📆 สัญญาผ่อน ${mine.length} สัญญา</h3><button class="btn ghost sm" id="ci">ดูทั้งหมด</button></div>${mine.map(p => instRow(p, false)).join('')}</div>`;
+    $('#ci', b).onclick = () => { ov.remove(); IV.cust = c.id; IV.f = ''; go('inst'); };
+    $$('[data-iv]', b).forEach(r => r.onclick = () => instDetail(mine.find(p => p.id === r.dataset.iv))); }).catch(() => { });
   const py = $('#py', ov); if (py) py.onclick = () => keypad('รับชำระหนี้ — ค้าง ' + money(c.credit), num(c.credit), async v => {
     try { busy(1); const r = await api('customerPay', { id: c.id, amount: v }); busy(0); ov.remove(); toast('รับชำระแล้ว · คงค้าง ' + money(r.credit)); await loadCustomers(true); if (S.view === 'customers') go('customers');
       RP.printOrder({ id: 'PAY-' + Date.now().toString().slice(-6), date: LocalDB.now(), title: 'ใบรับชำระหนี้', cashierName: S.user.name, customerName: c.name, customerId: c.id, items: [{ name: 'รับชำระหนี้เงินเชื่อ', qty: 1, price: v }], subtotal: v, discount: 0, total: v, payments: [{ type: 'cash', amount: v }], creditBalance: r.credit }).catch(() => { });
@@ -43,7 +48,7 @@ async function customerDetail(c) {
   }, { min: 0 });
   try {
     const tx = (await api('list', { table: 'CustomerTx' })).rows.filter(t => t.customerId === c.id).sort((a, b) => String(b.date).localeCompare(a.date)).slice(0, 40);
-    const T = { credit_sale: 'ซื้อเงินเชื่อ', credit_pay: 'ชำระหนี้', credit_refund: 'คืนเงิน (เชื่อ)', points_adjust: 'ปรับแต้ม' };
+    const T = { credit_sale: 'ซื้อเงินเชื่อ', credit_pay: 'ชำระหนี้', credit_pay_void: 'ยกเลิกการชำระหนี้ (คืนเงินบิล)', credit_refund: 'คืนเงิน (เชื่อ)', points_adjust: 'ปรับแต้ม' };
     $('#tx', ov).innerHTML = tx.length ? tx.map(t => `<div class="kv small"><span>${T[t.type] || t.type}<div class="tiny muted">${esc(String(t.date).replace('T', ' ').slice(0, 16))} ${esc(t.ref || '')} ${esc(t.note || '')}</div></span><b>${t.amount ? money(t.amount) : (num(t.points) > 0 ? '+' : '') + t.points + ' แต้ม'}</b></div>`).join('') : '<div class="muted small">ยังไม่มีรายการเงินเชื่อ/แต้ม — ประวัติการซื้อดูได้ที่ใบเสร็จรับเงิน (ค้นหาชื่อลูกค้า)</div>';
   } catch (e) { $('#tx', ov).textContent = e.message; }
 }

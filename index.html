@@ -213,7 +213,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.41';
+const APP_VER = '2.6.42';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -1175,6 +1175,7 @@ function go(v, arg) {
   if (v === 'pos' && window.Drawer) Drawer.close(true);
   if (isKiosk() && !KIOSK_OK.includes(v)) v = 'pos';
   if (Elev.scope && !(ELEV_AREAS[Elev.scope] || []).includes(v)) Elev.clear();
+  if (v === 'sales') { v = 'reports'; if (typeof RS !== 'undefined') RS.top = 'month'; }
   if (!isKiosk() && v === 'reports' && !seesSales() && S.user && S.user.role !== 'owner') v = 'home';
   if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
@@ -1411,7 +1412,7 @@ async function switchUser() {
 let PF = { q: '', cat: '', flag: '', limit: 60 };
 VIEWS.products = async (el, flag) => {
   if (flag) PF.flag = flag;
-  el.innerHTML = vhead('สินค้า', `<button class="btn ghost sm" onclick="autoImages()">🖼 เติมรูปอัตโนมัติ</button><button class="btn sm" onclick="editProduct()">${I(IC.plus, 18)} เพิ่ม</button>`) +
+  el.innerHTML = vhead('สินค้า', `<button class="btn ghost sm" onclick="prodIO()">⇅ นำเข้า/ส่งออก</button><button class="btn ghost sm" onclick="autoImages()">🖼 เติมรูปอัตโนมัติ</button><button class="btn sm" onclick="editProduct()">${I(IC.plus, 18)} เพิ่ม</button>`) +
     `<div class="search"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาชื่อ / รหัส / บาร์โค้ด" value="${esc(PF.q)}"><button class="scanbtn" id="sc">${I(IC.scan, 20)}</button></div>
      <div class="chips" id="flags" style="margin-top:10px"></div><div class="chips" id="cats"></div>
      <div class="row small muted" style="margin:2px 4px 8px"><span id="cnt" class="grow"></span><button class="btn ghost sm" id="rf">รีเฟรช</button></div>
@@ -1911,11 +1912,11 @@ function moreGroups() {
   const jn = S.jobsN || 0;
   return [
     it('jobs', IC.alert, own ? 'งานรอดำเนินการ' : 'งานโอน/ชำระบิล', 1, jn ? jn : ''),
-    { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), it('sales', IC.sale, 'ยอดขายรายเดือน', own), it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers'))] },
+    { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), (seesSales() || own) && ['รายงาน/ยอดขาย', IC.chart, () => go('reports'), '', S.view === 'reports', 'ยอดขายรายเดือน'], it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers')), it('inst', IC.receipt, 'สัญญาผ่อนสินค้า', can('customers') || can('credit'))] },
     { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
     { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
     { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', 1), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
-    { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ', 1), it('pins', IC.shield, 'รหัสเจ้าของ · รหัสอนุญาต', own), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ โอน/เติม/บิล', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
+    { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ', 1), it('pins', IC.shield, 'รหัสเจ้าของ · รหัสอนุญาต', own), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ · ถ่ายเอกสาร · ผ่อน', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
   ];
 }
 function drawerHead() { return `<div style="display:flex;align-items:center;gap:10px"><img src="${Brand.white ? Brand.white() : 'logo-white.png'}" alt="" style="height:34px;width:auto" onerror="this.remove()"><div style="min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(S.user ? S.user.name : '')}</div><div style="font-size:12px;opacity:.85">${S.user && S.user.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน'}</div></div></div>`; }
@@ -2031,14 +2032,13 @@ function rowsToDaily(rows) {
   });
   return Object.values(D).filter(x => x.gross || x.net || x.refund).map(x => ({ ...x, profit: Math.round((x.net - x.cost) * 100) / 100, cost: ix.cost != null ? x.cost : '' })).sort((a, b) => a.date.localeCompare(b.date));
 }
-VIEWS.sales = async el => {
-  if (ownerOnly(el)) return;
+async function salesMonthlyView(el) {
   const y0 = +todayISO().slice(0, 4);
-  el.innerHTML = vhead('ยอดขายรายเดือน', '', 'more') + `
-   <div class="card"><div class="row wrap" style="gap:8px"><label class="btn grow">${I(IC.io, 18)} นำเข้าไฟล์ยอดขาย (Excel/CSV)<input type="file" id="fi" accept=".xlsx,.xls,.csv" class="hidden"></label><button class="btn ghost grow" id="ex">ส่งออก Excel</button><button class="btn ghost grow" id="exc">ส่งออก CSV</button><button class="btn ghost grow" id="exd">ส่งออกรายวัน (Excel)</button></div>
-     <div class="tiny muted" style="margin-top:8px">รองรับไฟล์ “สรุปยอดขาย” ที่ส่งออกจาก Loyverse (รายเดือนหรือรายวัน ระบบจะรวมเป็นรายเดือนให้) · เดือนที่นำเข้าจะใช้ยอดจากไฟล์แทนยอด POS ในการคำนวณภาษี</div><div id="pv"></div></div>
-   <div class="card" id="ov"><span class="spin dark"></span></div>
-   <div class="card"><div class="row" style="margin-bottom:8px"><h3 class="grow">รายละเอียดรายเดือน</h3><select class="in" id="yy" style="width:auto"></select></div><div id="mm"><span class="spin dark"></span></div></div>`;
+  el.innerHTML = `
+   <div class="card" id="mov"><span class="spin dark"></span></div>
+   <div class="card"><div class="row" style="margin-bottom:8px"><h3 class="grow">รายละเอียดรายเดือน</h3><select class="in" id="yy" style="width:auto"></select></div><div id="mm"><span class="spin dark"></span></div></div>
+   <div class="card"><h3>นำเข้า / ส่งออกยอดขาย</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px"><label class="btn">${I(IC.io, 18)} นำเข้าไฟล์ยอดขาย (Excel/CSV)<input type="file" id="mfi" accept=".xlsx,.xls,.csv" class="hidden"></label><button class="btn ghost" id="mex">ส่งออก Excel</button><button class="btn ghost" id="mexc">ส่งออก CSV</button><button class="btn ghost" id="mexd">ส่งออกรายวัน (Excel)</button></div>
+     <div class="tiny muted" style="margin-top:8px">รองรับไฟล์ “สรุปยอดขาย” ที่ส่งออกจาก Loyverse (รายเดือนหรือรายวัน ระบบจะรวมเป็นรายเดือนให้) · เดือนที่นำเข้าจะใช้ยอดจากไฟล์แทนยอด POS ในการคำนวณภาษี</div><div id="mpv"></div></div>`;
   let years = [];
   const allYears = async () => {
     const [man, sd] = await Promise.all([loadTable('Sales').catch(() => []), swr('sdYears', () => api('list', { table: 'SalesDaily' }).then(r => [...new Set(r.rows.map(x => +String(x.date).slice(0, 4)))]), 300000).catch(() => [])]);
@@ -2049,7 +2049,7 @@ VIEWS.sales = async el => {
     S.allMonths = data;
     const first = data.findIndex(m => m.amount); const D = first >= 0 ? data.slice(first) : [];
     const tot = D.reduce((s, m) => s + m.amount, 0), byY = {}; D.forEach(m => { const b = byY[m.y] || (byY[m.y] = { net: 0, cost: 0, n: 0, hc: true }); b.net += m.amount; b.cost += m.cost; if (m.amount) b.n++; if (m.amount && !m.hasCost) b.hc = false; });
-    $('#ov', el).innerHTML = D.length ? `<h3>ภาพรวม ${D.length} เดือน · ${baht(tot)}</h3>${barChart(D.map(m => ({ l: TH_M[m.i].replace('.', '') + String(m.y + 543).slice(-2), t: TH_MF[m.i] + ' ' + (m.y + 543) + (m.src ? ' (' + m.src + ')' : ''), v: m.amount })))}
+    $('#mov', el).innerHTML = D.length ? `<h3>ภาพรวม ${D.length} เดือน · ${baht(tot)}</h3>${barChart(D.map(m => ({ l: TH_M[m.i].replace('.', '') + String(m.y + 543).slice(-2), t: TH_MF[m.i] + ' ' + (m.y + 543) + (m.src ? ' (' + m.src + ')' : ''), v: m.amount })))}
       <div class="scroll-x" style="margin-top:8px"><table class="t"><tr><th>ปี</th><th class="right">ยอดขายสุทธิ</th><th class="right">เฉลี่ย/เดือน</th><th class="right">ต้นทุน</th><th class="right">กำไร</th><th class="right">เทียบเกณฑ์ VAT</th></tr>${Object.entries(byY).sort((a, b) => b[0] - a[0]).map(([y, b]) => `<tr><td>${+y + 543}</td><td class="right num">${money(b.net, 0)}</td><td class="right num">${money(b.n ? b.net / b.n : 0, 0)}</td><td class="right num">${b.hc ? money(b.cost, 0) : '<span class="muted">ไม่ครบ</span>'}</td><td class="right num">${b.hc ? money(b.net - b.cost, 0) : '-'}</td><td class="right"><span class="tag ${b.net > 1.8e6 ? 'red' : b.net > 1.44e6 ? 'amber' : 'green'}">${(b.net / 1.8e6 * 100).toFixed(0)}%</span></td></tr>`).join('')}</table></div>
       ${Object.values(byY).some(b => b.net > 1.8e6) ? `<div class="alert red" style="margin-top:8px">${I(IC.alert, 18)}<div>มีปีที่ยอดขายเกิน 1.8 ล้านบาท ซึ่งเป็นเกณฑ์ที่ต้องจดทะเบียนภาษีมูลค่าเพิ่ม (VAT) — ควรปรึกษาสรรพากรพื้นที่หรือนักบัญชี</div></div>` : ''}` : '<div class="muted small">ยังไม่มีข้อมูลยอดขาย — นำเข้าไฟล์จาก Loyverse หรือเริ่มขายผ่านหน้า POS</div>';
     drawYear();
@@ -2058,10 +2058,12 @@ VIEWS.sales = async el => {
     const y = +$('#yy', el).value; const rows = (S.allMonths || []).filter(m => m.y === y).length ? S.allMonths.filter(m => m.y === y) : [];
     const full = TH_MF.map((n, i) => rows.find(r => r.i === i) || { i, y, name: n, id: `M-${y}-${String(i + 1).padStart(2, '0')}`, amount: 0, pos: 0, manual: null, src: '', cost: 0, gross: 0, refund: 0, disc: 0, hasCost: false });
     let tot = 0; full.forEach(r => tot += r.amount);
-    $('#mm', el).innerHTML = `<div class="scroll-x"><table class="t"><tr><th>เดือน</th><th class="right">ยอดขายสุทธิ</th><th class="right">ต้นทุน</th><th>ที่มา</th><th class="right">แก้ไข/กรอกเอง</th></tr>${full.map(r => `<tr><td>${r.name}</td><td class="right num">${r.amount ? money(r.amount, 0) : '<span class="muted">-</span>'}${r.manual != null && r.pos ? `<div class="tiny muted">POS ${money(r.pos, 0)}</div>` : ''}</td><td class="right num">${r.hasCost ? money(r.cost, 0) : '<span class="muted">-</span>'}</td><td>${r.src ? `<span class="tag ${r.src === 'POS' ? 'green' : r.src === 'กรอกเอง' ? 'gray' : 'blue'}">${esc(r.src)}</span>` : ''}</td><td class="right"><input class="in num right" style="max-width:130px;min-height:34px" type="number" step="any" data-id="${r.id}" value="${r.manual != null ? r.manual : ''}" placeholder="${r.pos ? money(r.pos, 0) : ''}"></td></tr>`).join('')}</table></div>
+    const py = (S.allMonths || []).filter(m => m.y === y - 1), ptot = py.reduce((a, m) => a + m.amount, 0);
+    const yoy = barChart(full.map(r => ({ l: TH_M[r.i].replace('.', ''), t: TH_MF[r.i] + ' ' + (y + 543), v: r.amount, ...(py.length ? { p: (py.find(m => m.i === r.i) || { amount: 0 }).amount } : {}) })), { color: '#E53935', curName: 'ปี ' + (y + 543), prevName: 'ปี ' + (y + 542), h: 200 });
+    $('#mm', el).innerHTML = `${yoy}${ptot ? `<div class="tiny muted center" style="margin:2px 0 8px">รวมปี ${y + 543} ${money(tot, 0)} เทียบปี ${y + 542} ${money(ptot, 0)} ${chgTag(tot, ptot)}</div>` : ''}<div class="scroll-x"><table class="t"><tr><th>เดือน</th><th class="right">ยอดขายสุทธิ</th><th class="right">ต้นทุน</th><th>ที่มา</th><th class="right">แก้ไข/กรอกเอง</th></tr>${full.map(r => `<tr><td>${r.name}</td><td class="right num">${r.amount ? money(r.amount, 0) : '<span class="muted">-</span>'}${r.manual != null && r.pos ? `<div class="tiny muted">POS ${money(r.pos, 0)}</div>` : ''}</td><td class="right num">${r.hasCost ? money(r.cost, 0) : '<span class="muted">-</span>'}</td><td>${r.src ? `<span class="tag ${r.src === 'POS' ? 'green' : r.src === 'กรอกเอง' ? 'gray' : 'blue'}">${esc(r.src)}</span>` : ''}</td><td class="right"><input class="in num right" style="max-width:130px;min-height:34px" type="number" step="any" data-id="${r.id}" value="${r.manual != null ? r.manual : ''}" placeholder="${r.pos ? money(r.pos, 0) : ''}"></td></tr>`).join('')}</table></div>
       <div class="kv" style="font-weight:700;margin-top:8px"><span>รวมปี ${y + 543}</span><span>${baht(tot)}</span></div>
-      <div class="tiny muted">ช่องว่าง = ใช้ยอดจาก POS · ลบตัวเลขออกแล้วบันทึก = กลับไปใช้ยอด POS</div><button class="btn block green" id="sv" style="margin-top:10px">บันทึกการแก้ไข</button>`;
-    $('#sv', el).onclick = async () => {
+      <div class="tiny muted">ช่องว่าง = ใช้ยอดจาก POS · ลบตัวเลขออกแล้วบันทึก = กลับไปใช้ยอด POS</div><button class="btn block green" id="msv" style="margin-top:10px">บันทึกการแก้ไข</button>`;
+    $('#msv', el).onclick = async () => {
       const ins = $$('[data-id]', el), man = S.sales || [];
       const up = ins.filter(i => i.value !== '' && String(num((man.find(x => x.id === i.dataset.id) || {}).amount)) !== String(num(i.value)) ).map(i => { const old = man.find(x => x.id === i.dataset.id) || {}; const ch = old.amount !== undefined && num(old.amount) !== num(i.value); return { id: i.dataset.id, date: i.dataset.id.slice(2) + '-01', amount: i.value, source: ch || !old.id ? 'กรอกเอง' : old.source, ...(ch || !old.id ? { gross: '', refund: '', discount: '', cost: '', profit: '' } : {}) }; });
       const clear = ins.filter(i => i.value === '' && man.some(x => x.id === i.dataset.id)).map(i => i.dataset.id);
@@ -2069,7 +2071,7 @@ VIEWS.sales = async el => {
     };
   };
   $('#yy', el).onchange = drawYear;
-  $('#fi', el).onchange = async e => {
+  $('#mfi', el).onchange = async e => {
     const f = e.target.files[0]; if (!f) return; e.target.value = '';
     try {
       busy(1, 'กำลังอ่านไฟล์...'); const sheetRows = await readSheetRows(f); const { months, bad } = rowsToMonthly(sheetRows); busy(0);
@@ -2078,13 +2080,13 @@ VIEWS.sales = async el => {
       const posMonths = new Set((S.allMonths || []).filter(m => m.pos).map(m => m.y + '-' + m.mm));
       const overlap = months.filter(m => posMonths.has(m.ym)).length, tot = months.reduce((s, m) => s + m.net, 0);
       const lowCost = months.filter(m => m.hasCost && m.net && m.cost / m.net < .2).length;
-      $('#pv', el).innerHTML = `<div class="alert blue" style="margin-top:10px">${I(IC.check, 18)}<div>พบ <b>${months.length}</b> เดือน (${thDate(months[0].ym + '-01')} – ${thDate(months[months.length - 1].ym + '-01')}) · ยอดขายสุทธิรวม <b>${baht(tot)}</b>${months.some(m => m.days > 1) ? ' · รวมจากรายวัน' : ''}${bad ? ` · ข้าม ${bad} แถวที่อ่านวันที่ไม่ได้` : ''}</div></div>
+      $('#mpv', el).innerHTML = `<div class="alert blue" style="margin-top:10px">${I(IC.check, 18)}<div>พบ <b>${months.length}</b> เดือน (${thDate(months[0].ym + '-01')} – ${thDate(months[months.length - 1].ym + '-01')}) · ยอดขายสุทธิรวม <b>${baht(tot)}</b>${months.some(m => m.days > 1) ? ' · รวมจากรายวัน' : ''}${bad ? ` · ข้าม ${bad} แถวที่อ่านวันที่ไม่ได้` : ''}</div></div>
         ${lowCost ? `<div class="alert amber">${I(IC.alert, 18)}<div>${lowCost} เดือนมีต้นทุนต่ำกว่า 20% ของยอดขาย (อาจเป็นช่วงที่ยังไม่ได้ใส่ต้นทุนสินค้าใน Loyverse) — กำไรของเดือนเหล่านั้นจะสูงเกินจริง</div></div>` : ''}
         <div class="scroll-x" style="max-height:220px;overflow:auto"><table class="t"><tr><th>เดือน</th><th class="right">ยอดขายรวม</th><th class="right">คืนเงิน</th><th class="right">สุทธิ</th><th class="right">ต้นทุน</th></tr>${months.slice().reverse().map(m => `<tr><td>${TH_M[+m.ym.slice(5) - 1]} ${+m.ym.slice(0, 4) + 543}</td><td class="right num">${money(m.gross, 0)}</td><td class="right num">${money(m.refund, 0)}</td><td class="right num"><b>${money(m.net, 0)}</b></td><td class="right num">${m.hasCost ? money(m.cost, 0) : '-'}</td></tr>`).join('')}</table></div>
         ${overlap ? `<label class="row small" style="margin-top:8px"><input type="checkbox" id="skp"> ข้าม ${overlap} เดือนที่มียอดขายจาก POS ของระบบนี้แล้ว (ถ้าไม่ติ๊ก จะใช้ยอดจากไฟล์แทน)</label>` : ''}
         ${isDaily ? `<div class="alert green" style="margin-top:8px">${I(IC.check, 18)}<div class="small">ไฟล์รายวัน <b>${daily.length.toLocaleString()} วัน</b> — จะเก็บเป็นยอดรายวัน ใช้ดูกราฟรายวัน หน้าหลัก (วันนี้/เดือนนี้/เดือนก่อน) และรายงานเงินสดรับ-จ่าย · วันที่มีบิลจาก POS ของระบบนี้ จะใช้ยอด POS (ไม่นับซ้ำ)</div></div>` : ''}
-        <button class="btn green block" id="go" style="margin-top:10px">นำเข้า ${isDaily ? daily.length.toLocaleString() + ' วัน' : months.length + ' เดือน'}</button>`;
-      $('#go', el).onclick = async () => {
+        <button class="btn green block" id="mgo" style="margin-top:10px">นำเข้า ${isDaily ? daily.length.toLocaleString() + ' วัน' : months.length + ' เดือน'}</button>`;
+      $('#mgo', el).onclick = async () => {
         const skip = $('#skp', el) && $('#skp', el).checked;
         if (isDaily) {
           try {
@@ -2093,17 +2095,17 @@ VIEWS.sales = async el => {
             // ยอดรายเดือนที่เคยนำเข้า (ไม่ใช่กรอกเอง) ในช่วงเดียวกัน → ลบ ให้ใช้รายวันแทน
             const ms = new Set(R.map(d => 'M-' + d.date.slice(0, 7))), old = (S.sales || []).filter(r => ms.has(r.id) && r.source !== 'กรอกเอง').map(r => r.id);
             if (old.length) await api('remove', { table: 'Sales', ids: old });
-            Cache.staleBefore = Date.now(); busy(0); toast(`นำเข้ายอดรายวัน ${R.length} วันแล้ว`); $('#pv', el).innerHTML = ''; allYears();
+            Cache.staleBefore = Date.now(); busy(0); toast(`นำเข้ายอดรายวัน ${R.length} วันแล้ว`); $('#mpv', el).innerHTML = ''; allYears();
           } catch (err) { busy(0); toast(err.message, 1); }
           return;
         }
         const rows = months.filter(m => !(skip && posMonths.has(m.ym))).map(m => ({ id: 'M-' + m.ym, date: m.ym + '-01', amount: String(Math.round(m.net * 100) / 100), gross: String(m.gross), refund: String(m.refund), discount: String(m.discount), cost: m.hasCost ? String(m.cost) : '', profit: m.hasCost ? String(Math.round((m.net - m.cost) * 100) / 100) : '', source: 'นำเข้า', note: f.name.slice(0, 80) }));
-        try { busy(1, 'กำลังนำเข้า...'); await api('upsert', { table: 'Sales', rows }); busy(0); toast(`นำเข้า ${rows.length} เดือนแล้ว`); $('#pv', el).innerHTML = ''; allYears(); } catch (err) { busy(0); toast(err.message, 1); }
+        try { busy(1, 'กำลังนำเข้า...'); await api('upsert', { table: 'Sales', rows }); busy(0); toast(`นำเข้า ${rows.length} เดือนแล้ว`); $('#mpv', el).innerHTML = ''; allYears(); } catch (err) { busy(0); toast(err.message, 1); }
       };
     } catch (err) { busy(0); toast(err.message, 1); }
   };
   const exportRows = () => [SALES_HEAD].concat((S.allMonths || []).filter(m => m.amount).slice().reverse().map(m => [`${m.y}-${m.mm}-01`, m.gross, m.refund, m.disc, m.amount, m.hasCost ? m.cost : '', m.hasCost ? m.amount - m.cost : '', m.hasCost && m.amount ? Math.round((m.amount - m.cost) / m.amount * 100) / 100 : '', m.src]));
-  $('#exd', el).onclick = async () => {
+  $('#mexd', el).onclick = async () => {
     try {
       busy(1, 'กำลังเตรียมไฟล์...'); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX');
       const ys = years.length ? years : [+todayISO().slice(0, 4)], all = {};
@@ -2113,10 +2115,11 @@ VIEWS.sales = async el => {
       download(`sales-summary-daily_${todayISO()}.xlsx`, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })])); busy(0);
     } catch (e) { busy(0); toast(e.message, 1); }
   };
-  $('#exc', el).onclick = () => download(`sales-summary-monthly_${todayISO()}.csv`, toCSV(exportRows()));
-  $('#ex', el).onclick = async () => { try { busy(1); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const R = exportRows().map((r, i) => i ? [new Date(r[0] + 'T00:00:00')].concat(r.slice(1)) : r); const ws = XLSX.utils.aoa_to_sheet(R, { cellDates: true }); ws['!cols'] = [{ wch: 12 }].concat(Array(8).fill({ wch: 14 })); for (let i = 1; i < R.length; i++) { const c = ws[XLSX.utils.encode_cell({ r: i, c: 0 })]; if (c) c.z = 'mmm yyyy'; } const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'sales-summary'); download(`sales-summary-monthly_${todayISO()}.xlsx`, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })])); busy(0); } catch (e) { busy(0); toast(e.message, 1); } };
+  $('#mexc', el).onclick = () => download(`sales-summary-monthly_${todayISO()}.csv`, toCSV(exportRows()));
+  $('#mex', el).onclick = async () => { try { busy(1); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const R = exportRows().map((r, i) => i ? [new Date(r[0] + 'T00:00:00')].concat(r.slice(1)) : r); const ws = XLSX.utils.aoa_to_sheet(R, { cellDates: true }); ws['!cols'] = [{ wch: 12 }].concat(Array(8).fill({ wch: 14 })); for (let i = 1; i < R.length; i++) { const c = ws[XLSX.utils.encode_cell({ r: i, c: 0 })]; if (c) c.z = 'mmm yyyy'; } const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'sales-summary'); download(`sales-summary-monthly_${todayISO()}.xlsx`, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })])); busy(0); } catch (e) { busy(0); toast(e.message, 1); } };
   allYears();
-};
+}
+window.salesMonthlyView = salesMonthlyView;
 
 /* ---------- TAX ---------- */
 VIEWS.tax = async el => {
@@ -2140,7 +2143,7 @@ VIEWS.tax = async el => {
     const curY = y === y0; const monthsPassed = curY ? +todayISO().slice(5, 7) : 12;
     const proj = monthsWithSales ? G / monthsWithSales * 12 : 0;
     const rec = [];
-    if (!monthsWithSales) rec.push(['amber', 'ยังไม่มียอดขายของปีนี้ — ขายผ่านหน้า POS หรือกรอกที่ “ยอดขายรายเดือน” การคำนวณด้านล่างจะยังไม่ถูกต้อง']);
+    if (!monthsWithSales) rec.push(['amber', 'ยังไม่มียอดขายของปีนี้ — ขายผ่านหน้า POS หรือกรอกที่ “รายงาน/ยอดขาย › รายเดือน” การคำนวณด้านล่างจะยังไม่ถูกต้อง']);
     else if (monthsWithSales < monthsPassed) rec.push(['amber', `บันทึกยอดขายแล้ว ${monthsWithSales} เดือน จาก ${monthsPassed} เดือน — กรอกให้ครบเพื่อความแม่นยำ`]);
     if (G > 1.8e6) rec.push(['red', `<b>ยอดขายเกิน 1,800,000 บาท/ปี แล้ว</b> — กฎหมายกำหนดให้จดทะเบียนภาษีมูลค่าเพิ่ม (VAT) ภายใน 30 วันนับจากวันที่รายรับเกิน จากนั้นต้องยื่น ภ.พ.30 ทุกเดือน ควรปรึกษาสรรพากรพื้นที่/นักบัญชีทันที`]);
     else if (proj > 1.8e6 || G > 1.44e6) rec.push(['amber', `คาดการณ์ยอดขายทั้งปี ≈ ${baht(proj)} ใกล้/เกินเกณฑ์ VAT 1.8 ล้าน — เตรียมความพร้อมจด VAT (ระบบใบกำกับภาษี, ปรับราคา)`]);
@@ -2353,6 +2356,56 @@ async function autoImages() {
 window.autoImages = autoImages;
 
 /* ---------- IMPORT / EXPORT ---------- */
+/* ---------- นำเข้า / ส่งออกสินค้า (ใช้ทั้งหน้า "นำเข้า/ส่งออก" และหน้าสินค้า) ---------- */
+async function prodImportFile(f, pv, done) {
+  done = done || ioReport;
+  try {
+    busy(1, 'กำลังอ่านไฟล์...'); let rows;
+    if (/\.xlsx?$/i.test(f.name)) { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
+    else rows = parseCSV(await f.text());
+    if (!S.products.length) await loadProducts(true).catch(() => { });
+    const list = rowsToProducts(rows); busy(0); const skipped = Math.max(0, rows.length - 1 - list.length);
+    const exist = list.filter(p => IDX.bySku[p.sku]).length;
+    const dupBar = {}; list.forEach(p => p.barcode && (dupBar[p.barcode] = (dupBar[p.barcode] || 0) + 1));
+    const dups = Object.values(dupBar).filter(n => n > 1).length;
+    pv.innerHTML = `<div class="alert blue">${I(IC.check, 18)}<div>พบ <b>${list.length.toLocaleString()}</b> รายการ · มีอยู่แล้ว ${exist} · ใหม่ ${list.length - exist}${skipped ? ` · ข้าม ${skipped} แถว (ไม่มี SKU)` : ''}${dups ? ` · <b>บาร์โค้ดซ้ำในไฟล์ ${dups} ชุด</b>` : ''}</div></div>
+      <div class="scroll-x"><table class="t"><tr><th>SKU</th><th>ชื่อ</th><th>บาร์โค้ด</th><th class="right">ทุน</th><th class="right">ราคา</th></tr>${list.slice(0, 8).map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.barcode)}</td><td class="right">${esc(p.cost)}</td><td class="right">${esc(p.price)}</td></tr>`).join('')}</table></div>
+      <div class="seg" id="md" style="margin:10px 0"><button class="on" data-m="merge">รวม/อัปเดตตาม SKU</button><button data-m="replace">แทนที่ทั้งหมด</button></div>
+      <button class="btn green block" id="go">นำเข้า ${list.length.toLocaleString()} รายการ</button>`;
+    let mode = 'merge'; $$('#md button', pv).forEach(b => b.onclick = () => { mode = b.dataset.m; $$('#md button', pv).forEach(x => x.classList.toggle('on', x === b)); });
+    $('#go', pv).onclick = async () => {
+      if (mode === 'replace' && !(await confirmDlg('ลบสินค้าทั้งหมดในระบบแล้วแทนที่ด้วยไฟล์นี้?', 'แทนที่', true))) return;
+      try {
+        const CH = 800;
+        for (let i = 0; i < list.length; i += CH) { busy(1, `กำลังนำเข้า ${Math.min(i + CH, list.length)}/${list.length}...`); await api('importProducts', { rows: list.slice(i, i + CH), mode: i === 0 ? mode : 'merge' }); }
+        await loadProducts(true); busy(0); pv.innerHTML = '';
+        done('นำเข้าสินค้าแล้ว', [['ไฟล์', esc(f.name)], ['นำเข้าทั้งหมด', list.length.toLocaleString() + ' รายการ'], ['สินค้าใหม่', (mode === 'replace' ? list.length : list.length - exist).toLocaleString() + ' รายการ'], ['อัปเดตของเดิม', (mode === 'replace' ? 0 : exist).toLocaleString() + ' รายการ'], ...(skipped ? [['ข้าม (ไม่มีรหัส SKU/ชื่อ)', skipped + ' แถว']] : []), ['วิธีนำเข้า', mode === 'replace' ? 'แทนที่ทั้งหมด' : 'รวม/อัปเดตตาม SKU'], ['สินค้าในระบบตอนนี้', S.products.length.toLocaleString() + ' รายการ']], 'import');
+      } catch (err) { busy(0); toast(err.message, 1); }
+    };
+  } catch (err) { busy(0); toast(err.message, 1); }
+}
+async function prodExport(kind, done) {
+  done = done || ioReport;
+  const stamp = todayISO().replace(/-/g, ''), n = `May_MiniMart_items_${stamp}.${kind}`;
+  try {
+    busy(1, 'กำลังเตรียมไฟล์...'); await loadProducts(true);
+    if (kind === 'csv') download(n, toCSV(productsToLoyverseRows(S.products)));
+    else { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const ws = XLSX.utils.aoa_to_sheet(productsToLoyverseRows(S.products)); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Items'); download(n, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })); }
+    busy(0);
+    done('ส่งออกสินค้าแล้ว', [['จำนวน', S.products.length.toLocaleString() + ' รายการ'], ['หมวดหมู่', new Set(S.products.map(p => p.category).filter(Boolean)).size + ' หมวด'], ['ไฟล์', n], ...(canStrict('viewCost') ? [] : ['ไม่มีต้นทุนในไฟล์ (สิทธิ์ดูต้นทุนปิดอยู่)'])], 'export');
+  } catch (e) { busy(0); toast(e.message, 1); }
+}
+/* ปุ่ม "นำเข้า/ส่งออก" บนหน้าสินค้า */
+function prodIO() {
+  const canImp = isOwner();
+  const ov = sheet('นำเข้า / ส่งออกสินค้า', `<div class="grid2" style="margin-bottom:10px"><button class="btn ghost" id="pe1" style="min-height:64px;flex-direction:column;gap:2px">⬆ ส่งออก Excel<span class="tiny muted" style="font-weight:400">.xlsx</span></button><button class="btn ghost" id="pe2" style="min-height:64px;flex-direction:column;gap:2px">⬆ ส่งออก CSV<span class="tiny muted" style="font-weight:400">รูปแบบ Loyverse</span></button></div>
+    ${canImp ? `<label class="btn block" style="min-height:56px">${I(IC.io, 18)} ⬇ นำเข้าไฟล์ Excel / CSV<input type="file" id="pfi" accept=".csv,.xlsx,.xls,text/csv" hidden></label>
+    <div class="tiny muted" style="margin-top:6px">คอลัมน์แบบไฟล์ที่ส่งออก (Handle, SKU, Name, Category, Cost, Barcode, Price, In stock ...) · แนะนำ: ส่งออกไปแก้ใน Excel แล้วนำเข้ากลับแบบ “รวม/อัปเดตตาม SKU”</div>` : '<div class="tiny muted">นำเข้าไฟล์ได้เฉพาะเจ้าของร้าน</div>'}
+    <div id="ppv" style="margin-top:10px"></div>`);
+  $('#pe1', ov).onclick = () => prodExport('xlsx');
+  $('#pe2', ov).onclick = () => prodExport('csv');
+  const fi = $('#pfi', ov); if (fi) fi.onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; prodImportFile(f, $('#ppv', ov), (t, l, k) => { ioReport(t, l, k); if (S.view === 'products') go('products'); }); };
+}
 VIEWS.io = el => {
   if (ownerOnly(el)) return;
   el.innerHTML = vhead('นำเข้า / ส่งออก', '', 'more') + `
@@ -2374,38 +2427,10 @@ VIEWS.io = el => {
     const lb = cfg('lastBackup', {}); $('#lb', el).innerHTML = lb.at ? `สำรองล่าสุด <b>${esc(new Date(lb.at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }))}</b> · ${(lb.total || 0).toLocaleString()} แถว ${lb.tables || 0} ตาราง${lb.img ? ' (รวมรูป)' : ''}` : '<span style="color:var(--red)">ยังไม่เคยสำรองข้อมูลทั้งระบบ</span>'; };
   hist();
   const done = (t, lines, kind) => { ioReport(t, lines, kind); setTimeout(hist, 800); };
-  $('#fi', el).onchange = async e => {
-    const f = e.target.files[0]; if (!f) return;
-    try {
-      busy(1, 'กำลังอ่านไฟล์...'); let rows;
-      if (/\.xlsx?$/i.test(f.name)) { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
-      else rows = parseCSV(await f.text());
-      if (!S.products.length) await loadProducts(true).catch(() => { });
-      const list = rowsToProducts(rows); busy(0); const skipped = Math.max(0, rows.length - 1 - list.length);
-      const exist = list.filter(p => IDX.bySku[p.sku]).length;
-      const dupBar = {}; list.forEach(p => p.barcode && (dupBar[p.barcode] = (dupBar[p.barcode] || 0) + 1));
-      const dups = Object.values(dupBar).filter(n => n > 1).length;
-      $('#pv', el).innerHTML = `<div class="alert blue">${I(IC.check, 18)}<div>พบ <b>${list.length.toLocaleString()}</b> รายการ · มีอยู่แล้ว ${exist} · ใหม่ ${list.length - exist}${skipped ? ` · ข้าม ${skipped} แถว (ไม่มี SKU)` : ''}${dups ? ` · <b>บาร์โค้ดซ้ำในไฟล์ ${dups} ชุด</b>` : ''}</div></div>
-        <div class="scroll-x"><table class="t"><tr><th>SKU</th><th>ชื่อ</th><th>บาร์โค้ด</th><th class="right">ทุน</th><th class="right">ราคา</th></tr>${list.slice(0, 8).map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.barcode)}</td><td class="right">${esc(p.cost)}</td><td class="right">${esc(p.price)}</td></tr>`).join('')}</table></div>
-        <div class="seg" id="md" style="margin:10px 0"><button class="on" data-m="merge">รวม/อัปเดตตาม SKU</button><button data-m="replace">แทนที่ทั้งหมด</button></div>
-        <button class="btn green block" id="go">นำเข้า ${list.length.toLocaleString()} รายการ</button>`;
-      let mode = 'merge'; $$('#md button', el).forEach(b => b.onclick = () => { mode = b.dataset.m; $$('#md button', el).forEach(x => x.classList.toggle('on', x === b)); });
-      $('#go', el).onclick = async () => {
-        if (mode === 'replace' && !(await confirmDlg('ลบสินค้าทั้งหมดในระบบแล้วแทนที่ด้วยไฟล์นี้?', 'แทนที่', true))) return;
-        try {
-          const CH = 800;
-          for (let i = 0; i < list.length; i += CH) { busy(1, `กำลังนำเข้า ${Math.min(i + CH, list.length)}/${list.length}...`); await api('importProducts', { rows: list.slice(i, i + CH), mode: i === 0 ? mode : 'merge' }); }
-          await loadProducts(true); busy(0); $('#pv', el).innerHTML = '';
-          done('นำเข้าสินค้าแล้ว', [['ไฟล์', esc(f.name)], ['นำเข้าทั้งหมด', list.length.toLocaleString() + ' รายการ'], ['สินค้าใหม่', (mode === 'replace' ? list.length : list.length - exist).toLocaleString() + ' รายการ'], ['อัปเดตของเดิม', (mode === 'replace' ? 0 : exist).toLocaleString() + ' รายการ'], ...(skipped ? [['ข้าม (ไม่มีรหัส SKU/ชื่อ)', skipped + ' แถว']] : []), ['วิธีนำเข้า', mode === 'replace' ? 'แทนที่ทั้งหมด' : 'รวม/อัปเดตตาม SKU'], ['สินค้าในระบบตอนนี้', S.products.length.toLocaleString() + ' รายการ']], 'import');
-        } catch (err) { busy(0); toast(err.message, 1); }
-      };
-    } catch (err) { busy(0); toast(err.message, 1); }
-    e.target.value = '';
-  };
+  $('#fi', el).onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) prodImportFile(f, $('#pv', el), done); };
   const stamp = todayISO().replace(/-/g, '');
-  const expDone = (name) => done('ส่งออกสินค้าแล้ว', [['จำนวน', S.products.length.toLocaleString() + ' รายการ'], ['หมวดหมู่', new Set(S.products.map(p => p.category).filter(Boolean)).size + ' หมวด'], ['ไฟล์', name]], 'export');
-  $('#e1', el).onclick = async () => { try { busy(1); await loadProducts(true); busy(0); const n = `May_MiniMart_items_${stamp}.csv`; download(n, toCSV(productsToLoyverseRows(S.products))); expDone(n); } catch (e) { busy(0); toast(e.message, 1); } };
-  $('#e2', el).onclick = async () => { try { busy(1); await loadProducts(true); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const ws = XLSX.utils.aoa_to_sheet(productsToLoyverseRows(S.products)); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Items'); const n = `May_MiniMart_items_${stamp}.xlsx`; download(n, new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })); busy(0); expDone(n); } catch (e) { busy(0); toast(e.message, 1); } };
+  $('#e1', el).onclick = () => prodExport('csv', done);
+  $('#e2', el).onclick = () => prodExport('xlsx', done);
   // สำรองทั้งระบบ: ดึงทีละตาราง (ตารางใหญ่ดึงเป็นช่วง) แล้วรวมเป็นไฟล์เดียว + รายงานจำนวนแถวแต่ละตาราง
   $('#e3', el).onclick = async () => {
     const withImg = $('#bimg', el).checked, tabs = Object.keys(Logic.SCHEMA).filter(t => withImg || t !== 'Images'), out = {}, counts = {};
@@ -2450,7 +2475,7 @@ VIEWS.io = el => {
     } catch (err) { busy(0); toast(err.message, 1); }
   };
 };
-const TBL_TH = { Products: 'สินค้า', Categories: 'หมวดหมู่', Images: 'รูปสินค้า', Receipts: 'ใบเสร็จร้านส่ง/ค่าใช้จ่าย', SalesDaily: 'ยอดขายรายวัน (นำเข้า)', TaxFilings: 'บันทึกการยื่นภาษี', Sales: 'ยอดขายรายเดือน (นำเข้า)', Orders: 'ใบเสร็จรับเงิน (บิลขาย)', Customers: 'ลูกค้า', CustomerTx: 'ประวัติแต้ม/เงินเชื่อ', Shifts: 'เวลาเข้า-ออกงาน', Devices: 'อุปกรณ์', StockCounts: 'การนับสต็อก', POs: 'ใบสั่งซื้อ', Licenses: 'ใบอนุญาต', Users: 'ผู้ใช้/พนักงาน', Settings: 'ตั้งค่า', Log: 'บันทึกการใช้งาน' };
+const TBL_TH = { Installments: 'สัญญาผ่อนสินค้า', Products: 'สินค้า', Categories: 'หมวดหมู่', Images: 'รูปสินค้า', Receipts: 'ใบเสร็จร้านส่ง/ค่าใช้จ่าย', SalesDaily: 'ยอดขายรายวัน (นำเข้า)', TaxFilings: 'บันทึกการยื่นภาษี', Sales: 'ยอดขายรายเดือน (นำเข้า)', Orders: 'ใบเสร็จรับเงิน (บิลขาย)', Customers: 'ลูกค้า', CustomerTx: 'ประวัติแต้ม/เงินเชื่อ', Shifts: 'เวลาเข้า-ออกงาน', Devices: 'อุปกรณ์', StockCounts: 'การนับสต็อก', POs: 'ใบสั่งซื้อ', Licenses: 'ใบอนุญาต', Users: 'ผู้ใช้/พนักงาน', Settings: 'ตั้งค่า', Log: 'บันทึกการใช้งาน' };
 
 /* ---------- USERS ---------- */
 VIEWS.users = async el => {
@@ -2595,21 +2620,21 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.41"></script>
-<script src="logic.js?v=2.6.41"></script>
-<script src="cache.js?v=2.6.41"></script>
-<script src="offline.js?v=2.6.41"></script>
-<script src="scanner.js?v=2.6.41"></script>
-<script src="printer.js?v=2.6.41"></script>
-<script src="pos.js?v=2.6.41"></script>
-<script src="idle.js?v=2.6.41"></script>
-<script src="display.js?v=2.6.41"></script>
-<script src="reports.js?v=2.6.41"></script>
-<script src="inventory.js?v=2.6.41"></script>
-<script src="people.js?v=2.6.41"></script>
-<script src="quality.js?v=2.6.41"></script>
-<script src="services.js?v=2.6.41"></script>
-<script src="owner.js?v=2.6.41"></script>
+<script src="qr.js?v=2.6.42"></script>
+<script src="logic.js?v=2.6.42"></script>
+<script src="cache.js?v=2.6.42"></script>
+<script src="offline.js?v=2.6.42"></script>
+<script src="scanner.js?v=2.6.42"></script>
+<script src="printer.js?v=2.6.42"></script>
+<script src="pos.js?v=2.6.42"></script>
+<script src="idle.js?v=2.6.42"></script>
+<script src="display.js?v=2.6.42"></script>
+<script src="reports.js?v=2.6.42"></script>
+<script src="inventory.js?v=2.6.42"></script>
+<script src="people.js?v=2.6.42"></script>
+<script src="quality.js?v=2.6.42"></script>
+<script src="services.js?v=2.6.42"></script>
+<script src="owner.js?v=2.6.42"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

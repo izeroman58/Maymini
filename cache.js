@@ -44,11 +44,12 @@ async function swr(key, fetcher, maxAge = 30000) {
   return refresh();
 }
 // บันทึกข้อมูลแล้ว → ข้อมูลในแคชถือว่าเก่า (ตารางที่แก้ ลบทิ้งเลย เพื่อให้หน้าถัดไปเห็นของใหม่ทันที)
-const WRITE_ACTIONS = /^(upsert|remove|importProducts|renameCategory|applyReceipt|syncOrders|refund|customerPay|adjustPoints|clockIn|clockOut|finishCount|receivePO|adjustStock|saveUser)$/;
+const WRITE_ACTIONS = /^(upsert|remove|importProducts|renameCategory|applyReceipt|syncOrders|refund|customerPay|instCancel|adjustPoints|clockIn|clockOut|finishCount|receivePO|adjustStock|saveUser)$/;
 function cacheAfterWrite(action, payload) {
   if (!WRITE_ACTIONS.test(action)) return;
   Cache.staleBefore = Date.now();
   if (payload && payload.table) Cache.del(Cache.key('t:' + payload.table));
+  if (/^(syncOrders|refund|instCancel)$/.test(action)) Cache.del(Cache.key('t:Installments'));
   if (action === 'syncOrders' || action === 'refund') Object.keys(Cache.mem).forEach(k => { if (/\|(o|d):/.test(k)) Cache.mem[k].at = 0; });
 }
 // วาดหน้าใหม่เมื่อข้อมูลอัปเดต (ไม่รบกวนตอนพิมพ์/เปิดหน้าต่างย่อย/อยู่หน้าขาย)

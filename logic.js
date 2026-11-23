@@ -21,6 +21,7 @@ var Logic = (function () {
     POs: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', cols: ['id', 'date', 'supplier', 'status', 'items', 'total', 'note', 'createdBy', 'receivedAt'] },
     Licenses: { key: 'id', read: 'all', write: 'owner', cols: ['id', 'type', 'subtype', 'number', 'holder', 'issueDate', 'expiryDate', 'fileId', 'fileUrl', 'note', 'updatedAt'] },
     Users: { key: 'id', read: 'owner', write: 'none', cols: ['id', 'name', 'username', 'pinHash', 'role', 'active', 'createdAt'] },
+    Installments: { key: 'id', read: 'customers', write: 'none', dateCol: 'date', cols: ['id', 'date', 'customerId', 'customerName', 'phone', 'product', 'price', 'down', 'financed', 'rate', 'rateMode', 'interest', 'total', 'count', 'period', 'per', 'firstDue', 'paid', 'paidCount', 'status', 'orderId', 'lastPayAt', 'closedAt', 'note', 'createdBy'] },
     Jobs: { key: 'id', read: 'owner', write: 'owner', dateCol: 'date', cols: ['id', 'date', 'orderId', 'type', 'status', 'title', 'amount', 'fee', 'bank', 'bankName', 'acc', 'accName', 'carrier', 'carrierName', 'phone', 'billType', 'ref', 'contact', 'fileUrl', 'customerName', 'cashier', 'cashierName', 'deviceName', 'note', 'doneAt', 'doneBy', 'doneRef'] },
     Settings: { key: 'key', read: 'all', write: 'owner', cols: ['key', 'value'] },
     Log: { key: 'time', read: 'owner', write: 'none', cols: ['time', 'user', 'action', 'detail'] }
@@ -308,13 +309,19 @@ var Logic = (function () {
         if (p && p.trackStock === 'Y') { p.stock = String(r2(n(p.stock) - sign * Math.abs(n(it.qty)))); chP[p.sku] = { sku: p.sku, stock: p.stock }; }
       });
       if (o.customerId && cmap[o.customerId]) {
-        var c = cmap[o.customerId], tot = Math.abs(n(o.total)), credit = Math.abs(payPart(o, 'credit'));
+        // รายการ "ใช้หนี้" (it.debt) = รับชำระเงินเชื่อ → ตัดยอดค้างอัตโนมัติ ไม่นับเป็นยอดซื้อของลูกค้า
+        var debt = J(o.items, []).reduce(function (s, it) { return s + (it && it.debt ? Math.abs(n(it.qty) * n(it.price)) : 0); }, 0);
+        var c = cmap[o.customerId], tot = Math.max(0, Math.abs(n(o.total)) - debt), credit = Math.abs(payPart(o, 'credit'));
         c.totalSpent = String(r2(n(c.totalSpent) + sign * tot));
         c.visits = String(Math.max(0, n(c.visits) + sign));
         c.points = String(Math.max(0, n(c.points) + sign * (Math.abs(n(o.pointsEarned)) - Math.abs(n(o.pointsUsed)))));
         if (credit) {
           c.credit = String(r2(n(c.credit) + sign * credit));
           tx.push({ id: uid('T'), date: now, customerId: c.id, type: sign > 0 ? 'credit_sale' : 'credit_refund', amount: String(sign * credit), points: '', ref: o.id, by: by, note: '' });
+        }
+        if (debt) {
+          c.credit = String(r2(n(c.credit) - sign * debt));
+          tx.push({ id: uid('T'), date: now, customerId: c.id, type: sign > 0 ? 'credit_pay' : 'credit_pay_void', amount: String(-sign * debt), points: '', ref: o.id, by: by, note: 'ใช้หนี้ที่หน้าขาย' });
         }
         if (sign > 0) c.lastVisit = o.date;
         chC[c.id] = { id: c.id, totalSpent: c.totalSpent, visits: c.visits, points: c.points, credit: c.credit, lastVisit: c.lastVisit || '' };
@@ -336,6 +343,7 @@ var Logic = (function () {
     prods.forEach(function (p) { pc[p.sku] = n(p.cost); });
     var fresh = orders.filter(function (o) { return o.id && !have[o.id]; }).map(function (o) {
       if (payPart(o, 'credit') && !o.customerId) err('ขายเงินเชื่อต้องเลือกลูกค้า (บิล ' + o.id + ')');
+      if (!o.customerId && J(o.items, []).some(function (it) { return it && (it.debt || it.inst); })) err('ใช้หนี้/ผ่อนสินค้า ต้องเลือกลูกค้า (บิล ' + o.id + ')');
       // ต้นทุนคิดจากฐานข้อมูลเสมอ (เครื่องพนักงานไม่มีข้อมูลต้นทุน)
       var items = J(o.items, []), cost = 0;
       items.forEach(function (it) { if (it.sku in pc) it.cost = pc[it.sku]; cost += n(it.qty) * n(it.cost); });
@@ -349,8 +357,51 @@ var Logic = (function () {
       db.append('Orders', fresh);
       db.log(u, 'syncOrders', fresh.length + ' บิล');
       makeJobs(db, fresh);
+      eff.inst = applyInst(db, fresh, 1, now);
     }
-    return { saved: orders.map(function (o) { return o.id; }), stock: eff.products, customers: eff.customers };
+    return { saved: orders.map(function (o) { return o.id; }), stock: eff.products, customers: eff.customers, inst: eff.inst || [] };
+  }
+  // ---------- ผ่อนสินค้า ----------
+  // รายการในบิล it.inst = {op:'new', plan:{...}} เปิดสัญญา (เงินดาวน์) · {op:'pay', id} ชำระค่างวด (ยอด = ราคารายการ)
+  // สร้าง/ตัดยอดตอนบิลเข้าระบบ (ขายตอนออฟไลน์ได้) · คืนเงินบิล = ย้อนรายการ (sign = -1)
+  function applyInst(db, orders, sign, now) {
+    var ops = [];
+    orders.forEach(function (o) { J(o.items, []).forEach(function (it) { if (it && it.inst && it.inst.op) ops.push({ o: o, it: it, x: it.inst }); }); });
+    if (!ops.length) return [];
+    var map = {}, ch = {};
+    db.read('Installments', {}).forEach(function (r) { map[r.id] = r; });
+    ops.forEach(function (op) {
+      var x = op.x, o = op.o, r;
+      if (x.op === 'new') {
+        var p = x.plan || {}, id = String(p.id || ''); if (!id) return;
+        if (sign > 0) {
+          if (map[id]) return;
+          r = clean('Installments', p); r.id = id; r.date = o.date; r.customerId = o.customerId; r.customerName = o.customerName || r.customerName || '';
+          r.paid = '0'; r.paidCount = '0'; r.status = 'active'; r.orderId = o.id; r.createdBy = o.cashierName || o.cashier || ''; r.lastPayAt = ''; r.closedAt = '';
+          map[id] = r; ch[id] = r;
+        } else if (map[id]) { map[id].status = 'cancelled'; map[id].closedAt = now; map[id].note = String(map[id].note || '') + ' [ยกเลิก: คืนเงินบิล ' + o.id + ']'; ch[id] = map[id]; }
+      } else if (x.op === 'pay') {
+        r = map[String(x.id || '')]; if (!r) return;
+        var amt = Math.abs(n(op.it.qty) * n(op.it.price));
+        r.paid = String(r2(Math.max(0, n(r.paid) + sign * amt)));
+        r.paidCount = String(n(r.paid) >= n(r.total) - 0.009 ? n(r.count) : Math.min(n(r.count), Math.floor((n(r.paid) + 0.009) / Math.max(1, n(r.per)))));
+        if (r.status !== 'cancelled') r.status = n(r.paid) >= n(r.total) - 0.009 ? 'done' : 'active';
+        if (sign > 0) r.lastPayAt = o.date;
+        r.closedAt = r.status === 'done' ? (r.closedAt || o.date) : r.status === 'cancelled' ? r.closedAt : '';
+        ch[r.id] = r;
+      }
+    });
+    var rows = Object.keys(ch).map(function (k) { return clean('Installments', ch[k]); });
+    if (rows.length) db.upsert('Installments', rows);
+    return rows;
+  }
+  function instCancel(db, u, id, note) {
+    need(db, u, 'owner');
+    var r = db.read('Installments', {}).filter(function (x) { return x.id === id; })[0]; if (!r) err('ไม่พบสัญญาผ่อน');
+    var c = { id: id, status: 'cancelled', closedAt: db.now(), note: String(r.note || '') + (note ? ' [ยกเลิก: ' + note + ']' : ' [ยกเลิกโดยเจ้าของร้าน]') };
+    db.upsert('Installments', [c]); db.log(u, 'instCancel', id);
+    for (var k in c) r[k] = c[k];
+    return { row: r };
   }
   // ---------- งานที่เจ้าของร้านต้องทำต่อ (โอนเงินให้ลูกค้า / เติม TrueMoney / ชำระบิล) ----------
   // สร้างจากบิลขายที่มีรายการบริการ job.notify (สร้างตอนบิลเข้าระบบ จึงใช้ได้แม้ขายตอนออฟไลน์) แล้วแจ้งเตือนเจ้าของร้าน
@@ -420,6 +471,7 @@ var Logic = (function () {
     applyOrderEffects(db, [o], -1, db.read('Products', {}), o.customerId ? db.read('Customers', {}) : [], now, u.username);
     db.upsert('Orders', [{ id: o.id, status: 'refunded' }]);
     db.append('Orders', [r]);
+    applyInst(db, [o], -1, now);
     // บิลที่มีงานโอน/ชำระบิลค้างอยู่ → ยกเลิกงานและแจ้งเจ้าของร้าน
     var js = db.read('Jobs', {}).filter(function (j) { return j.orderId === o.id && j.status === 'pending'; });
     if (js.length) {
@@ -612,6 +664,7 @@ var Logic = (function () {
       case 'backupTable': return backupTable(db, u, p.table, p.offset, p.limit);
       case 'restoreTable': return restoreTable(db, u, p.table, p.rows, p.dry);
       case 'customerPay': return customerPay(db, u, p.id, p.amount, p.note);
+      case 'instCancel': return instCancel(db, u, p.id, p.note);
       case 'adjustPoints': return adjustPoints(db, u, p.id, p.points, p.note);
       case 'clockIn': return clockIn(db, u, p.deviceId, p.at);
       case 'clockOut': return clockOut(db, u, p.at);

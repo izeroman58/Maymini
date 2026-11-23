@@ -173,6 +173,7 @@ const Sync = {
       if ((r.stock || []).length) LS.set('products', S.products);
       (r.customers || []).forEach(x => { const c = (S.customers || []).find(c => c.id === x.id); if (c) Object.assign(c, x); });
       if (S.customers) LS.set('customers', S.customers);
+      if ((r.inst || []).length && window.Inst) Inst.merge(r.inst);
       if (manual) toast('ส่งข้อมูลแล้ว');
       if (this.box.length) setTimeout(() => this.flush(), 300);
     } catch (e) { if (manual || !e.offline) toast('ส่งบิลไม่สำเร็จ: ' + e.message, 1); }
@@ -800,7 +801,7 @@ const POS = {
   async renderPay() {
     const T = this.totals(), P = this.pay, pc = payCfg(), remain = Math.round((T.total - this.paid()) * 100) / 100;
     $('#pt', this.el).textContent = 'ชำระเงิน';
-    const types = ['cash', pc.transfer && 'transfer', pc.welfare && 'welfare', pc.credit && can('credit') && 'credit'].filter(Boolean);
+    const types = ['cash', pc.transfer && 'transfer', pc.welfare && 'welfare', pc.credit && can('credit') && !this.t.items.some(it => it.debt || it.inst) && 'credit'].filter(Boolean);
     if (P.done) return this.renderDone();
     const qs = [...new Set([remain].concat(this.quick(remain)))].slice(0, 8);
     const c = this.t.customer;
@@ -861,12 +862,14 @@ const POS = {
     const pcn = pconn(), wantDrawer = pcn.drawer && (pcn.drawerAll || P.payments.some(p => p.type === 'cash'));
     if (wantDrawer && !(pcn.autoPrint && pcn.type === 'rawbt')) RP.kick().catch(e => toast('เปิดลิ้นชักไม่ได้: ' + e.message, 1));
     const seq = LS.get('seq', 100000) + 1; LS.set('seq', seq);
-    const earned = c && pc.enabled ? Math.floor(T.total / Math.max(1, num(pc.bahtPerPoint))) : 0;
+    // แต้มคิดจากยอดซื้อสินค้า/บริการ ไม่รวมเงินรับแทน (โอน/เติม/บิล) และเงินใช้หนี้
+    const nonPts = t.items.filter(it => it.pass || it.debt).reduce((s2, it) => s2 + num(it.qty) * num(it.price), 0);
+    const earned = c && pc.enabled ? Math.floor(Math.max(0, T.total - nonPts) / Math.max(1, num(pc.bahtPerPoint))) : 0;
     const types = [...new Set(P.payments.map(p => p.type))];
     const order = {
       id: `${S.device.no || 0}-${seq}`, date: LocalDB.now(), deviceId: S.device.id, deviceName: S.device.name || '',
       cashier: S.user.username, cashierName: S.user.name, customerId: c ? c.id : '', customerName: c ? c.name : '',
-      items: JSON.stringify(t.items.map(it => ({ sku: it.sku, name: it.name, qty: it.qty, price: it.price, cost: it.cost, cat: it.cat, byWeight: it.byWeight || '', ...(it.pass ? { pass: 1 } : {}), ...(it.svc ? { svc: it.svc } : {}), ...(it.job ? { job: it.job } : {}) }))),
+      items: JSON.stringify(t.items.map(it => ({ sku: it.sku, name: it.name, qty: it.qty, price: it.price, cost: it.cost, cat: it.cat, byWeight: it.byWeight || '', ...(it.pass ? { pass: 1 } : {}), ...(it.svc ? { svc: it.svc } : {}), ...(it.job ? { job: it.job } : {}), ...(it.debt ? { debt: 1 } : {}), ...(it.inst ? { inst: it.inst } : {}) }))),
       itemCount: T.count, subtotal: T.sub, discount: T.disc, total: T.total, cost: Math.round(T.cost * 100) / 100,
       payments: JSON.stringify(P.payments), payType: types.length > 1 ? 'split' : types[0], cash: P.cash || '', change: P.change || '',
       pointsEarned: earned, pointsUsed: t.pointsUse || 0, status: 'sale', refundOf: '', note: ''
@@ -875,8 +878,9 @@ const POS = {
     t.items.forEach(it => { const p = IDX.bySku[it.sku]; if (p && p.trackStock === 'Y') p.stock = String(Math.round((num(p.stock) - num(it.qty)) * 1000) / 1000); });
     LS.set('products', S.products);
     let cust = null;
-    if (c) { cust = (S.customers || []).find(x => x.id === c.id); if (cust) { cust.points = String(Math.max(0, num(cust.points) + earned - num(t.pointsUse))); cust.totalSpent = String(num(cust.totalSpent) + T.total); const cr = P.payments.filter(p => p.type === 'credit').reduce((s, p) => s + p.amount, 0); if (cr) cust.credit = String(num(cust.credit) + cr); LS.set('customers', S.customers); } }
-    const printable = { ...order, cashOut: t.cashOut || 0, customerPhone: c ? c.phone : '', pointsBalance: cust ? cust.points : null, creditBalance: cust && P.payments.some(p => p.type === 'credit') ? cust.credit : null };
+    if (c) { cust = (S.customers || []).find(x => x.id === c.id); if (cust) { cust.points = String(Math.max(0, num(cust.points) + earned - num(t.pointsUse))); const dbt = t.items.filter(it => it.debt).reduce((s2, it) => s2 + num(it.qty) * num(it.price), 0); cust.totalSpent = String(num(cust.totalSpent) + T.total - dbt); const cr = P.payments.filter(p => p.type === 'credit').reduce((s, p) => s + p.amount, 0); if (cr || dbt) cust.credit = String(Math.round((num(cust.credit) + cr - dbt) * 100) / 100); LS.set('customers', S.customers); } }
+    const printable = { ...order, cashOut: t.cashOut || 0, customerPhone: c ? c.phone : '', pointsBalance: cust ? cust.points : null, creditBalance: cust && (P.payments.some(p => p.type === 'credit') || t.items.some(it => it.debt)) ? cust.credit : null };
+    if (window.Inst) Inst.applyLocal(order);
     const recent = LS.get('recentOrders', []); recent.unshift(printable); LS.set('recentOrders', recent.slice(0, 30));
     Sync.add(order);
     // รายงานในเครื่องเห็นบิลนี้ทันที (ไม่ต้องรอส่งขึ้นออนไลน์)
