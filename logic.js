@@ -523,7 +523,7 @@ var Logic = (function () {
     need(db, u, 'owner');
     rows = rows || [];
     var ids = rows.map(function (o) { return String(o && o.id || ''); }).filter(function (x) { return x; });
-    var have = {}; if (ids.length) db.read('Orders', { ids: ids }).forEach(function (o) { have[o.id] = 1; });
+    var have = {}; if (ids.length) (db.has ? db.has('Orders', ids) : db.read('Orders', { ids: ids }).map(function (o) { return o.id; })).forEach(function (k) { have[k] = 1; });
     var seen = {}, dup = [], bad = [], fresh = [], now = db.now();
     rows.forEach(function (o, i) {
       var id = String(o && o.id || '');
@@ -539,7 +539,9 @@ var Logic = (function () {
   // ---------- สำรอง / กู้คืนข้อมูลทั้งระบบ (เจ้าของเท่านั้น) ----------
   function backupTable(db, u, t, offset, limit) {
     need(db, u, 'owner'); if (!SCHEMA[t]) err('ไม่พบตาราง ' + t);
-    var rows = db.read(t, {}), off = Math.max(0, n(offset)), lim = Math.max(1, n(limit) || 5000);
+    var off = Math.max(0, n(offset)), lim = Math.max(1, n(limit) || 5000);
+    if (db.page) return { table: t, total: db.count(t), rows: db.page(t, off, lim) };   // ตารางใหญ่: อ่านเฉพาะหน้าที่ขอ
+    var rows = db.read(t, {});
     return { table: t, total: rows.length, rows: rows.slice(off, off + lim) };
   }
   // กู้คืนแบบรวม: แถวที่มีอยู่แล้ว (key ตรงกัน) = เขียนทับ · แถวใหม่ = เพิ่ม · ไม่ลบข้อมูลที่ไม่มีในไฟล์

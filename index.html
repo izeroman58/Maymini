@@ -152,6 +152,14 @@ body.navdock #app{padding-left:min(330px,86vw)}body.navdock .nav{left:min(330px,
 .drw .df{border-top:1px solid var(--line);padding:6px 0 calc(8px + var(--safe-b))}.drw .df .ver{padding:4px 18px;color:var(--ink3);font-size:12.5px}
 .scan{position:fixed;inset:0;background:#000;z-index:80;display:flex;flex-direction:column}
 .scan.inline{position:relative;inset:auto;z-index:1;height:clamp(120px,19vh,165px);border-radius:16px;overflow:hidden;margin:0 0 10px}.scan.inline .bot{display:none}.scan.inline .frame{top:30%;height:54%;left:8%;right:8%}.scan.inline .bar{padding:6px 10px}.scan.inline .bar .disp{font-size:15px!important}
+.nsbtn{all:unset;cursor:pointer;font-size:13px;font-weight:600;color:var(--red);background:var(--red-l);border-radius:999px;padding:4px 12px;line-height:1.5}
+.nsbox{margin-top:8px;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:#FCFBFA}
+.nshd{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--ink2)}.nshd>span{flex:1;display:flex;gap:6px;align-items:center}.nshd a{color:var(--ink2);text-decoration:none;font-weight:600}
+.nschips{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.nschip{all:unset;cursor:pointer;box-sizing:border-box;width:100%;padding:8px 12px;border-radius:10px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);font-size:15px;line-height:1.35}
+.nschip:active,.nschip.on{box-shadow:inset 0 0 0 2px var(--green);background:#F2FBF3}.nschip i{font-style:normal;font-size:11px;font-weight:700;color:#1F5FBF;background:#E8F0FD;border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:1px}
+.nsft{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+@media (min-width:700px){.nschips{display:grid;grid-template-columns:1fr 1fr}}
 .scanhost{margin:0 0 10px}.scanhost .scan.inline{margin:0}.scanlast{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:6px;font-size:15px}
 .scan video{flex:1;width:100%;object-fit:cover;min-height:0}.scan .cam{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}.scan.split .cam{flex:none;height:clamp(130px,22vh,190px)}.scan.split .frame{top:30%;height:54%;left:8%;right:8%}.scan.split .bot{display:none}.scan.split .last{display:none}.scan.split .bot{padding-bottom:10px}.scan .spane{flex:1;min-height:0;background:var(--bg,#f6f3f2);display:flex;flex-direction:column}
 .scan .frame{position:absolute;left:10%;right:10%;top:30%;height:22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
@@ -214,7 +222,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.46';
+const APP_VER = '2.6.47';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -1484,7 +1492,7 @@ VIEWS.products = async (el, flag) => {
     $('#pl', el).innerHTML = res.length ? res.slice(0, PF.limit).map(p => {
       const low = p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0);
       return `<div class="item" data-sku="${esc(p.sku)}">${pthumb(p)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.sku)} · ${p.barcode ? esc(p.barcode) : '<span class="tag amber">ไม่มีบาร์โค้ด</span>'}${p.trackStock === 'Y' ? ` · <span class="tag ${low ? 'red' : 'gray'}">คงเหลือ ${num(p.stock)}</span>` : ''}${can('viewCost') && num(p.cost) ? ` · ทุน ${money(p.cost)}` : ''}</div></div><div class="price">${baht(p.price)}</div></div>`;
-    }).join('') + (res.length > PF.limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red);font-weight:600">แสดงเพิ่ม (${res.length - PF.limit})</div>` : '') : `<div class="empty">ไม่พบสินค้า<br><button class="btn sm" style="margin-top:10px" onclick="editProduct({name:${esc(JSON.stringify(PF.q))}})">เพิ่ม “${esc(PF.q)}”</button></div>`;
+    }).join('') + (res.length > PF.limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red);font-weight:600">แสดงเพิ่ม (${res.length - PF.limit})</div>` : '') : `<div class="empty">ไม่พบสินค้า<br><button class="btn sm" style="margin-top:10px" onclick="editProduct(${esc(JSON.stringify(/^\d{8,14}$/.test(PF.q.trim()) ? { barcode: PF.q.trim() } : { name: PF.q }))})">เพิ่ม “${esc(PF.q)}”</button></div>`;
     $$('#pl [data-sku]', el).forEach(r => r.onclick = () => productCard(IDX.bySku[r.dataset.sku]));
     const m = $('#more', el); if (m) m.onclick = () => { PF.limit += 100; draw(); };
   };
@@ -1557,7 +1565,7 @@ async function editProduct(p0) {
   const ov = sheet(isNew ? 'เพิ่มสินค้าใหม่' : 'แก้ไขสินค้า', `
     <div class="row" style="margin-bottom:12px;gap:12px"><div id="pimg" style="width:84px;height:84px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink3);flex:none">${curImg ? `<img src="${curImg}" style="width:100%;height:100%;object-fit:cover">` : I(IC.image, 30)}</div>
       <div class="grow"><div class="small" style="font-weight:600">รูปสินค้า (แสดงบนหน้าจอขาย)</div><div class="row wrap" style="margin-top:6px"><label class="btn ghost sm">${I(IC.cam, 16)} ถ่าย/เลือกรูป<input type="file" accept="image/*" id="f_img" class="hidden"></label><button class="btn ghost sm" id="webimg">🔎 ค้นรูปจากเน็ต</button><button class="btn ghost sm" id="rmimg">ลบรูป</button></div><div class="tiny muted">ย่อขนาดอัตโนมัติ ~10 KB โหลดเร็ว ใช้ได้แม้ออฟไลน์</div></div></div>
-    <label class="f"><span>ชื่อสินค้า *</span><input class="in" id="f_name" value="${esc(p.name)}"></label>
+    <div class="f" style="margin-bottom:10px"><div class="row" style="margin-bottom:4px;gap:6px"><span class="grow" style="font-size:13px;color:var(--ink2);font-weight:500">ชื่อสินค้า *</span><button type="button" class="nsbtn" id="nsgo">✨ แนะนำชื่อ</button></div><input class="in" id="f_name" value="${esc(p.name)}" autocomplete="off"><div id="nsug"></div></div>
     <div class="f" style="margin-bottom:10px"><span style="display:block;font-size:13px;color:var(--ink2);margin-bottom:4px;font-weight:500">บาร์โค้ด <span class="tiny muted">· ยิงด้วยเครื่อง / แตะ 📷 ถ่ายรูป / แตะสแกนสด</span></span><div class="row">${barcodeFieldHTML('f_barcode', p.barcode)}<button class="btn sm" id="bscan" title="สแกนด้วยกล้องแบบสด">${I(IC.scan, 18)}</button><button class="btn ghost sm" id="bgen" title="สร้างบาร์โค้ดภายในร้าน">สร้าง</button></div><div class="tiny muted" id="bmsg"></div></div>
     <div class="grid2"><label class="f"><span>ราคาขาย *</span><input class="in" id="f_price" type="number" inputmode="decimal" step="any" value="${esc(p.price)}"></label>
     <label class="f ${can('viewCost') ? '' : 'hidden'}"><span>ต้นทุน</span><input class="in" id="f_cost" type="number" inputmode="decimal" step="any" value="${esc(p.cost)}"></label></div>
@@ -1584,8 +1592,13 @@ async function editProduct(p0) {
   $('#f_img', ov).onchange = async e => { const f = e.target.files[0]; if (!f) return; newImg = await Img.shrink(f); rmImg = false; $('#pimg', ov).innerHTML = `<img src="${newImg}" style="width:100%;height:100%;object-fit:cover">`; };
   $('#rmimg', ov).onclick = () => { newImg = null; rmImg = true; $('#pimg', ov).innerHTML = I(IC.image, 30); };
   $('#webimg', ov).onclick = () => webImagePicker({ name: $('#f_name', ov).value.trim() || p.name, barcode: ($('#f_barcode', ov) || {}).value || p.barcode }, d => { newImg = d; rmImg = false; $('#pimg', ov).innerHTML = `<img src="${d}" style="width:100%;height:100%;object-fit:cover">`; });
-  $('#bscan', ov).onclick = () => openScanner(code => { $('#f_barcode', ov).value = code; chk(); return 'close'; });
-  bindBarcodeField(ov, 'f_barcode', () => chk());
+  // แนะนำชื่อสินค้าจากบาร์โค้ด (สินค้าใหม่ = ค้นให้เอง · สินค้าเดิม = กด ✨ แนะนำชื่อ)
+  const NS = nameSuggest(ov, { name: $('#f_name', ov), barcode: () => $('#f_barcode', ov).value.trim(), self: p.sku, box: $('#nsug', ov) });
+  $('#nsgo', ov).onclick = () => NS.run(true);
+  if (isNew && p.barcode) NS.run();
+  $('#f_barcode', ov).addEventListener('input', () => { if (isNew || NS.shown) NS.soon(); });
+  $('#bscan', ov).onclick = () => openScanner(code => { $('#f_barcode', ov).value = code; chk(); NS.run(); return 'close'; });
+  bindBarcodeField(ov, 'f_barcode', () => { chk(); NS.run(); });
   $('#bgen', ov).onclick = () => { $('#f_barcode', ov).value = internalBarcode($('#f_sku', ov).value); chk(); toast('สร้างบาร์โค้ดภายในร้าน (ขึ้นต้น 21)'); };
   const stkVis = () => $('#stk', ov).style.display = $('#f_trackStock', ov).checked ? '' : 'none';
   $('#f_trackStock', ov).onchange = stkVis; stkVis();
@@ -1605,7 +1618,7 @@ async function editProduct(p0) {
   };
   $('#sv', ov).onclick = () => save(false); $('#svp', ov).onclick = () => save(true);
   const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg(`ลบ “${esc(p.name)}” ?`, 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Products', ids: [p.sku] }); S.products = S.products.filter(x => x.sku !== p.sku); LS.set('products', S.products); buildIndex(); busy(0); ov.remove(); go('products'); } catch (e) { busy(0); toast(e.message, 1); } };
-  if (isNew) setTimeout(() => $('#f_name', ov).focus(), 200);
+  if (isNew && !p.barcode) setTimeout(() => $('#f_name', ov).focus(), 200);
 }
 
 /* ---------- SCAN / PRICE CHECK ---------- */
@@ -2340,6 +2353,80 @@ function webImagePicker(p, onPick) {
 }
 window.webImagePicker = webImagePicker;
 
+/* ---------- แนะนำชื่อสินค้าจากบาร์โค้ด ----------
+   อัตโนมัติ: ฐานข้อมูลสินค้าเปิด (Open Food / Beauty / Products / Pet Food Facts — ค้นพร้อมกัน รอไม่เกิน 4 วิ)
+              + สินค้ายี่ห้อเดียวกันในร้าน (บาร์โค้ด 9 หลักแรกตรงกัน) ไว้ใช้เป็นแบบตั้งชื่อ
+   ห้างใหญ่ไม่เปิดให้ระบบอื่นดึงข้อมูล → ใช้ "วางชื่อที่คัดลอกมา" จากที่ไหนก็ได้
+   ทำงานเฉพาะในหน้าเพิ่ม/แก้สินค้า ไม่แตะหน้าขาย · ผลค้นเก็บในเครื่อง (ค้นซ้ำทันที) */
+const NS_DB = [['https://world.openfoodfacts.org', 'อาหาร/เครื่องดื่ม'], ['https://world.openbeautyfacts.org', 'ความงาม'], ['https://world.openproductsfacts.org', 'ของใช้'], ['https://world.openpetfoodfacts.org', 'อาหารสัตว์']];
+const nsClean = t => String(t || '').replace(/\s+/g, ' ').replace(/\s*[|–—-]\s*(makro|big ?c|lotus'?s|tops|dohome|ไทวัสดุ|thai ?watsadu|global ?house|โกลบอล.*|แม็คโคร|บิ๊กซี|โลตัส|ท็อปส์|ดูโฮม).*$/i, '').replace(/^ราคา\s*/, '').trim().slice(0, 120);
+function nsNames(res) {
+  const out = [], seen = new Set();
+  const add = (t, src) => { t = nsClean(t); const k = t.toLowerCase().replace(/\s/g, ''); if (t.length >= 2 && !seen.has(k)) { seen.add(k); out.push({ t, src }); } };
+  res.forEach(x => {
+    const br = String(x.brands || '').split(',')[0].trim(), q = String(x.quantity || '').replace(/\s+/g, ''), src = 'ฐานข้อมูลสินค้า · ' + x._db;
+    const withQ = n => n && q && !n.replace(/\s/g, '').toLowerCase().includes(q.toLowerCase()) ? n + ' ' + q : n;
+    const withB = n => n && br && !n.toLowerCase().includes(br.toLowerCase()) ? br + ' ' + n : n;
+    [x.product_name_th, x.generic_name_th].filter(Boolean).forEach(n => { add(withQ(n), src); add(withQ(withB(n)), src); });
+    [x.product_name, x.product_name_en, x.generic_name].filter(Boolean).forEach(n => { add(withQ(withB(n)), src); add(n, src); });
+  });
+  return out.slice(0, 5);
+}
+// ค้นพร้อมกันทุกฐานข้อมูล · ได้ผลจากที่ไหนก่อนแสดงก่อน (onPart) · แต่ละที่รอไม่เกิน 4 วิ
+async function nsLookup(code, onPart) {
+  const C = LS.get('nsCache', {}), hit = C[code];
+  if (hit && Date.now() - hit.t < (hit.l.length ? 60 : 3) * 864e5) return hit.l;
+  const F = 'product_name,product_name_th,product_name_en,generic_name,generic_name_th,brands,quantity', got = [];
+  const one = ([base, db]) => { const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 4000);
+    return fetch(`${base}/api/v2/product/${code}.json?fields=${F}`, { signal: ac.signal }).then(r => r.ok ? r.json() : null)
+      .then(j => { if (j && j.product) { got.push({ ...j.product, _db: db }); onPart && onPart(nsNames(got)); } }).catch(() => { }).finally(() => clearTimeout(tm)); };
+  await Promise.all(NS_DB.map(one));
+  const l = nsNames(got); C[code] = { t: Date.now(), l };
+  const ks = Object.keys(C); if (ks.length > 500) ks.sort((a, b) => C[a].t - C[b].t).slice(0, ks.length - 500).forEach(k => delete C[k]);
+  LS.set('nsCache', C); return l;
+}
+function nsSimilar(code, self) {
+  if (!/^\d{13}$/.test(code) || /^2[0-9]/.test(code)) return [];
+  const pre = code.slice(0, 9);
+  return (S.products || []).filter(x => x.sku !== self && String(x.barcode || '').length === 13 && String(x.barcode).startsWith(pre) && String(x.barcode) !== code).slice(0, 3).map(x => ({ t: x.name, src: 'ยี่ห้อเดียวกันในร้าน', tpl: 1 }));
+}
+function nameSuggest(root, o) {
+  const box = o.box, inp = o.name; let seq = 0, tmr = 0, prev = null;
+  const st = {};
+  const pick = t => { prev = prev == null ? inp.value : prev; inp.value = t; inp.dispatchEvent(new Event('input', { bubbles: true })); draw.last && draw(draw.last, true); toast('ใส่ชื่อแล้ว — แก้ต่อได้ในช่องชื่อ'); };
+  const draw = (r, picked) => {
+    draw.last = r;
+    const code = o.barcode();
+    const chips = r.list.map((x, i) => `<button type="button" class="nschip${inp.value.trim() === x.t ? ' on' : ''}" data-i="${i}" title="${esc(x.src)}">${x.tpl ? '<i>แบบ</i>' : ''}${esc(x.t)}</button>`).join('');
+    box.innerHTML = `<div class="nsbox">
+      <div class="nshd"><span>${r.busy ? `<span class="spin dark" style="width:14px;height:14px;border-width:2px"></span> ${r.list.some(x => !x.tpl) ? 'แตะเพื่อใช้ชื่อ · กำลังค้นเพิ่ม…' : 'กำลังค้นชื่อจากบาร์โค้ด…'}` : r.list.length ? 'แตะเพื่อใช้ชื่อ' : (code ? 'ไม่พบชื่อจากบาร์โค้ดนี้ — พิมพ์ชื่อเอง หรือวางชื่อที่คัดลอกมา' : 'ใส่/สแกนบาร์โค้ดก่อน แล้วกดแนะนำชื่อ')}</span>${prev != null && picked !== false ? '<a href="javascript:void 0" data-undo>↶ ชื่อเดิม</a>' : ''}<a href="javascript:void 0" data-x aria-label="ซ่อน">✕</a></div>
+      ${chips ? `<div class="nschips">${chips}</div>` : ''}
+      <div class="nsft"><button type="button" class="nsbtn" data-paste>📋 วางชื่อที่คัดลอกมา</button></div></div>`;
+    $$('.nschip', box).forEach(b => b.onclick = () => { const x = r.list[+b.dataset.i]; pick(x.t); if (x.tpl) setTimeout(() => { inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { } }, 50); });
+    const u = $('[data-undo]', box); if (u) u.onclick = () => { inp.value = prev; prev = null; inp.dispatchEvent(new Event('input', { bubbles: true })); draw(r, false); };
+    $('[data-x]', box).onclick = () => { box.innerHTML = ''; };
+    $('[data-paste]', box).onclick = async () => {
+      try { const t = nsClean(await navigator.clipboard.readText()); if (!t) return toast('ยังไม่ได้คัดลอกชื่อ', 1); if (/^https?:/.test(t)) return toast('ที่คัดลอกเป็นลิงก์ — กดค้างที่ "ชื่อสินค้า" แล้วคัดลอกข้อความ', 1, 4000); pick(t); }
+      catch (e) { toast('เครื่องนี้วางอัตโนมัติไม่ได้ — แตะช่องชื่อแล้วกดค้าง › วาง', 1, 4000); }
+    };
+  };
+  st.run = async force => {
+    const code = o.barcode(), my = ++seq;
+    if (!force && !/^\d{8,14}$/.test(code)) return;
+    const sim = nsSimilar(code, o.self);
+    if (!/^\d{8,14}$/.test(code) || /^2[01]\d{11}$/.test(code)) return draw({ list: sim });   // บาร์โค้ดร้าน/ไม่มีบาร์โค้ด: ไม่มีในฐานข้อมูลภายนอก
+    draw({ list: sim, busy: 1 });
+    const l = await nsLookup(code, part => { if (my === seq && box.isConnected) draw({ list: part.concat(sim), busy: 1 }); }).catch(() => []);
+    if (my !== seq || !box.isConnected) return;
+    draw({ list: l.concat(sim) });
+  };
+  st.soon = () => { clearTimeout(tmr); tmr = setTimeout(() => st.run(), 450); };
+  Object.defineProperty(st, 'shown', { get: () => !!box.firstChild });
+  return st;
+}
+window.nameSuggest = nameSuggest;
+
+
 /* ---------- เติมรูปอัตโนมัติ: ไล่ค้นรูปจากบาร์โค้ดของสินค้าที่ยังไม่มีรูป (Open Food Facts) ----------
    ค้นครั้งละ 50 บาร์โค้ด เว้นจังหวะตามข้อกำหนดของ Open Food Facts · ที่พบแสดงให้ติ๊กเลือกก่อนบันทึก
    บาร์โค้ดที่ไม่พบจำไว้ ครั้งหน้าไม่ค้นซ้ำ (เลือกค้นซ้ำได้) · บาร์โค้ดร้าน (ขึ้นต้น 20/21) ข้าม */
@@ -2627,6 +2714,7 @@ const IdleLock = {
     ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => this.last = Date.now(), { passive: true }));
     setInterval(() => {
       if (!S.user) return;
+      if (S.longJob) { this.last = Date.now(); return; }   // กำลังนำเข้าข้อมูลใหญ่ — ไม่ล็อก/ไม่ออกจากระบบ
       const mins = num(cfg('idleLock', '10'));
       // มือถือเจ้าของที่ตั้ง "ไม่ต้องออกจากระบบอัตโนมัติ" ไว้ → ไม่ล็อก (รับแจ้งเตือนงานได้ตลอด)
       const applies = S.user.role === 'owner' ? !LS.get('stayIn', false) : !isKiosk();
@@ -2673,21 +2761,21 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.46"></script>
-<script src="logic.js?v=2.6.46"></script>
-<script src="cache.js?v=2.6.46"></script>
-<script src="offline.js?v=2.6.46"></script>
-<script src="scanner.js?v=2.6.46"></script>
-<script src="printer.js?v=2.6.46"></script>
-<script src="pos.js?v=2.6.46"></script>
-<script src="idle.js?v=2.6.46"></script>
-<script src="display.js?v=2.6.46"></script>
-<script src="reports.js?v=2.6.46"></script>
-<script src="inventory.js?v=2.6.46"></script>
-<script src="people.js?v=2.6.46"></script>
-<script src="quality.js?v=2.6.46"></script>
-<script src="services.js?v=2.6.46"></script>
-<script src="owner.js?v=2.6.46"></script>
+<script src="qr.js?v=2.6.47"></script>
+<script src="logic.js?v=2.6.47"></script>
+<script src="cache.js?v=2.6.47"></script>
+<script src="offline.js?v=2.6.47"></script>
+<script src="scanner.js?v=2.6.47"></script>
+<script src="printer.js?v=2.6.47"></script>
+<script src="pos.js?v=2.6.47"></script>
+<script src="idle.js?v=2.6.47"></script>
+<script src="display.js?v=2.6.47"></script>
+<script src="reports.js?v=2.6.47"></script>
+<script src="inventory.js?v=2.6.47"></script>
+<script src="people.js?v=2.6.47"></script>
+<script src="quality.js?v=2.6.47"></script>
+<script src="services.js?v=2.6.47"></script>
+<script src="owner.js?v=2.6.47"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

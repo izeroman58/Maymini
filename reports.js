@@ -339,6 +339,88 @@ function ioLog(kind, text) {
   saveSetting('ioHistory', { list: h.list }).catch(() => { });
 }
 window.ioReport = ioReport; window.ioLog = ioLog; window.readTableFile = readTableFile;
+/* ---------- นำเข้าใบเสร็จจำนวนมาก (แสนใบ) ----------
+   ส่งทีละชุด (ปรับขนาดชุดเองให้แต่ละครั้ง ~8 วินาที) · ระบบตรวจซ้ำทีละชุด · หน้าต่างแสดงความคืบหน้าละเอียดทุกวินาที
+   ไม่ล็อกหน้าจอ/ไม่ออกจากระบบระหว่างทำ · จอไม่ดับ · เน็ตหลุด = รอแล้วลองใหม่เอง · จำจุดที่ทำถึง (ทำต่อได้) · บันทึกประวัติ */
+async function rxImportRun(P, f, key, from, prev, reload) {
+  const N = P.rows.length, T0 = Date.now(), st = { i: from, added: prev ? prev.added : 0, dup: prev ? prev.dup : 0, bad: prev ? prev.bad : 0, ch: 300, paused: false, stop: false, msg: '', calls: 0, sent: 0, busyMs: 0 };
+  const elapsed0 = prev ? prev.elapsed || 0 : 0, log = [];
+  S.longJob = (S.longJob || 0) + 1;
+  let wl = null; const wake = async () => { try { wl = await navigator.wakeLock.request('screen'); } catch (e) { } };
+  wake(); const onVis = () => { if (document.visibilityState === 'visible' && !st.stop) wake(); }; document.addEventListener('visibilitychange', onVis);
+  const onUnload = e => { e.preventDefault(); e.returnValue = ''; }; addEventListener('beforeunload', onUnload);
+  const ov = document.createElement('div'); ov.className = 'ov rxov'; ov.innerHTML = `<div class="sheet" role="dialog"><div class="sh"><h3>กำลังนำเข้าใบเสร็จ</h3></div><div class="sb" id="rxb"></div><div class="sf"><button class="btn ghost grow" id="rxp">⏸ หยุดชั่วคราว</button><button class="btn ghost" id="rxx" style="color:var(--red)">ยกเลิก</button></div></div>`;
+  document.body.appendChild(ov);
+  const fmtT = ms => { const s2 = Math.round(ms / 1000), h = Math.floor(s2 / 3600), m = Math.floor(s2 % 3600 / 60), x = s2 % 60; return (h ? h + ' ชม. ' : '') + (h || m ? m + ' นาที ' : '') + x + ' วินาที'; };
+  const save = () => LS.set('rxJob', { key, done: st.i, total: N, added: st.added, dup: st.dup, bad: st.bad, at: new Date().toISOString(), elapsed: elapsed0 + Date.now() - T0 });
+  const draw = () => {
+    const el = Date.now() - T0, doneNow = st.i - from, rate = doneNow / Math.max(1, el / 1000), left = N - st.i, pct = st.i / N * 100;
+    const cur = P.rows[Math.min(st.i, N - 1)], ce = P.rows[Math.min(st.i + st.ch, N) - 1] || cur;
+    $('#rxb', ov).innerHTML = `
+      <div class="small muted">${esc(f.name)}</div>
+      <div style="height:14px;border-radius:7px;background:#EEF0F2;margin:10px 0 6px;overflow:hidden"><div style="height:100%;width:${pct.toFixed(2)}%;background:var(--green);border-radius:7px;transition:width .4s"></div></div>
+      <div class="row" style="font-size:20px;font-weight:700"><span class="grow num">${st.i.toLocaleString()} / ${N.toLocaleString()} ใบ</span><span class="num">${pct.toFixed(1)}%</span></div>
+      <div class="grid3" style="margin:12px 0">
+        <div class="stat"><div class="k">นำเข้าใหม่</div><div class="v" style="color:var(--green)">${st.added.toLocaleString()}</div></div>
+        <div class="stat"><div class="k">ซ้ำ (ข้าม)</div><div class="v">${st.dup.toLocaleString()}</div></div>
+        <div class="stat"><div class="k">ไม่ครบ (ข้าม)</div><div class="v">${st.bad.toLocaleString()}</div></div></div>
+      <div class="kv small"><span>ความเร็ว</span><b>${rate >= 1 ? rate.toFixed(1) + ' ใบ/วินาที' : '-'} ${doneNow ? `· ${(el / doneNow).toFixed(1)} ms/ใบ` : ''}</b></div>
+      <div class="kv small"><span>เวลาที่ใช้</span><b>${fmtT(elapsed0 + el)}</b></div>
+      <div class="kv small"><span>คาดว่าเสร็จในอีก</span><b>${doneNow && rate ? fmtT(left / rate * 1000) : 'กำลังคำนวณ…'}</b></div>
+      <div class="kv small"><span>ชุดปัจจุบัน</span><b>${st.i < N ? `ใบที่ ${(st.i + 1).toLocaleString()}–${Math.min(st.i + st.ch, N).toLocaleString()} (${st.ch} ใบ/ชุด)` : '-'}</b></div>
+      <div class="kv small"><span>วันที่ของใบเสร็จ</span><b>${cur ? esc(thDate(cur.date.slice(0, 10))) + (ce && ce.date.slice(0, 10) !== cur.date.slice(0, 10) ? ' – ' + esc(thDate(ce.date.slice(0, 10))) : '') : '-'}</b></div>
+      <div class="kv small"><span>ใบล่าสุดที่ส่งแล้ว</span><b>${st.i > 0 ? esc(P.rows[st.i - 1].id) + ' · ' + esc(String(P.rows[st.i - 1].date).slice(0, 16).replace('T', ' ')) : '-'}</b></div>
+      <div class="small" style="margin-top:8px;padding:8px 10px;border-radius:10px;background:${/รอ|หลุด|ผิดพลาด|หยุด/.test(st.msg) ? '#FFF6E5' : '#F2FBF3'}">${st.paused ? '⏸ หยุดชั่วคราว — กด ▶ ทำต่อ' : esc(st.msg || 'กำลังส่ง…')}</div>
+      ${log.length ? `<div class="tiny muted" style="margin-top:8px">ชุดล่าสุด</div><div style="font-size:12px;font-family:ui-monospace,monospace;max-height:132px;overflow:auto;background:#FAFAF9;border-radius:8px;padding:6px 8px">${log.slice(0, 8).map(x => `<div>${x}</div>`).join('')}</div>` : ''}
+      <div class="tiny muted" style="margin-top:8px">อย่าปิดหน้านี้หรือปิดเครื่อง · หน้าจอไม่ล็อกและไม่ออกจากระบบระหว่างนำเข้า · ปิดไปแล้วเลือกไฟล์เดิมอีกครั้งเพื่อทำต่อได้</div>`;
+  };
+  const tick = setInterval(draw, 1000); draw();
+  $('#rxp', ov).onclick = () => { st.paused = !st.paused; $('#rxp', ov).textContent = st.paused ? '▶ ทำต่อ' : '⏸ หยุดชั่วคราว'; draw(); };
+  $('#rxx', ov).onclick = async () => { if (await confirmDlg('ยกเลิกการนำเข้า? (ใบที่นำเข้าแล้วยังอยู่ · เลือกไฟล์เดิมอีกครั้งเพื่อทำต่อได้)', 'ยกเลิกการนำเข้า', true)) st.stop = true; };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let status = 'สำเร็จ';
+  try {
+    while (st.i < N && !st.stop) {
+      if (st.paused) { await sleep(400); continue; }
+      const chunk = P.rows.slice(st.i, st.i + st.ch), t1 = Date.now();
+      let r = null, tries = 0;
+      while (!r && !st.stop) {
+        if (!navigator.onLine) { st.msg = 'เน็ตหลุด — รอเชื่อมต่อแล้วส่งต่อเอง…'; await sleep(2000); continue; }
+        try { st.msg = `กำลังส่งชุดใบที่ ${(st.i + 1).toLocaleString()}–${(st.i + chunk.length).toLocaleString()} และตรวจซ้ำ…`; r = await api('importOrders', { rows: chunk }); }
+        catch (err) {
+          if (!S.user || (!err.offline && /เจ้าของ|สิทธิ์|เข้าสู่ระบบ/.test(err.message))) throw err;   // ออกจากระบบ/ไม่มีสิทธิ์ = หยุด · อย่างอื่นลองใหม่เอง
+          tries++; const w = Math.min(60, 2 ** tries) * 1000; st.msg = `ส่งไม่สำเร็จ (${err.message}) — ลองใหม่ใน ${Math.round(w / 1000)} วินาที (ครั้งที่ ${tries})`;
+          if (tries >= 3 && st.ch > 100) st.ch = Math.max(100, Math.floor(st.ch / 2));
+          await sleep(w);
+        }
+      }
+      if (!r) break;
+      const ms = Date.now() - t1;
+      st.added += r.added; st.dup += r.dup; st.bad += r.bad; st.i += chunk.length; st.calls++; st.busyMs += ms;
+      log.unshift(`${new Date().toTimeString().slice(0, 8)}  #${(st.i - chunk.length + 1).toLocaleString()}–${st.i.toLocaleString()}  +${r.added} ซ้ำ ${r.dup}${r.bad ? ' ไม่ครบ ' + r.bad : ''}  ${(ms / 1000).toFixed(1)}s`);
+      st.msg = `ชุดล่าสุด ${chunk.length} ใบ ใช้ ${(ms / 1000).toFixed(1)} วินาที`;
+      // ปรับขนาดชุดให้แต่ละครั้งใช้เวลา ~8 วินาที (ไม่ช้า ไม่เสี่ยงหมดเวลาของ Google)
+      st.ch = Math.max(100, Math.min(2000, Math.round(st.ch * Math.min(2, Math.max(.5, 8000 / Math.max(500, ms))))));
+      save();
+    }
+    if (st.stop) status = 'ยกเลิกกลางคัน';
+  } catch (err) { status = 'หยุดเพราะผิดพลาด: ' + err.message; toast(err.message, 1, 8000); }
+  clearInterval(tick); S.longJob = Math.max(0, (S.longJob || 1) - 1);
+  removeEventListener('beforeunload', onUnload); document.removeEventListener('visibilitychange', onVis); try { wl && wl.release(); } catch (e) { }
+  ov.remove();
+  const all = st.i >= N; if (all) LS.del('rxJob'); else save();
+  const dur = elapsed0 + Date.now() - T0, ds = P.rows.map(o => o.date);
+  Cache.staleBefore = Date.now(); if (window.OStore) OStore.sync(true).catch(() => { });
+  const lines = [['ไฟล์', esc(f.name)], ['สถานะ', all ? '<span style="color:var(--green)">นำเข้าครบ</span>' : `<span style="color:var(--red)">${esc(status)}</span>`], ['ทำไปแล้ว', `${st.i.toLocaleString()} / ${N.toLocaleString()} ใบ`], ['นำเข้าใหม่', st.added.toLocaleString() + ' ใบ'], ['ข้าม (ซ้ำในระบบ)', st.dup.toLocaleString() + ' ใบ'],
+    ...(P.inFile.length ? [['ข้าม (ซ้ำในไฟล์)', P.inFile.length.toLocaleString() + ' ใบ']] : []), ...(P.cancelled.length ? [['ข้าม (ยกเลิก)', P.cancelled.length.toLocaleString() + ' ใบ']] : []), ...(st.bad + P.bad.length ? [['ข้าม (ข้อมูลไม่ครบ)', (st.bad + P.bad.length).toLocaleString() + ' แถว']] : []),
+    ['ช่วงวันที่', `${thDate(ds[0].slice(0, 10))} – ${thDate(ds[ds.length - 1].slice(0, 10))}`], ['เวลาที่ใช้', fmtT(dur)], ['ความเร็วเฉลี่ย', st.i - from ? `${((st.i - from) / Math.max(1, (Date.now() - T0) / 1000)).toFixed(1)} ใบ/วินาที` : '-'],
+    ...(all ? [] : ['ทำต่อ: เลือกไฟล์เดิมอีกครั้ง แล้วกด "ทำต่อ"'])];
+  ioReport(all ? 'นำเข้าใบเสร็จรับเงินแล้ว' : 'นำเข้าใบเสร็จยังไม่ครบ', lines, '');
+  ioLog('import-rx', `${f.name} · ${all ? 'ครบ' : status} · ${st.i.toLocaleString()}/${N.toLocaleString()} ใบ · ใหม่ ${st.added.toLocaleString()} · ซ้ำ ${(st.dup + P.inFile.length).toLocaleString()} · ${fmtT(dur)}`);
+  reload && reload();
+}
+window.rxImportRun = rxImportRun;
+
 function receiptsIO(rows, reload) {
   const sales = rows.filter(o => o.status !== 'refund').length, ref = rows.length - sales;
   const ov = sheet('ส่งออก / นำเข้าใบเสร็จรับเงิน', `
@@ -350,35 +432,32 @@ function receiptsIO(rows, reload) {
   const done = ext => { ov.remove(); ioReport('ส่งออกใบเสร็จรับเงินแล้ว', [['จำนวน', rows.length.toLocaleString() + ' ใบ'], ['ขาย / คืนเงิน', `${sales} / ${ref}`], ['ช่วงวันที่', `${thDate(RR.from)} – ${thDate(RR.to)}`], ['ไฟล์', fname(ext)]], 'export'); };
   $('#xc', ov).onclick = () => { download(fname('csv'), toCSV(ordersToSheet(rows))); done('csv'); };
   $('#xx', ov).onclick = async () => { try { busy(1); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ordersToSheet(rows)), 'receipts'); download(fname('xlsx'), new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/octet-stream' })); busy(0); done('xlsx'); } catch (e) { busy(0); toast(e.message, 1); } };
+  // ประวัติการนำเข้าใบเสร็จ (10 ครั้งล่าสุด)
+  const hist = (cfg('ioHistory', { list: [] }).list || []).filter(h => h.kind === 'import-rx').slice(0, 10);
+  $('#pv', ov).insertAdjacentHTML('afterend', hist.length ? `<details style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:600">ประวัติการนำเข้าใบเสร็จ (${hist.length})</summary>${hist.map(h => `<div class="small" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${esc(thDate(h.at.slice(0, 10)))} ${esc(new Date(h.at).toTimeString().slice(0, 5))}</b> · ${esc(h.by || '')}<div class="muted">${esc(h.text)}</div></div>`).join('')}</details>` : '');
   $('#fi', ov).onchange = async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     const pv = $('#pv', ov);
     try {
-      busy(1, 'กำลังอ่านไฟล์...'); const P = rxParse(await readTableFile(f));
+      busy(1, 'กำลังอ่านไฟล์...'); await new Promise(r => setTimeout(r, 30));
+      const P = rxParse(await readTableFile(f));
       if (!P.rows.length) throw new Error('ไม่พบใบเสร็จในไฟล์');
-      const CH = 400, chunks = []; for (let i = 0; i < P.rows.length; i += CH) chunks.push(P.rows.slice(i, i + CH));
-      let fresh = 0, dup = 0, bad = 0, dupIds = [];
-      for (let i = 0; i < chunks.length; i++) { busy(1, `กำลังตรวจใบเสร็จซ้ำ ${Math.min((i + 1) * CH, P.rows.length)}/${P.rows.length}...`); const r = await api('importOrders', { rows: chunks[i], dry: true }); fresh += r.fresh; dup += r.dup; bad += r.bad; dupIds = dupIds.concat(r.dupIds || []); }
+      P.rows.sort((x, y) => String(x.date).localeCompare(String(y.date)));
       busy(0);
-      const ds = P.rows.map(o => o.date).sort(), net = P.rows.reduce((a, o) => a + num(o.total), 0);
-      const sub = [['รูปแบบไฟล์', P.src], ['ใบเสร็จในไฟล์', P.rows.length.toLocaleString() + ' ใบ'], ['ช่วงวันที่', `${thDate(ds[0].slice(0, 10))} – ${thDate(ds[ds.length - 1].slice(0, 10))}`], ['ยอดสุทธิรวม', baht(net)],
-        ['<span style="color:var(--green)">ใหม่ (จะนำเข้า)</span>', `<span style="color:var(--green)">${fresh.toLocaleString()} ใบ</span>`], ['ซ้ำ — มีในระบบแล้ว (ข้าม)', dup.toLocaleString() + ' ใบ']];
-      if (P.inFile.length) sub.push(['ซ้ำกันเองในไฟล์ (ข้าม)', P.inFile.length + ' ใบ']);
-      if (P.cancelled.length) sub.push(['ใบเสร็จที่ยกเลิก (ข้าม)', P.cancelled.length + ' ใบ']);
-      if (P.bad.length + bad) sub.push(['ข้อมูลไม่ครบ (ข้าม)', (P.bad.length + bad) + ' แถว']);
+      // ตัวอย่างจากไฟล์ (ทันที ไม่ต้องรอระบบ) — ใบซ้ำกับในระบบ ตรวจระหว่างนำเข้าทีละชุด แล้วข้าม
+      const ds = P.rows.map(o => o.date), net = P.rows.reduce((a2, o) => a2 + num(o.total), 0);
+      const key = `${f.name}|${f.size}|${P.rows.length}`, job = LS.get('rxJob', null), resume = job && job.key === key && job.done > 0 && job.done < P.rows.length ? job : null;
+      const sub = [['รูปแบบไฟล์', P.src], ['ใบเสร็จในไฟล์', P.rows.length.toLocaleString() + ' ใบ'], ['ช่วงวันที่', `${thDate(ds[0].slice(0, 10))} – ${thDate(ds[ds.length - 1].slice(0, 10))}`], ['ยอดสุทธิรวม', baht(net)]];
+      if (P.inFile.length) sub.push(['ซ้ำกันเองในไฟล์ (ข้าม)', P.inFile.length.toLocaleString() + ' ใบ']);
+      if (P.cancelled.length) sub.push(['ใบเสร็จที่ยกเลิก (ข้าม)', P.cancelled.length.toLocaleString() + ' ใบ']);
+      if (P.bad.length) sub.push(['ข้อมูลไม่ครบ (ข้าม)', P.bad.length.toLocaleString() + ' แถว']);
       pv.innerHTML = `<div class="card" style="margin:0">${sub.map(l => `<div class="kv"><span>${l[0]}</span><b>${l[1]}</b></div>`).join('')}
-        ${dupIds.length ? `<div class="tiny muted" style="margin-top:4px">ตัวอย่างเลขที่ซ้ำ: ${esc(dupIds.slice(0, 6).join(', '))}${dup > 6 ? ' …' : ''}</div>` : ''}
-        <div class="tiny muted" style="margin-top:6px">ใบเสร็จที่นำเข้าจะนับในรายงานยอดขาย · วันที่มีใบเสร็จแล้วระบบใช้ยอดจากใบเสร็จแทนยอดรายวันที่นำเข้า (ไม่นับซ้ำ)${P.src.includes('Loyverse') ? ' · เลขที่จาก Loyverse ขึ้นต้นด้วย LV-' : ''}</div></div>
-        <button class="btn green block" id="go" style="margin-top:10px" ${fresh ? '' : 'disabled'}>${fresh ? `นำเข้า ${fresh.toLocaleString()} ใบ` : 'ไม่มีใบเสร็จใหม่ให้นำเข้า'}</button>`;
-      const go = $('#go', pv); if (go) go.onclick = async () => {
-        let added = 0, dup2 = 0;
-        try {
-          for (let i = 0; i < chunks.length; i++) { busy(1, `กำลังนำเข้า ${Math.min((i + 1) * CH, P.rows.length)}/${P.rows.length}...`); const r = await api('importOrders', { rows: chunks[i] }); added += r.added; dup2 += r.dup; }
-          busy(0); ov.remove(); Cache.staleBefore = Date.now();
-          ioReport('นำเข้าใบเสร็จรับเงินแล้ว', [['ไฟล์', esc(f.name)], ['นำเข้าใหม่', added.toLocaleString() + ' ใบ'], ['ข้าม (ซ้ำ)', (dup2 + P.inFile.length).toLocaleString() + ' ใบ'], ...(P.cancelled.length ? [['ข้าม (ยกเลิก)', P.cancelled.length + ' ใบ']] : []), ...(P.bad.length + bad ? [['ข้าม (ข้อมูลไม่ครบ)', (P.bad.length + bad) + ' แถว']] : []), ['ช่วงวันที่', `${thDate(ds[0].slice(0, 10))} – ${thDate(ds[ds.length - 1].slice(0, 10))}`]], 'import');
-          reload && reload();
-        } catch (err) { busy(0); toast(`นำเข้าได้ ${added} ใบแล้วหยุด: ${err.message} — เลือกไฟล์เดิมอีกครั้งเพื่อทำต่อ (ใบที่เข้าแล้วจะไม่ซ้ำ)`, 1, 8000); }
-      };
+        <div class="tiny muted" style="margin-top:6px">ระบบตรวจเลขที่ใบเสร็จซ้ำกับในระบบระหว่างนำเข้า ใบที่มีอยู่แล้วข้ามให้เอง · หน้าจอไม่ล็อก/ไม่ออกจากระบบระหว่างนำเข้า · หยุดกลางคันแล้วเลือกไฟล์เดิมอีกครั้งเพื่อทำต่อได้${P.src.includes('Loyverse') ? ' · เลขที่จาก Loyverse ขึ้นต้นด้วย LV-' : ''}</div></div>
+        ${resume ? `<div class="alert blue small" style="margin:10px 0 0">ไฟล์นี้เคยนำเข้าค้างไว้ที่ใบที่ ${resume.done.toLocaleString()} / ${P.rows.length.toLocaleString()} (${esc(thDate(String(resume.at).slice(0, 10)))})</div><button class="btn green block" id="go2" style="margin-top:8px">▶ ทำต่อจากใบที่ ${(resume.done + 1).toLocaleString()}</button>` : ''}
+        <button class="btn ${resume ? 'ghost' : 'green'} block" id="go" style="margin-top:10px">${resume ? 'เริ่มใหม่ตั้งแต่ใบแรก (ใบที่เข้าแล้วข้ามให้เอง)' : `นำเข้า ${P.rows.length.toLocaleString()} ใบ`}</button>`;
+      const start = from => { ov.remove(); rxImportRun(P, f, key, from, resume && from ? resume : null, reload); };
+      $('#go', pv).onclick = () => start(0);
+      const g2 = $('#go2', pv); if (g2) g2.onclick = () => start(resume.done);
     } catch (err) { busy(0); pv.innerHTML = ''; toast(err.message, 1); }
   };
 }
