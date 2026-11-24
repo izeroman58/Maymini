@@ -11,6 +11,9 @@ const RANGES = [
   ['30d', '30 วัน', () => [addDays(todayISO(), -29), todayISO()]],
   ['month', 'เดือนนี้', () => { const t = todayISO(); return [t.slice(0, 8) + '01', t]; }],
   ['lmonth', 'เดือนก่อน', () => { const t = todayISO(); const f = addDays(t.slice(0, 8) + '01', -1); return [f.slice(0, 8) + '01', f]; }],
+  ['12m', '12 เดือน', () => { const t = todayISO(), d = new Date(+t.slice(0, 4), +t.slice(5, 7) - 12, 1); return [d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01', t]; }],
+  ['year', 'ปีนี้', () => { const t = todayISO(); return [t.slice(0, 4) + '-01-01', t]; }],
+  ['lyear', 'ปีที่แล้ว', () => { const y = +todayISO().slice(0, 4) - 1; return [y + '-01-01', y + '-12-31']; }],
   ['custom', 'กำหนดเอง', null]
 ];
 const OCACHE = {};
@@ -96,7 +99,41 @@ function rangePicker(el, state, onChange) {
   $('#ok', el).onclick = () => { state.from = $('#f', el).value; state.to = $('#t', el).value; if (state.from > state.to) [state.from, state.to] = [state.to, state.from]; onChange(); };
 }
 const RS = { r: 'today', from: todayISO(), to: todayISO(), tab: 'day', staff: '', top: 'range' };
-const prevRange = (from, to) => { const n = Math.round((new Date(to + 'T12:00:00') - new Date(from + 'T12:00:00')) / 864e5) + 1; return [addDays(from, -n), addDays(from, -1)]; };
+const spanDays = (from, to) => Math.round((new Date(to + 'T12:00:00') - new Date(from + 'T12:00:00')) / 864e5) + 1;
+const yShift = (d, k) => { const y = +d.slice(0, 4) + k, md = d.slice(5); return y + '-' + (md === '02-29' ? '02-28' : md); };
+// ช่วงก่อนหน้า: ช่วงสั้น = ช่วงยาวเท่ากันที่อยู่ติดกันก่อนหน้า · ช่วงตั้งแต่ ~1 ปี = วันเดียวกันของปีก่อน
+const prevRange = (from, to) => { const n = spanDays(from, to); return n >= 300 ? [yShift(from, -1), yShift(to, -1)] : [addDays(from, -n), addDays(from, -1)]; };
+/* ยอดที่นำเข้า (ใช้แทนใบเสร็จย้อนหลัง): ยอดรายวันที่นำเข้า (SalesDaily) สำหรับวันที่ไม่มีบิล
+   + ยอดรายเดือนที่นำเข้า/กรอกเอง (Sales) สำหรับเดือนที่ไม่มีทั้งบิลและยอดรายวัน — นับเฉพาะเดือนที่อยู่ในช่วงทั้งเดือน */
+async function importedSales(from, to) {
+  if (!isOwner() && !canStrict('reports')) return { days: {}, months: [] };
+  const [days, man] = await Promise.all([dailySummary(from, to).catch(() => ({})), quick(loadTable('Sales'), 1500, S.sales || []).catch(() => S.sales || [])]);
+  if (man && man.length) S.sales = man;
+  const dd = {}; Object.entries(days || {}).forEach(([d, x]) => { if (x.src !== 'POS' && (num(x.net) || num(x.gross))) dd[d] = x; });
+  const has = ym => Object.keys(days || {}).some(d => d.startsWith(ym) && (num(days[d].net) || num(days[d].gross)));
+  const partial = [];
+  const months = (man || []).filter(r => r.amount !== '' && r.amount != null).map(r => {
+    const ym = String(r.date).slice(0, 7), m0 = ym + '-01', m1 = addDays(addDays(m0, 32).slice(0, 8) + '01', -1);
+    if (m1 < from || m0 > to || has(ym)) return null;
+    if (m0 < from || m1 > to) { partial.push(ym); return null; }   // ช่วงที่เลือกครอบแค่บางส่วนของเดือน — ไม่มียอดรายวันให้แบ่ง
+    return { ym, net: num(r.amount), gross: r.gross !== '' && r.gross != null ? num(r.gross) : num(r.amount), refund: num(r.refund), disc: num(r.discount), cost: num(r.cost), hasCost: r.cost !== '' && r.cost != null, src: r.source || 'นำเข้ารายเดือน' };
+  }).filter(Boolean).sort((a, b) => a.ym.localeCompare(b.ym));
+  return { days: dd, months, partial };
+}
+window.importedSales = importedSales;
+// รวมยอดนำเข้าเข้าไปในผลสรุปจากใบเสร็จ (วันที่มีบิลใช้บิล)
+function blendImported(A, I) {
+  A.impD = 0; A.impDN = 0; A.impM = 0; A.months = {}; A.partial = I ? I.partial || [] : [];
+  if (!I) return A;
+  Object.entries(I.days).forEach(([d, x]) => {
+    if (A.days[d]) return;
+    A.net += num(x.net); A.gross += num(x.gross); A.disc += num(x.disc); A.refund += num(x.refund); A.cost += num(x.cost);
+    A.days[d] = { net: num(x.net), cost: num(x.cost), bills: 0, imp: x.src || 'นำเข้า' }; A.impD += num(x.net); A.impDN++;
+  });
+  I.months.forEach(m => { A.net += m.net; A.gross += m.gross; A.disc += m.disc; A.refund += m.refund; A.cost += m.cost; A.months[m.ym] = m; A.impM += m.net; });
+  A.profit = A.net - A.cost;
+  return A;
+}
 
 /* ---------- รายงาน/ยอดขาย (รวมสรุปตามช่วงเวลา + รายเดือน/รายปี ไว้หน้าเดียว) ---------- */
 VIEWS.reports = el => {
@@ -120,22 +157,38 @@ function reportsRange(el) {
     <div class="grid2" id="hl"></div>
     <div class="card"><div class="row" style="gap:8px;margin-bottom:10px"><div class="seg grow" id="tabs" style="overflow-x:auto">${[['day', 'ตามวัน'], ['prod', 'ตามสินค้า'], ['cat', 'ตามหมวดหมู่'], ['staff', 'ตามพนักงาน'], ['pay', 'ตามการชำระ']].map(([k, n]) => `<button data-t="${k}" class="${RS.tab === k ? 'on' : ''}" style="white-space:nowrap">${n}</button>`).join('')}</div><button class="btn ghost sm" id="ex">ส่งออก CSV</button></div><div id="tb"></div></div>
     <div class="row wrap" style="gap:8px"><button class="btn ghost grow" onclick="go('salesreceipts')">${I(IC.receipt, 18)} ใบเสร็จรับเงิน</button>${vc ? `<button class="btn ghost grow" onclick="go('stockvalue')">${I(IC.box, 18)} มูลค่าสต็อก</button>` : ''}${isOwner() ? `<button class="btn ghost grow" onclick="go('tax')">${I(IC.tax, 18)} ภาษี</button>` : ''}</div>`;
-  let rows = [], prows = [], A = null, tableRows = [];
+  let rows = [], prows = [], A = null, tableRows = [], imp = null, pimp = null;
   const single = () => RS.from === RS.to;
+  const monthly = () => spanDays(RS.from, RS.to) > 62;
   const draw = () => {
     const f = o => !RS.staff || (o.cashierName || o.cashier) === RS.staff;
-    const R = rows.filter(f); A = aggregate(R); const P = aggregate(prows.filter(f));
+    const R = rows.filter(f); A = blendImported(aggregate(R), RS.staff ? null : imp); const P = blendImported(aggregate(prows.filter(f)), RS.staff ? null : pimp);
     const k = (t, v, s, cur, prv, inv) => `<div class="stat"><div class="k">${t}</div><div class="v">${v}</div><div class="tiny muted">${cur != null ? chgTag(cur, prv, inv) + ' ' : ''}${s || ''}</div></div>`;
-    const pn = single() ? 'เทียบวันก่อน' : 'เทียบช่วงก่อน';
+    const yoy = spanDays(RS.from, RS.to) >= 300, pn = single() ? 'เทียบวันก่อน' : yoy ? 'เทียบช่วงเดียวกันปีก่อน' : 'เทียบช่วงก่อน';
     const extra = [(A.pass || 0) - (A.debt || 0) > 0 && `เงินรับแทน (โอน/เติม/บิล) ${money((A.pass || 0) - (A.debt || 0), 0)}`, A.debt && `รับชำระหนี้ ${money(A.debt, 0)}`, A.inst && `ผ่อนสินค้า (ดาวน์/ค่างวด) ${money(A.inst, 0)}`].filter(Boolean);
     $('#kpi', el).innerHTML = `<div class="grid3" style="margin-bottom:${extra.length ? 6 : 12}px">${k('ยอดขายสุทธิ', baht(A.net), pn, A.net, P.net)}${vc ? k('กำไรขั้นต้น', baht(A.profit), A.net ? 'อัตรา ' + (A.profit / A.net * 100).toFixed(1) + '%' : '', A.profit, P.profit) : k('จำนวนบิล', A.bills, '', A.bills, P.bills)}${k('เฉลี่ย/บิล', baht(A.bills ? A.net / A.bills : 0), A.bills + ' บิล', A.bills ? A.net / A.bills : 0, P.bills ? P.net / P.bills : 0)}${k('ยอดขาย (ก่อนหัก)', baht(A.gross), '', A.gross, P.gross)}${k('ส่วนลด', baht(A.disc), '', A.disc, P.disc, 1)}${k('คืนเงิน', baht(A.refund), A.refunds + ' ใบ', A.refund, P.refund, 1)}</div>
-      ${extra.length ? `<div class="tiny muted" style="margin:0 4px 12px">รวมอยู่ในยอดขายสุทธิ: ${extra.join(' · ')}</div>` : ''}`;
+      ${extra.length ? `<div class="tiny muted" style="margin:0 4px 12px">รวมอยู่ในยอดขายสุทธิ: ${extra.join(' · ')}</div>` : ''}
+      ${A.partial.length ? `<div class="alert amber small" style="margin:0 0 12px">${I(IC.alert, 18)}<div>${A.partial.map(ym => TH_MF[+ym.slice(5, 7) - 1] + ' ' + (+ym.slice(0, 4) + 543)).join(', ')} มีแค่ยอดรวมทั้งเดือน (นำเข้า) ไม่มียอดรายวัน — ช่วงที่เลือกครอบไม่ครบเดือนจึงยังไม่นับ · เลือก “เดือนก่อน”, “12 เดือน”, “ปีนี้/ปีที่แล้ว” หรือกำหนดเองให้ครอบทั้งเดือน</div></div>` : ''}
+      ${A.impDN || A.impM ? `<div class="alert blue small" style="margin:0 0 12px">${I(IC.io, 18)}<div>รวมยอดที่นำเข้าแล้ว: ${[A.impDN && `รายวัน ${A.impDN} วัน ${money(A.impD, 0)}`, A.impM && `รายเดือน ${Object.keys(A.months).length} เดือน ${money(A.impM, 0)}`].filter(Boolean).join(' · ')} — ยอดนำเข้าไม่มีจำนวนบิล/รายละเอียดสินค้า (เฉลี่ยต่อบิล สินค้าขายดี และตารางสินค้า/หมวด/พนักงาน/การชำระ คิดจากใบเสร็จเท่านั้น)${A.impM ? ' · ยอดรายเดือนนับเมื่อเลือกช่วงครอบทั้งเดือน' : ''}</div></div>` : ''}`;
+    // เฉลี่ย/บิล: คิดจากใบเสร็จเท่านั้น
+    { const nb = R.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), pb = prows.filter(f).filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), PA = aggregate(prows.filter(f));
+      const v = $$('#kpi .stat', el)[2]; if (v) v.outerHTML = k('เฉลี่ย/บิล', baht(A.bills ? nb / A.bills : 0), A.bills + ' บิล', A.bills ? nb / A.bills : 0, PA.bills ? pb / PA.bills : 0); }
     // กราฟหลัก: ช่วงนี้เทียบช่วงก่อนหน้า (แท่งเทา)
     let data, ttl;
     if (single()) { ttl = 'ยอดขายรายชั่วโมง'; data = []; for (let i = 5; i <= 23; i++) { const hh = String(i).padStart(2, '0'); data.push({ l: hh, t: hh + ':00 น.', v: A.hours[hh] || 0, p: P.hours[hh] || 0 }); } }
+    else if (monthly()) {
+      ttl = 'ยอดขายสุทธิรายเดือน'; data = [];
+      const [pf] = prevRange(RS.from, RS.to), mk = (o, ym) => Object.entries(o.days).reduce((a2, [d, x]) => a2 + (d.startsWith(ym) ? x.net : 0), 0) + (o.months[ym] ? o.months[ym].net : 0);
+      for (let ym = RS.from.slice(0, 7), i = 0; ym <= RS.to.slice(0, 7) && i < 60; i++) {
+        const pd = new Date(+pf.slice(0, 4), +pf.slice(5, 7) - 1 + i, 1), pym = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0'), mi = +ym.slice(5, 7) - 1;
+        data.push({ l: TH_M[mi].replace('.', '') + String(+ym.slice(0, 4) + 543).slice(-2), t: TH_MF[mi] + ' ' + (+ym.slice(0, 4) + 543) + (A.months[ym] ? ' (นำเข้ารายเดือน)' : ''), v: mk(A, ym), p: mk(P, pym) });
+        const nd = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 1); ym = nd.getFullYear() + '-' + String(nd.getMonth() + 1).padStart(2, '0');
+      }
+    }
     else { ttl = 'ยอดขายสุทธิรายวัน'; data = []; const off = Math.round((new Date(RS.from + 'T12:00:00') - new Date(prevRange(RS.from, RS.to)[0] + 'T12:00:00')) / 864e5); for (let d = RS.from; d <= RS.to; d = addDays(d, 1)) { const pd = addDays(d, -off); data.push({ l: d.slice(8) + '/' + d.slice(5, 7), t: thDate(d), v: (A.days[d] || { net: 0 }).net, p: (P.days[pd] || { net: 0 }).net }); if (data.length > 400) break; } }
     $('#cht', el).textContent = ttl;
-    $('#chart', el).innerHTML = barChart(data, { curName: single() ? 'วันนี้ที่เลือก' : 'ช่วงนี้', prevName: single() ? 'วันก่อนหน้า' : 'ช่วงก่อนหน้า (จำนวนวันเท่ากัน)' });
+    $('#chart', el).innerHTML = barChart(data, { curName: single() ? 'วันนี้ที่เลือก' : 'ช่วงนี้', prevName: single() ? 'วันก่อนหน้า' : yoy ? 'ช่วงเดียวกันปีก่อน' : 'ช่วงก่อนหน้า (จำนวนวันเท่ากัน)' })
+      + (!single() && !monthly() && Object.keys(A.months).length ? `<div class="tiny muted center">เดือนที่มีแต่ยอดรวมทั้งเดือน (นำเข้า) ไม่มีแท่งรายวัน — ดูกราฟรายเดือนได้โดยเลือกช่วง 12 เดือน/ปี</div>` : '');
     // ไฮไลต์: สินค้าขายดี 5 อันดับ · ช่องทางชำระ · ช่วงเวลาขายดี
     const top = Object.values(A.prod).filter(p => p.amt > 0 && !p.pass).sort((a, b) => b.amt - a.amt).slice(0, 5).map(p => ({ n: p.name, v: p.amt, s: `${Math.round(p.qty * 1000) / 1000} ชิ้น${vc ? ' · กำไร ' + money(p.amt - p.cost, 0) : ''}` }));
     const pays = Object.entries(A.pay).filter(([, p]) => p.amt > 0).sort((a, b) => b[1].amt - a[1].amt).map(([k2, p]) => ({ n: PAYNAME[k2] || k2, v: p.amt, c: PAYCOLOR[k2] || '#999' }));
@@ -143,13 +196,20 @@ function reportsRange(el) {
     $('#hl', el).innerHTML = `<div class="card"><h3>🏆 สินค้าขายดี</h3>${hBars(top, '#E53935')}<a href="#" class="small" id="morep">ดูทั้งหมด ›</a></div>
       <div class="card"><h3>💳 ช่องทางชำระ</h3>${pays.length ? mixBar(pays) : '<div class="empty small">ไม่มีข้อมูล</div>'}${hrs.length ? `<div class="kv small" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><span>⏰ ช่วงขายดีที่สุด</span><b>${hrs[0][0]}:00–${String(+hrs[0][0] + 1).padStart(2, '0')}:00 น.</b></div>` : ''}${A.bills ? `<div class="kv small"><span>🧾 สินค้าต่อบิล (เฉลี่ย)</span><b>${(R.filter(o => o.status !== 'refund').reduce((s, o) => s + num(o.itemCount), 0) / A.bills).toFixed(1)} ชิ้น</b></div>` : ''}</div>`;
     $('#morep', el).onclick = e => { e.preventDefault(); RS.tab = 'prod'; $$('#tabs button', el).forEach(x => x.classList.toggle('on', x.dataset.t === 'prod')); drawTab(); $('#tabs', el).scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    const tb0 = $('#tabs [data-t="day"]', el); if (tb0) tb0.textContent = monthly() ? 'ตามเดือน' : 'ตามวัน';
     drawTab();
   };
   const drawTab = () => {
     const tab = RS.tab; let h = '';
     if (tab === 'day') {
-      tableRows = [['วันที่', 'บิล', 'ยอดขายสุทธิ'].concat(vc ? ['ต้นทุน', 'กำไร'] : [])].concat(Object.keys(A.days).sort().reverse().map(d => [d, A.days[d].bills, A.days[d].net].concat(vc ? [A.days[d].cost, A.days[d].net - A.days[d].cost] : [])));
-      h = tbl(tableRows, r => [thDate(r[0])].concat(r.slice(1).map((v, i) => i === 0 ? v : money(v))));
+      let dl = Object.keys(A.days).map(d => [d, A.days[d].bills || (A.days[d].imp ? 'นำเข้า' : 0), A.days[d].net, A.days[d].cost])
+        .concat(Object.values(A.months).map(m => [m.ym, 'รายเดือน', m.net, m.cost])).sort((a2, b) => b[0].localeCompare(a2[0]));
+      if (monthly()) {   // ช่วงยาว: รวมเป็นรายเดือน
+        const g = {}; dl.forEach(r => { const ym = r[0].slice(0, 7), x = g[ym] || (g[ym] = [ym, 0, 0, 0, new Set()]); if (typeof r[1] === 'number') x[1] += r[1]; else x[4].add(r[1]); x[2] += r[2]; x[3] += r[3]; });
+        dl = Object.values(g).sort((a2, b) => b[0].localeCompare(a2[0])).map(x => [x[0], x[1] || (x[4].has('รายเดือน') ? 'รายเดือน' : 'นำเข้า'), x[2], x[3]]);
+      }
+      tableRows = [[monthly() ? 'เดือน' : 'วันที่', 'บิล', 'ยอดขายสุทธิ'].concat(vc ? ['ต้นทุน', 'กำไร'] : [])].concat(dl.map(r => [r[0], r[1], r[2]].concat(vc ? [r[3], r[2] - r[3]] : [])));
+      h = tbl(tableRows, r => [r[0].length === 7 ? (monthly() ? '' : 'ทั้งเดือน ') + TH_MF[+r[0].slice(5, 7) - 1] + ' ' + (+r[0].slice(0, 4) + 543) : thDate(r[0])].concat(r.slice(1).map((v, i) => i === 0 ? (typeof v === 'string' ? `<span class="tag gray" style="white-space:nowrap">${v}</span>` : v) : money(v, vc ? 2 : 0))));
     } else if (tab === 'prod') {
       const list = Object.values(A.prod).sort((a, b) => b.amt - a.amt);
       tableRows = [['สินค้า', 'หมวด', 'จำนวน', 'ยอดขาย'].concat(vc ? ['ต้นทุน', 'กำไร'] : [])].concat(list.map(p => [p.name, p.cat, round3(p.qty), p.amt].concat(vc ? [p.cost, p.amt - p.cost] : [])));
@@ -175,7 +235,7 @@ function reportsRange(el) {
   const load = async force => {
     $('#kpi', el).innerHTML = '<div class="card center"><span class="spin dark"></span></div>';
     const [pf, pt] = prevRange(RS.from, RS.to);
-    try { [rows, prows] = await Promise.all([fetchOrders(RS.from, RS.to, force), fetchOrders(pf, pt).catch(() => [])]); } catch (e) { rows = []; prows = []; toast(e.message, 1); }
+    try { [rows, prows, imp, pimp] = await Promise.all([fetchOrders(RS.from, RS.to, force), fetchOrders(pf, pt).catch(() => []), importedSales(RS.from, RS.to), importedSales(pf, pt)]); } catch (e) { rows = []; prows = []; toast(e.message, 1); }
     if (!el.isConnected) return;
     const staffs = [...new Set(rows.map(o => o.cashierName || o.cashier))];
     $('#sf', el).innerHTML = all && staffs.length > 1 ? `<select class="in" id="st" style="margin-bottom:10px"><option value="">พนักงานทั้งหมด</option>${staffs.map(x => `<option ${RS.staff === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>` : '';

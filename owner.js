@@ -36,9 +36,11 @@ VIEWS.home = async el => {
   if (own) {
     const kpi = $('#kpi', el);
     kpi.innerHTML = `<div class="kpi3">${['วันนี้', 'เดือนนี้', 'เดือนก่อน'].map(n => `<div class="stat"><div class="k">ยอดขาย${n}</div><div class="v"><span class="skel">000,000</span></div></div>`).join('')}</div>`;
-    dailySummary(lm0, t).then(days => {
+    Promise.all([dailySummary(lm0, t), window.importedSales ? importedSales(lm0, lmEnd).catch(() => null) : null]).then(([days, imL]) => {
       if (!$('#kpi', el)) return;
       const T = sumDays(days, t, t), M = sumDays(days, m0, t), L = sumDays(days, lm0, lmEnd);
+      // เดือนก่อนไม่มีบิล/ยอดรายวัน แต่มียอดรายเดือนที่นำเข้า → ใช้ยอดรายเดือน
+      const lmM = imL && imL.months[0]; if (lmM && !L.net) Object.assign(L, { net: lmM.net, cost: lmM.cost, hasCost: lmM.hasCost, pass: 0, n: 1 });
       const dom = +t.slice(8, 10), Lsame = sumDays(days, lm0, lm0.slice(0, 8) + String(Math.min(dom, +lmEnd.slice(8))).padStart(2, '0'));
       const cmp = Lsame.net ? (M.net - Lsame.net) / Lsame.net * 100 : null;
       const vc = canStrict('viewCost');
@@ -81,8 +83,10 @@ function vatCard(box) {
     return;
   }
   box.innerHTML = `<div class="card"><div class="small muted">กำลังคำนวณยอดเทียบเกณฑ์ VAT…</div></div>`;
-  dailySummary(y + '-01-01', y + '-12-31').then(days => {
-    const s = sumDays(days, y + '-01-01', t), counted = Math.max(0, s.net - s.pass - s.exempt);
+  Promise.all([dailySummary(y + '-01-01', y + '-12-31'), window.importedSales ? importedSales(y + '-01-01', y + '-12-31').catch(() => null) : null]).then(([days, im]) => {
+    const s = sumDays(days, y + '-01-01', t);
+    const mo = im ? im.months.filter(m => m.ym + '-01' <= t) : []; s.net += mo.reduce((a, m) => a + m.net, 0);   // เดือนที่มีแต่ยอดรายเดือนที่นำเข้า
+    const counted = Math.max(0, s.net - s.pass - s.exempt);
     const doy = Math.max(1, Math.round((new Date(t) - new Date(y + '-01-01')) / 864e5) + 1), proj = counted / doy * 365;
     const pct = counted / 1.8e6 * 100, reviewed = v.status === 'reviewed' && String(v.reviewedYear) === String(y);
     const color = reviewed ? 'var(--blue)' : pct >= 100 ? 'var(--red)' : pct >= 80 || proj >= 1.8e6 ? 'var(--amber)' : 'var(--green)';
@@ -90,7 +94,7 @@ function vatCard(box) {
     box.innerHTML = `<div class="card" style="border-left:5px solid ${color}"><div class="row"><div class="grow small">รายรับปี ${y + 543} เทียบเกณฑ์จด VAT 1.8 ล้าน</div><b class="small">${pct.toFixed(0)}%</b><button class="btn ghost sm" style="margin-left:8px" onclick="vatDlg()">สถานะ / วิธีปิด</button></div>
       <div class="prog" style="margin-top:6px"><i style="width:${Math.min(100, pct)}%;background:${color}"></i></div>
       <div class="tiny" style="margin-top:6px">${msg}</div>
-      <div class="tiny muted">นับ ${money(counted, 0)} = ยอดขาย ${money(s.net, 0)}${s.pass ? ` − เงินรับแทน (โอน/เติมเงิน/บิล) ${money(s.pass, 0)}` : ''}${s.exempt ? ` − สินค้ายกเว้น VAT ${money(s.exempt, 0)}` : ''}</div></div>`;
+      <div class="tiny muted">นับ ${money(counted, 0)} = ยอดขาย ${money(s.net, 0)}${mo.length ? ` (รวมยอดรายเดือนที่นำเข้า ${mo.length} เดือน)` : ''}${s.pass ? ` − เงินรับแทน (โอน/เติมเงิน/บิล) ${money(s.pass, 0)}` : ''}${s.exempt ? ` − สินค้ายกเว้น VAT ${money(s.exempt, 0)}` : ''}</div></div>`;
   }).catch(() => { box.innerHTML = ''; });
 }
 async function vatDlg() {

@@ -222,7 +222,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.47';
+const APP_VER = '2.6.48';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -2761,21 +2761,21 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.47"></script>
-<script src="logic.js?v=2.6.47"></script>
-<script src="cache.js?v=2.6.47"></script>
-<script src="offline.js?v=2.6.47"></script>
-<script src="scanner.js?v=2.6.47"></script>
-<script src="printer.js?v=2.6.47"></script>
-<script src="pos.js?v=2.6.47"></script>
-<script src="idle.js?v=2.6.47"></script>
-<script src="display.js?v=2.6.47"></script>
-<script src="reports.js?v=2.6.47"></script>
-<script src="inventory.js?v=2.6.47"></script>
-<script src="people.js?v=2.6.47"></script>
-<script src="quality.js?v=2.6.47"></script>
-<script src="services.js?v=2.6.47"></script>
-<script src="owner.js?v=2.6.47"></script>
+<script src="qr.js?v=2.6.48"></script>
+<script src="logic.js?v=2.6.48"></script>
+<script src="cache.js?v=2.6.48"></script>
+<script src="offline.js?v=2.6.48"></script>
+<script src="scanner.js?v=2.6.48"></script>
+<script src="printer.js?v=2.6.48"></script>
+<script src="pos.js?v=2.6.48"></script>
+<script src="idle.js?v=2.6.48"></script>
+<script src="display.js?v=2.6.48"></script>
+<script src="reports.js?v=2.6.48"></script>
+<script src="inventory.js?v=2.6.48"></script>
+<script src="people.js?v=2.6.48"></script>
+<script src="quality.js?v=2.6.48"></script>
+<script src="services.js?v=2.6.48"></script>
+<script src="owner.js?v=2.6.48"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
