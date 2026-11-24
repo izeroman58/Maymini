@@ -9,7 +9,7 @@ VIEWS.customers = async el => {
   el.innerHTML = vhead('ฐานลูกค้า', `<button class="btn sm" id="nw">${I(IC.userplus, 18)} เพิ่ม</button>`, 'more') + `
     <div class="search"><svg class="s" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input class="in" id="q" placeholder="ค้นหาชื่อ / เบอร์โทร"></div>
     <div class="chips" style="margin-top:10px">${[['recent', 'มาล่าสุด'], ['spent', 'ยอดซื้อสูงสุด'], ['points', 'แต้มมากสุด'], ['credit', 'ค้างชำระ']].map(([k, n]) => `<button class="chip ${k === sort ? 'on' : ''}" data-s="${k}">${n}</button>`).join('')}</div>
-    <div class="grid3" id="sm" style="margin-bottom:10px"></div><div class="list" id="cl"><div class="empty"><span class="spin dark"></span></div></div>`;
+    <div id="rkb"></div><div class="grid3" id="sm" style="margin-bottom:10px"></div><div class="list" id="cl"><div class="empty"><span class="spin dark"></span></div></div>`;
   const draw = () => {
     const all = S.customers || [], t = norm(q);
     let res = all.filter(c => !t || norm(c.name + c.phone).includes(t));
@@ -18,6 +18,8 @@ VIEWS.customers = async el => {
     $('#sm', el).innerHTML = `<div class="stat center"><div class="k">ลูกค้า</div><div class="v">${all.length}</div></div><div class="stat center"><div class="k">ยอดค้างเชื่อรวม</div><div class="v" style="color:var(--amber)">${money(all.reduce((s, c) => s + Math.max(0, num(c.credit)), 0), 0)}</div></div><div class="stat center"><div class="k">แต้มคงค้าง</div><div class="v">${all.reduce((s, c) => s + num(c.points), 0).toLocaleString()}</div></div>`;
     $('#cl', el).innerHTML = res.slice(0, 200).map(c => `<div class="item" data-id="${esc(c.id)}"><div class="av">${esc(Array.from(c.name || '?')[0])}</div><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${esc(c.phone || '-')} · ${num(c.visits)} ครั้ง · ${num(c.points)} แต้ม${c.lastVisit ? ' · ล่าสุด ' + thDate(String(c.lastVisit).slice(0, 10)) : ''}</div></div><div class="right"><div class="num" style="font-weight:600">${baht(c.totalSpent)}</div>${num(c.credit) ? `<div class="tag amber">ค้าง ${money(c.credit)}</div>` : ''}</div></div>`).join('') || '<div class="empty">ไม่พบลูกค้า</div>';
     $$('#cl [data-id]', el).forEach(x => x.onclick = () => customerDetail(all.find(c => c.id === x.dataset.id)));
+    // หน้า ยอดซื้อสูงสุด / แต้มมากสุด → ปุ่มทำภาพอันดับ
+    $('#rkb', el).innerHTML = sort === 'spent' || sort === 'points' ? `<button class="btn block rkbtn" onclick="go('rank','${sort}')">🏆 ทำภาพอันดับลูกค้า${sort === 'spent' ? 'ยอดซื้อสูงสุด' : 'แต้มสูงสุด'}</button>` : '';
   };
   $('#q', el).oninput = e => { q = e.target.value; draw(); };
   $$('[data-s]', el).forEach(b => b.onclick = () => { sort = b.dataset.s; $$('[data-s]', el).forEach(x => x.classList.toggle('on', x === b)); draw(); });
@@ -76,13 +78,13 @@ VIEWS.staff = async (el, tab) => {
         ? `<select class="in" data-k="${k}" style="width:auto;min-height:36px;padding:4px 8px"><option value="y">✅ อนุญาต</option><option value="pin">🔒 ใส่รหัสเจ้าของ</option><option value="n">⛔ ไม่อนุญาต</option></select>`
         : `<input type="checkbox" data-k="${k}" ${r.perms[k] ? 'checked' : ''} style="width:22px;height:22px">`}</div>`).join('')}
       <div class="row" style="padding:10px 0;gap:10px"><span class="grow small">อุปกรณ์ใหม่ที่พนักงานเข้าใช้ ต้องให้เจ้าของอนุมัติก่อน</span><input type="checkbox" id="da" ${S.settings.deviceApproval === 'Y' ? 'checked' : ''} style="width:22px;height:22px"></div>
-      <div class="row" style="padding:6px 0;gap:10px"><span class="grow small">ล็อกหน้าจอ/ออกจากระบบอัตโนมัติ เมื่อไม่ได้ใช้งาน (นาที, 0 = ปิด)<div class="tiny muted">ใช้กับเจ้าของและพนักงานที่ไม่ได้อยู่ในโหมดพนักงานขาย</div></span><input class="in" type="number" id="il" value="${esc(cfg('idleLock', '10'))}" style="width:80px"></div>
+      <div class="tiny muted" style="padding:6px 0">ออกจากระบบอัตโนมัติ ตั้งได้ที่ เพิ่มเติม › ตั้งค่า › ร้าน · การเชื่อมต่อ</div>
       <button class="btn block green" id="sv" style="margin-top:8px">บันทึกสิทธิ์</button></div>
       <div class="card small"><b>แนะนำสำหรับร้าน:</b> เปิด “โหมดพนักงานขาย” · ต้นทุน/รายงาน = ไม่อนุญาต · แก้ไขสินค้า แก้ราคา คืนเงิน = ใส่รหัสเจ้าของ · ตรวจนับสต็อก = อนุญาต</div>`;
     $$('select[data-k]', sb).forEach(x => x.value = v2s(r.perms[x.dataset.k]));
     $('#sv', sb).onclick = async () => {
       const o = {}; $$('[data-k]', sb).forEach(c => o[c.dataset.k] = c.type === 'checkbox' ? c.checked : c.value === 'pin' ? 'pin' : c.value === 'y');
-      try { busy(1); await saveSetting('perms', o); await saveSetting('deviceApproval', $('#da', sb).checked ? 'Y' : 'N'); await saveSetting('idleLock', String(Math.max(0, num($('#il', sb).value)))); await loadSettings(); busy(0); toast('บันทึกสิทธิ์แล้ว — พนักงานจะเห็นผลเมื่อเปิดแอปครั้งถัดไป'); } catch (e) { busy(0); toast(e.message, 1); }
+      try { busy(1); await saveSetting('perms', o); await saveSetting('deviceApproval', $('#da', sb).checked ? 'Y' : 'N'); await loadSettings(); busy(0); toast('บันทึกสิทธิ์แล้ว — พนักงานจะเห็นผลเมื่อเปิดแอปครั้งถัดไป'); } catch (e) { busy(0); toast(e.message, 1); }
     };
   } else if (tab === 'clock') {
     sb.innerHTML = `<div class="card center"><div class="small muted">${esc(S.user.name)}</div><div class="disp" style="font-size:22px;margin:6px 0">${S.shift ? 'กำลังทำงาน ตั้งแต่ ' + esc(S.shift.inAt.slice(11, 16)) + ' น.' : 'ยังไม่ได้ลงเวลาเข้างาน'}</div><button class="btn ${S.shift ? '' : 'green'}" id="ck" style="min-width:200px">${I(IC.clock, 18)} ${S.shift ? 'ลงเวลาออกงาน' : 'ลงเวลาเข้างาน'}</button></div><div id="rp"></div><div id="sl"></div>`;
@@ -156,4 +158,147 @@ VIEWS.categories = async el => {
   const move = async (i, d) => { const a = cats.splice(i, 1)[0]; cats.splice(i + d, 0, a); try { busy(1); await api('upsert', { table: 'Categories', rows: cats.map((c, k) => ({ name: c.name, color: c.color, sort: String(k + 1) })) }); busy(0); go('categories'); } catch (e) { busy(0); toast(e.message, 1); } };
   $$('[data-up]', el).forEach(b => b.onclick = () => move(+b.dataset.up, -1));
   $$('[data-dn]', el).forEach(b => b.onclick = () => move(+b.dataset.dn, 1));
+};
+
+/* ---------- 🏆 ภาพอันดับลูกค้า (แต้มสูงสุด / ยอดซื้อสูงสุด) ----------
+   วาดเป็นภาพ 1024×1536 บนพื้นหลังแม่แบบของร้าน (rank-bg.jpg — เปลี่ยนได้) · ดาวน์โหลด/พิมพ์/เปิดเต็มจอได้ */
+const RANK_DEF = { type: 'points', n: 15, title: '', sub: '', prefix: true, first: true, font: 'kanit', foot: '', bgId: '' };
+const RANK_FONTS = { kanit: ['Kanit', 'kanit'], prompt: ['Prompt', 'prompt'], mitr: ['Mitr', 'mitr'] };
+const rankCfg = () => ({ ...RANK_DEF, ...cfg('rankCfg', {}), ...LS.get('rankCfgLocal', {}) });
+function rankName(c, o) {
+  let n = String(c.name || '').trim().replace(/^คุณ\s*/, ''); if (o.first) n = n.split(/\s+/)[0] || n;
+  return (o.prefix ? 'คุณ' : '') + n;
+}
+async function rankDraw(cv, list, o) {
+  const W = 1024, H = 1536, x = cv.getContext('2d'); cv.width = W; cv.height = H;
+  const fam = (RANK_FONTS[o.font] || RANK_FONTS.kanit)[0], F = (w, s) => `${w} ${s}px "${fam}","Prompt","Noto Sans Thai",sans-serif`;
+  if (window.IdleFont) IdleFont.ensure({ font: (RANK_FONTS[o.font] || RANK_FONTS.kanit)[1] });
+  try { await Promise.all([document.fonts.load(F(800, 60)), document.fonts.load(F(600, 40)), document.fonts.load(F(700, 40))]); await document.fonts.ready; } catch (e) { }
+  const img = src => new Promise((ok, no) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = no; i.src = src; });
+  let bg = null; try { bg = await img(o.bgId && window.AdFiles ? await AdFiles.url(o.bgId) : 'rank-bg.jpg'); } catch (e) { try { bg = await img('rank-bg.jpg'); } catch (e2) { } }
+  if (bg) { const s = Math.max(W / bg.width, H / bg.height); x.drawImage(bg, (W - bg.width * s) / 2, (H - bg.height * s) / 2, bg.width * s, bg.height * s); } else { x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); }
+  const rr = (X, Y, w, h, r) => { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); };
+  const fit = (t, max, size, w) => { let s = size; x.font = F(w, s); while (x.measureText(t).width > max && s > 12) { s -= 1; x.font = F(w, s); } return s; };
+  const GREEN = '#0E5A2B', LINE = '#1E8E3E', RED = '#D7262E', PILL = '#E4F5E7';
+  // โลโก้
+  try { const lg = await img(Brand.color()); const h = 190, w = Math.min(330, lg.width * h / lg.height); x.drawImage(lg, (W - w) / 2, 22, w, w * lg.height / lg.width); } catch (e) { }
+  // หัวข้อ
+  const N = list.length, unit = o.type === 'spent' ? 'บาท' : 'แต้ม';
+  const title = (o.title || `{n} อันดับลูกค้า${o.type === 'spent' ? 'ยอดซื้อสูงสุด' : 'แต้มสูงสุด'}`).replace(/\{n\}/g, N && N < o.n ? N : o.n);
+  const sub = o.sub || (o.type === 'spent' ? 'ขอบคุณที่อุดหนุนร้านเมย์เสมอมา' : 'สะสมแต้มทุกการช้อป');
+  x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillStyle = GREEN;
+  fit(title, 940, 84, 800); x.fillText(title, W / 2, 302);
+  const ss = fit(sub, 600, 42, 600); x.fillStyle = '#1B6B3A'; x.fillText(sub, W / 2, 356);
+  const sw = x.measureText(sub).width; x.strokeStyle = '#1B6B3A'; x.lineWidth = 4; x.lineCap = 'round';
+  [[W / 2 - sw / 2 - 150, W / 2 - sw / 2 - 30], [W / 2 + sw / 2 + 30, W / 2 + sw / 2 + 150]].forEach(([a, b]) => { x.beginPath(); x.moveTo(a, 356 - ss * .33); x.lineTo(b, 356 - ss * .33); x.stroke(); });
+  const val = c => num(o.type === 'spent' ? c.totalSpent : c.points);
+  const valTxt = c => Math.round(val(c)).toLocaleString('en-US');
+  // 3 อันดับแรก
+  const MED = { 1: ['#FFE27A', '#E6A800', '#8A5A00'], 2: ['#F2F4F7', '#AEB6C0', '#4B5563'], 3: ['#F7C08C', '#D9783A', '#7A3A12'] };
+  const pod = [[2, 45, 520, 288, 240, 200, 505, 50], [1, 343, 485, 334, 280, 512, 452, 60], [3, 688, 520, 290, 240, 828, 505, 50]];
+  pod.forEach(([r, X, Y, w, h, mx, my, mr]) => {
+    const c = list[r - 1]; if (!c) return;
+    // ริบบิ้น
+    x.fillStyle = '#E53935';
+    [[-1], [1]].forEach(([s]) => { x.beginPath(); x.moveTo(mx + s * mr * .15, my + mr * .4); x.lineTo(mx + s * mr * .95, my + mr * 1.65); x.lineTo(mx + s * mr * .62, my + mr * 1.45); x.lineTo(mx + s * mr * .5, my + mr * 1.85); x.lineTo(mx + s * mr * -.2, my + mr * .6); x.closePath(); x.fill(); });
+    // การ์ด
+    x.save(); x.shadowColor = 'rgba(0,0,0,.12)'; x.shadowBlur = 18; x.shadowOffsetY = 6; rr(X, Y, w, h, 30); x.fillStyle = '#fff'; x.fill(); x.restore();
+    rr(X, Y, w, h, 30); x.lineWidth = 7; x.strokeStyle = LINE; x.stroke();
+    // เหรียญ
+    const g = x.createRadialGradient(mx - mr * .35, my - mr * .4, mr * .1, mx, my, mr); g.addColorStop(0, MED[r][0]); g.addColorStop(1, MED[r][1]);
+    x.beginPath(); x.arc(mx, my, mr, 0, 7); x.fillStyle = g; x.fill(); x.lineWidth = mr * .1; x.strokeStyle = MED[r][2] + '88'; x.stroke();
+    x.beginPath(); x.arc(mx, my, mr * .78, 0, 7); x.lineWidth = mr * .05; x.strokeStyle = '#ffffffaa'; x.stroke();
+    if (r === 1) { x.fillStyle = '#D99A00'; x.beginPath(); const cy = my - mr * .55, cw = mr * .55; x.moveTo(mx - cw, cy); x.lineTo(mx - cw * .55, cy - cw * .55); x.lineTo(mx - cw * .3, cy - cw * .1); x.lineTo(mx, cy - cw * .75); x.lineTo(mx + cw * .3, cy - cw * .1); x.lineTo(mx + cw * .55, cy - cw * .55); x.lineTo(mx + cw, cy); x.closePath(); x.fill(); }
+    x.fillStyle = MED[r][2]; x.font = F(800, mr * 1.15); x.textAlign = 'center'; x.fillText(String(r), mx, my + mr * (r === 1 ? .52 : .4));
+    // ชื่อ + ค่า
+    x.fillStyle = '#111'; fit(rankName(c, o), w - 36, r === 1 ? 62 : 52, 700); x.fillText(rankName(c, o), X + w / 2, Y + (r === 1 ? 142 : 120));
+    const py = Y + h - (r === 1 ? 104 : 92), ph = r === 1 ? 80 : 70; rr(X + 18, py, w - 36, ph, ph / 2); x.fillStyle = PILL; x.fill();
+    const vt = valTxt(c), vs = fit(vt, w - 130, r === 1 ? 62 : 54, 800), vw = x.measureText(vt).width; x.font = F(700, vs * .6); const uw = x.measureText(' ' + unit).width;
+    const sx = X + w / 2 - (vw + uw) / 2; x.textAlign = 'left'; x.fillStyle = RED; x.font = F(800, vs); x.fillText(vt, sx, py + ph / 2 + vs * .36); x.font = F(700, vs * .6); x.fillText(' ' + unit, sx + vw, py + ph / 2 + vs * .36);
+  });
+  // อันดับ 4 เป็นต้นไป (เรียงลงตามคอลัมน์)
+  const rest = list.slice(3), cols = rest.length > 14 ? 3 : 2, rows = Math.ceil(rest.length / cols);
+  if (rest.length) {
+    const top = 800, bottom = 1258, gap = 18, cw = (984 - gap * (cols - 1)) / cols, step = Math.min(76, (bottom - top) / rows), h = step * .84;
+    // ขนาดตัวอักษร: ให้ยอด/แต้มที่ยาวที่สุดพอดี และเหลือที่ให้ชื่ออย่างน้อย 40% ของช่อง
+    let fs = Math.min(38, h * .56); const bw0 = Math.min(82, cw * .2);
+    const need = f => { x.font = F(800, f); const vw = Math.max(...rest.map(c => x.measureText(valTxt(c)).width)); x.font = F(700, f * .62); return 8 + bw0 + h * .22 + 14 + 10 + vw + x.measureText(' ' + unit).width + 16; };
+    while (fs > 14 && cw - need(fs) < cw * .4) fs -= 1;
+    rest.forEach((c, i) => {
+      const col = Math.floor(i / rows), row = i % rows, X = 20 + col * (cw + gap), Y = top + row * step, rank = i + 4;
+      rr(X, Y, cw, h, h * .32); x.fillStyle = '#fff'; x.fill(); x.lineWidth = 3; x.strokeStyle = LINE; x.stroke();
+      const bw = Math.min(82, cw * .2); x.beginPath(); x.moveTo(X + 8 + h * .25, Y + 6); x.lineTo(X + 8 + bw, Y + 6); x.lineTo(X + 8 + bw + h * .22, Y + h / 2); x.lineTo(X + 8 + bw, Y + h - 6); x.lineTo(X + 8 + h * .25, Y + h - 6); x.arcTo(X + 8, Y + h - 6, X + 8, Y + h / 2, h * .25); x.arcTo(X + 8, Y + 6, X + 8 + h * .25, Y + 6, h * .25); x.closePath(); x.fillStyle = '#DDF2E1'; x.fill();
+      x.fillStyle = GREEN; x.textAlign = 'center'; x.font = F(800, fs); x.fillText(String(rank), X + 8 + bw / 2 + 4, Y + h / 2 + fs * .36);
+      const vt = valTxt(c); x.font = F(800, fs); const vw = x.measureText(vt).width; x.font = F(700, fs * .62); const uw = x.measureText(' ' + unit).width;
+      const vx = X + cw - 16 - uw - vw; x.textAlign = 'left'; x.fillStyle = RED; x.font = F(800, fs); x.fillText(vt, vx, Y + h / 2 + fs * .36); x.font = F(700, fs * .62); x.fillText(' ' + unit, vx + vw, Y + h / 2 + fs * .36);
+      x.fillStyle = '#111'; const nx = X + 8 + bw + h * .22 + 14, nmax = vx - nx - 10; fit(rankName(c, o), nmax, fs, 600); x.fillText(rankName(c, o), nx, Y + h / 2 + fs * .36);
+    });
+  }
+  if (!N) { x.fillStyle = '#888'; x.textAlign = 'center'; x.font = F(600, 40); x.fillText('ยังไม่มีข้อมูลลูกค้า', W / 2, 700); }
+  // ท้ายภาพ
+  const foot = (o.foot || 'ข้อมูล ณ วันที่ {date}').replace(/\{date\}/g, thDate(todayISO()));
+  x.textAlign = 'right'; x.fillStyle = '#333'; fit(foot, 215, 22, 600); x.fillText(foot, 1006, 1474);
+}
+VIEWS.rank = async (el, type) => {
+  if (!can('customers')) return ownerOnly(el);
+  const own = isOwner(); const o = rankCfg(); if (type === 'spent' || type === 'points') o.type = type;
+  el.innerHTML = vhead('อันดับลูกค้า (ภาพ)', '', 'customers') + `<div class="rkw"><div class="rkpv"><canvas id="rkc"></canvas><div class="center small muted" id="rkst" style="margin-top:6px"></div></div>
+    <div class="card rkset"><div class="seg" id="rkt" style="margin-bottom:10px"><button data-t="points">⭐ แต้มสูงสุด</button><button data-t="spent">💰 ยอดซื้อสูงสุด</button></div>
+      <div class="grid2"><label class="f"><span>จำนวนอันดับ</span><select class="in" id="rkn">${[3, 5, 10, 15, 20, 25, 30].map(n => `<option value="${n}">${n} อันดับ</option>`).join('')}</select></label>
+      <label class="f"><span>ฟอนต์</span><select class="in" id="rkf"><option value="kanit">Kanit</option><option value="prompt">Prompt</option><option value="mitr">Mitr</option></select></label></div>
+      <label class="f"><span>หัวข้อ ({n} = จำนวนอันดับ · เว้นว่าง = อัตโนมัติ)</span><input class="in" id="rkh" placeholder="{n} อันดับลูกค้าแต้มสูงสุด"></label>
+      <label class="f"><span>ข้อความรอง</span><input class="in" id="rks" placeholder="สะสมแต้มทุกการช้อป"></label>
+      <label class="f"><span>ข้อความท้ายภาพ ({date} = วันที่วันนี้)</span><input class="in" id="rkft" placeholder="ข้อมูล ณ วันที่ {date}"></label>
+      <label class="row small" style="gap:8px;margin:4px 0"><input type="checkbox" id="rkp"> เติม “คุณ” หน้าชื่อ</label>
+      <label class="row small" style="gap:8px;margin:4px 0 10px"><input type="checkbox" id="rk1"> แสดงเฉพาะชื่อต้น (ไม่แสดงนามสกุล)</label>
+      <div class="small" style="font-weight:600;margin-bottom:6px">ภาพพื้นหลัง</div>
+      <div class="row wrap" style="gap:8px"><label class="btn ghost sm">🖼 เปลี่ยนภาพพื้นหลัง<input type="file" id="rkbg" accept="image/*" hidden></label><button class="btn ghost sm" id="rkbd">ใช้พื้นหลังเริ่มต้น</button></div>
+      <div class="tiny muted" style="margin:4px 0 12px">แนะนำภาพแนวตั้ง 1024×1536 (2:3) ส่วนบนและล่างมีลวดลาย ตรงกลางเว้นว่าง</div>
+      <div class="grid2"><button class="btn green" id="rkdl">⬇ ดาวน์โหลด JPG</button><button class="btn" id="rksh" style="background:#1877F2">📤 แชร์ (Facebook/LINE)</button><button class="btn ghost" id="rkfs">⛶ เต็มจอ (แคปหน้าจอ)</button><button class="btn ghost" id="rkpng">⬇ PNG</button><button class="btn ghost" id="rkpr">🖨 พิมพ์</button><button class="btn ghost" id="rksv">${own ? '💾 บันทึกการตั้งค่า' : '💾 จำการตั้งค่าในเครื่องนี้'}</button></div>
+      <div class="tiny muted" style="margin-top:8px">โพสต์ Facebook: กด “ดาวน์โหลด JPG” หรือ “แชร์” (มือถือเลือกแอป Facebook ได้เลย) · หรือกด “เต็มจอ” แล้วแคปหน้าจอ (แตะ 1 ครั้งเพื่อปิด)</div></div></div>`;
+  const cv = $('#rkc', el);
+  const pick = () => { const all = (S.customers || []).filter(c => num(o.type === 'spent' ? c.totalSpent : c.points) > 0); all.sort((a, b) => num(o.type === 'spent' ? b.totalSpent : b.points) - num(o.type === 'spent' ? a.totalSpent : a.points)); return all.slice(0, o.n); };
+  let tm = 0, busyDraw = false, again = false;
+  const draw = async () => { if (busyDraw) { again = true; return; } busyDraw = true; const L = pick(); await rankDraw(cv, L, o); busyDraw = false; $('#rkst', el).textContent = `${L.length} คน${L.length < o.n ? ` (มีลูกค้าที่มี${o.type === 'spent' ? 'ยอดซื้อ' : 'แต้ม'}แค่ ${L.length} คน)` : ''}`; if (again) { again = false; draw(); } };
+  const soon = () => { clearTimeout(tm); tm = setTimeout(draw, 250); };
+  const sync = () => { $$('#rkt button', el).forEach(b => b.classList.toggle('on', b.dataset.t === o.type)); $('#rkh', el).placeholder = `{n} อันดับลูกค้า${o.type === 'spent' ? 'ยอดซื้อสูงสุด' : 'แต้มสูงสุด'}`; $('#rks', el).placeholder = o.type === 'spent' ? 'ขอบคุณที่อุดหนุนร้านเมย์เสมอมา' : 'สะสมแต้มทุกการช้อป'; };
+  $('#rkn', el).value = String(o.n); $('#rkf', el).value = o.font; $('#rkh', el).value = o.title; $('#rks', el).value = o.sub; $('#rkft', el).value = o.foot; $('#rkp', el).checked = o.prefix; $('#rk1', el).checked = o.first; sync();
+  $$('#rkt button', el).forEach(b => b.onclick = () => { o.type = b.dataset.t; sync(); draw(); });
+  $('#rkn', el).onchange = e => { o.n = +e.target.value; draw(); };
+  $('#rkf', el).onchange = e => { o.font = e.target.value; draw(); };
+  [['rkh', 'title'], ['rks', 'sub'], ['rkft', 'foot']].forEach(([id, k]) => $('#' + id, el).oninput = e => { o[k] = e.target.value.trim(); soon(); });
+  $('#rkp', el).onchange = e => { o.prefix = e.target.checked; draw(); };
+  $('#rk1', el).onchange = e => { o.first = e.target.checked; draw(); };
+  $('#rkbg', el).onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      busy(1, 'กำลังเตรียมภาพ...'); const im = await loadImg(URL.createObjectURL(f)), sc = Math.min(1, 1024 / im.width, 1536 / im.height), c2 = document.createElement('canvas');
+      c2.width = Math.round(im.width * sc); c2.height = Math.round(im.height * sc); const g = c2.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c2.width, c2.height); g.drawImage(im, 0, 0, c2.width, c2.height);
+      const du = c2.toDataURL('image/jpeg', .88);
+      if (S.apiUrl) { const up = await api('upload', { kind: 'ad', name: f.name, mime: 'image/jpeg', base64: du }); await AdFiles.put(up.fileId, du); o.bgId = up.fileId; }
+      else { o.bgId = ''; toast('โหมดทดลอง: ใช้ภาพนี้ชั่วคราว', 0); const u = URL.createObjectURL(await (await fetch(du)).blob()); window.AdFiles && (AdFiles.urls.__rk = u); o.bgId = '__rk'; }
+      busy(0); draw(); toast('เปลี่ยนพื้นหลังแล้ว — กดบันทึกการตั้งค่าเพื่อใช้ครั้งต่อไป');
+    } catch (er) { busy(0); toast(er.message, 1); }
+  };
+  $('#rkbd', el).onclick = () => { o.bgId = ''; draw(); };
+  const fname = ext => `อันดับลูกค้า_${o.type === 'spent' ? 'ยอดซื้อ' : 'แต้ม'}_${todayISO()}.${ext}`;
+  const jpg = () => new Promise(r => cv.toBlob(r, 'image/jpeg', .92));
+  $('#rkdl', el).onclick = async () => { download(fname('jpg'), await jpg()); toast('ดาวน์โหลดภาพ JPG แล้ว — โพสต์ Facebook ได้เลย'); };
+  $('#rkpng', el).onclick = () => cv.toBlob(b => download(fname('png'), b), 'image/png');
+  $('#rksh', el).onclick = async () => {
+    try {
+      const f = new File([await jpg()], fname('jpg'), { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'อันดับลูกค้า ร้านเมย์ มินิมาร์ท' });
+      else { download(fname('jpg'), f); toast('เครื่องนี้แชร์ตรงไม่ได้ — ดาวน์โหลดภาพให้แล้ว นำไปโพสต์ได้เลย', 0, 4000); }
+    } catch (e) { if (e.name !== 'AbortError') toast(e.message, 1); }
+  };
+  $('#rkpr', el).onclick = () => { const w = open('', '_blank'); if (!w) return toast('เบราว์เซอร์บล็อกหน้าต่างใหม่', 1); w.document.write(`<title>อันดับลูกค้า</title><style>@page{size:A4 portrait;margin:8mm}body{margin:0;text-align:center}img{max-width:100%;max-height:100vh}</style><img src="${cv.toDataURL('image/png')}" onload="setTimeout(()=>print(),200)">`); w.document.close(); };
+  // เต็มจอสำหรับแคปหน้าจอ: พื้นสีขาว ไม่มีปุ่มบังภาพ · แตะ 1 ครั้งเพื่อปิด
+  $('#rkfs', el).onclick = () => { const ov = document.createElement('div'); ov.className = 'rkfull'; ov.innerHTML = `<img src="${cv.toDataURL('image/jpeg', .95)}" alt="อันดับลูกค้า">`; ov.onclick = () => { ov.remove(); try { document.fullscreenElement && document.exitFullscreen(); } catch (e) { } }; document.body.appendChild(ov); try { ov.requestFullscreen && ov.requestFullscreen().catch(() => { }); } catch (e) { } toast('แคปหน้าจอได้เลย · แตะ 1 ครั้งเพื่อปิด', 0, 2200); };
+  $('#rksv', el).onclick = async () => {
+    const keep = { type: o.type, n: o.n, title: o.title, sub: o.sub, prefix: o.prefix, first: o.first, font: o.font, foot: o.foot, bgId: o.bgId === '__rk' ? '' : o.bgId };
+    if (!own) { LS.set('rankCfgLocal', keep); return toast('จำการตั้งค่าในเครื่องนี้แล้ว'); }
+    try { busy(1); LS.del('rankCfgLocal'); await saveSetting('rankCfg', keep); busy(0); toast('บันทึกแล้ว — ใช้ได้ทุกเครื่อง'); } catch (er) { busy(0); toast(er.message, 1); }
+  };
+  await loadCustomers(true).catch(() => { }); if (el.isConnected) draw();
 };

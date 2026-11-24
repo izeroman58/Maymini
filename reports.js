@@ -59,6 +59,23 @@ function aggregate(rows) {
   A.profit = A.net - A.cost;
   return A;
 }
+// กล่องรายละเอียดกราฟแท่ง: ชี้เมาส์/แตะแท่ง → ขึ้นทันที (ไม่ต้องรอ) · แท่งขยายขึ้นเล็กน้อย
+const BarTip = {
+  el: null, cur: null,
+  show(g, x, y) {
+    if (!this.el) { this.el = document.createElement('div'); this.el.className = 'bctip'; document.body.appendChild(this.el); }
+    if (this.cur !== g) { this.cur && this.cur.classList.remove('hov'); g.classList.add('hov'); this.cur = g; this.el.innerHTML = g.dataset.tip; }
+    const r = g.getBoundingClientRect(), t = this.el; t.style.display = 'block';
+    const w = t.offsetWidth, h = t.offsetHeight; let L = r.left + r.width / 2 - w / 2, T = r.top + (y == null ? 8 : 0) - h - 10;
+    if (y != null) T = Math.min(T, y - h - 14); L = Math.max(6, Math.min(innerWidth - w - 6, L)); if (T < 6) T = (y || r.top) + 18;
+    t.style.left = L + 'px'; t.style.top = T + 'px';
+  },
+  hide() { if (this.el) this.el.style.display = 'none'; this.cur && this.cur.classList.remove('hov'); this.cur = null; }
+};
+document.addEventListener('pointerover', e => { const g = e.target.closest && e.target.closest('.bch g.bg'); if (g && e.pointerType === 'mouse') BarTip.show(g, e.clientX, e.clientY); });
+document.addEventListener('pointermove', e => { if (e.pointerType !== 'mouse') return; const g = e.target.closest && e.target.closest('.bch g.bg'); if (g) BarTip.show(g, e.clientX, e.clientY); else if (BarTip.cur) BarTip.hide(); });
+document.addEventListener('pointerdown', e => { const g = e.target.closest && e.target.closest('.bch g.bg'); if (g) BarTip.show(g, e.clientX, e.clientY); else BarTip.hide(); }, true);
+addEventListener('scroll', () => BarTip.cur && BarTip.hide(), true);
 function barChart(data, opt = {}) {
   // แท่งบาง ปลายมน · ถ้ามี d.p = ช่วงก่อนหน้า วาดเป็นแท่งสีเทาจาง ๆ ข้างหลังเพื่อเทียบ
   const W = 760, H = opt.h || 220, pl = 54, pb = 34, pt = 10, hasP = data.some(d => d.p != null);
@@ -69,15 +86,16 @@ function barChart(data, opt = {}) {
   const bar = (x, w, v, fill) => { const h = (H - pt - pb) * Math.max(0, v) / top, y = H - pb - h, r = Math.min(4, w / 2, h); return h <= 0 ? '' : `<path d="M${x},${H - pb}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${H - pb}Z" fill="${fill}"/>`; };
   data.forEach((d, i) => {
     const x0 = pl + i * bw, w = Math.max(2, Math.min(hasP ? bw * .42 : bw * .62, 34)), cx = x0 + bw / 2;
-    const tip = `${esc(d.t)}: ${money(d.v)}${d.p != null ? ` · ${esc(opt.prevName || 'ช่วงก่อน')} ${money(d.p)}` : ''}`;
-    g += `<g><title>${tip}</title><rect x="${x0}" y="${pt}" width="${bw}" height="${H - pt - pb}" fill="transparent"/>`;
+    const ch = d.p != null && d.p ? (d.v - d.p) / Math.abs(d.p) * 100 : null;
+    const tip = `<b>${esc(d.t)}</b><div><i style="background:${col}"></i>${esc(opt.curName || 'ยอด')} <b>${money(d.v)}</b></div>${d.p != null ? `<div><i style="background:#C9CED4"></i>${esc(opt.prevName || 'ช่วงก่อน')} ${money(d.p)}</div>${ch != null ? `<div class="${ch >= 0 ? 'up' : 'dn'}">${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch).toFixed(1)}%</div>` : ''}` : ''}`;
+    g += `<g class="bg" data-tip="${esc(tip)}"><rect class="hit" x="${x0}" y="${pt}" width="${bw}" height="${H - pt - pb}" fill="transparent"/>`;
     if (hasP) g += bar(cx - w - 1, w, d.p || 0, '#D5D9DE') + bar(cx + 1, w, d.v, col);
     else g += bar(cx - w / 2, w, d.v, col);
     g += '</g>';
     if (data.length <= 16 || i % Math.ceil(data.length / 16) === 0) g += `<text x="${cx}" y="${H - pb + 14}" text-anchor="middle" font-size="10.5" fill="#666">${esc(d.l)}</text>`;
   });
   const leg = hasP ? `<div class="row tiny muted" style="gap:14px;justify-content:center;margin-top:2px"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${col};vertical-align:-1px"></i> ${esc(opt.curName || 'ช่วงนี้')}</span><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#D5D9DE;vertical-align:-1px"></i> ${esc(opt.prevName || 'ช่วงก่อน')}</span></div>` : '';
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${g}</svg>${leg}`;
+  return `<div class="bch"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${g}</svg></div>${leg}`;
 }
 // แถบแนวนอน (อันดับ) — ชื่อ + แท่ง + ตัวเลข
 function hBars(list, color) {

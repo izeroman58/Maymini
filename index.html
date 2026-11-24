@@ -160,6 +160,24 @@ body.navdock #app{padding-left:min(330px,86vw)}body.navdock .nav{left:min(330px,
 .nschip:active,.nschip.on{box-shadow:inset 0 0 0 2px var(--green);background:#F2FBF3}.nschip i{font-style:normal;font-size:11px;font-weight:700;color:#1F5FBF;background:#E8F0FD;border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:1px}
 .nsft{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
 @media (min-width:700px){.nschips{display:grid;grid-template-columns:1fr 1fr}}
+.rkbtn{margin-bottom:10px;background:linear-gradient(90deg,#E53935,#F57C00)}
+.rkw{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}.rkpv canvas{width:100%;max-width:560px;display:block;margin:0 auto;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.12);background:#fff}
+@media (min-width:900px){.rkw{grid-template-columns:minmax(0,560px) minmax(300px,1fr)}.rkset{position:sticky;top:10px}}
+.rkfull{position:fixed;inset:0;z-index:300;background:#fff;display:flex;align-items:center;justify-content:center;cursor:zoom-out}.rkfull img{width:100%;height:100%;object-fit:contain}
+.bch g.bg path{transition:transform .14s ease;transform-box:fill-box;transform-origin:50% 100%}.bch g.bg.hov path{transform:scale(1.18,1.05)}.bch g.bg.hov .hit{fill:rgba(0,0,0,.045)}.bch g.bg{cursor:pointer}
+.bctip{position:fixed;z-index:400;display:none;pointer-events:none;background:#1F2328;color:#fff;border-radius:10px;padding:8px 11px;font-size:13px;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:260px}.bctip i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:0}.bctip .up{color:#7EE29A;font-weight:700}.bctip .dn{color:#FF8A80;font-weight:700}
+.thdbtn{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;cursor:pointer;color:var(--ink)}.thdbtn svg{flex:none;opacity:.55}
+.thcalbg{position:fixed;inset:0;z-index:350;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center}.thcalbg.pop{background:transparent;display:block}
+.thcal{background:#fff;width:100%;max-width:420px;border-radius:18px 18px 0 0;padding:12px 12px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -6px 30px rgba(0,0,0,.18);user-select:none}.thcalbg.pop .thcal{position:fixed;width:320px;border-radius:14px;box-shadow:0 10px 34px rgba(0,0,0,.22)}
+.thch{display:flex;align-items:center;gap:6px;margin-bottom:6px}.thch button{all:unset;cursor:pointer;border-radius:10px;padding:8px 12px;font-size:20px;line-height:1}.thch button:hover{background:#F2F2F0}.thch .thmy{flex:1;text-align:center;font-size:17px;font-weight:700}.thch .thmy span{font-size:12px;color:var(--ink2)}
+.thwk,.thgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}.thwk span{font-size:12.5px;color:var(--ink2);padding:4px 0;font-weight:600}.thwk .sun{color:var(--red)}
+.thgrid button{all:unset;cursor:pointer;height:40px;border-radius:10px;font-size:16px;text-align:center}.thgrid button:hover{background:#F2F2F0}.thgrid button.tdy{box-shadow:inset 0 0 0 1.5px var(--red);color:var(--red);font-weight:700}.thgrid button.sel{background:var(--red);color:#fff;font-weight:700}.thgrid button:disabled{opacity:.25;cursor:default}
+.thyr{display:flex;align-items:center;justify-content:center;gap:16px;margin:4px 0 8px;font-size:16px}.thyr button{all:unset;cursor:pointer;padding:6px 14px;font-size:20px;border-radius:10px}.thyr button:hover{background:#F2F2F0}
+.thmon{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.thmon button{all:unset;cursor:pointer;text-align:center;padding:11px 4px;border-radius:10px;background:#F6F6F4;font-size:14.5px}.thmon button.sel{background:var(--red);color:#fff;font-weight:700}
+.thft{display:flex;gap:6px;margin-top:8px}.thft button{all:unset;cursor:pointer;padding:8px 14px;border-radius:10px;font-weight:600;color:var(--red);font-size:14.5px}.thft button:hover{background:#FDECEC}
+.drw .di,.drw .dg,.mdrw .di,.mdrw .dg{position:relative}.di.drag::after,.dg.one.drag::after,.dgrp.drag>.dg::after{content:'';position:absolute;left:10px;right:10px;bottom:3px;height:3px;border-radius:2px;background:var(--red);transform-origin:left;animation:rnfill 2.55s linear forwards}
+@keyframes rnfill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.drn{display:flex;gap:6px;align-items:center;padding:6px 8px}.drn .in{flex:1;min-height:42px}.drn button{all:unset;cursor:pointer;font-size:20px;padding:6px 8px;border-radius:10px;line-height:1}.drn button:hover{background:#F2F2F0}
 .scanhost{margin:0 0 10px}.scanhost .scan.inline{margin:0}.scanlast{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:6px;font-size:15px}
 .scan video{flex:1;width:100%;object-fit:cover;min-height:0}.scan .cam{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}.scan.split .cam{flex:none;height:clamp(130px,22vh,190px)}.scan.split .frame{top:30%;height:54%;left:8%;right:8%}.scan.split .bot{display:none}.scan.split .last{display:none}.scan.split .bot{padding-bottom:10px}.scan .spane{flex:1;min-height:0;background:var(--bg,#f6f3f2);display:flex;flex-direction:column}
 .scan .frame{position:absolute;left:10%;right:10%;top:30%;height:22%;border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
@@ -222,7 +240,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.48';
+const APP_VER = '2.6.49';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -277,6 +295,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 /* ---------- icons ---------- */
 const I = (d, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const IC = {
+  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
   box: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
   scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M16 8v8"/>',
@@ -336,47 +355,84 @@ const Drawer = {
   sortBy(list, ids, idf) { if (!ids || !ids.length) return list; const pos = new Map(ids.map((x, i) => [x, i])); return list.map((x, i) => [x, i]).sort((a, b) => { const pa = pos.has(idf(a[0])) ? pos.get(idf(a[0])) : 1e3 + a[1], pb = pos.has(idf(b[0])) ? pos.get(idf(b[0])) : 1e3 + b[1]; return pa - pb; }).map(x => x[0]); },
   // วาดเมนูลงในกล่อง d (ใช้ทั้งลิ้นชักและหน้าเพิ่มเติม)
   build(d, o, inline) {
-    const key = o.key || 'm', openKey = 'drwOpen_' + key, ord = this.order(key);
+    const key = o.key || 'm', openKey = 'drwOpen_' + key, ord = this.order(key), names = LS.get('drwName_' + key, {}), mv = ord.mv || {};
+    d._o = o; d._inline = inline;
     let openG = LS.get(openKey, '');
     const gid = g => Array.isArray(g) ? 'i:' + this.kid(g) : 'g:' + g.t;
-    let groups = o.groups.filter(Boolean).map(g => Array.isArray(g) ? g : { ...g, items: this.sortBy(g.items.filter(Boolean), ord.i[g.t], it => this.kid(it)) }).filter(g => Array.isArray(g) || g.items.length);
+    // ย้ายรายการข้ามกลุ่ม (ที่ผู้ใช้ลากไว้) แล้วเรียงตามที่จัดไว้
+    const og = {}, byT = {};
+    let groups = o.groups.filter(Boolean).map(g => { if (Array.isArray(g)) return g; const x = { ...g, items: g.items.filter(Boolean) }; x.items.forEach(it => og[this.kid(it)] = g.t); byT[g.t] = x; return x; });
+    const inc = {}; Object.values(byT).forEach(g => { g.items = g.items.filter(it => { const t = mv[this.kid(it)]; if (t && t !== g.t && byT[t]) { (inc[t] || (inc[t] = [])).push(it); return false; } return true; }); });
+    Object.entries(inc).forEach(([t, l]) => byT[t].items = byT[t].items.concat(l));
+    groups = groups.map(g => Array.isArray(g) ? g : { ...g, items: this.sortBy(g.items, ord.i[g.t], it => this.kid(it)) }).filter(g => Array.isArray(g) || g.items.length);
     groups = this.sortBy(groups, ord.g, gid);
     const flat = []; const reg = it => { it._i = flat.length; flat.push(it); return it._i; };
-    const row = (it, sub) => { const [t, ic, , badge, on] = it; return `<button class="${sub ? 'di' : 'dg one'}${on ? ' on' : ''}" data-i="${reg(it)}" data-k="${esc(sub ? this.kid(it) : gid(it))}"><span class="dic">${I(ic || IC.dots, sub ? 19 : 20)}</span><span class="dt">${t}</span>${badge ? `<span class="dbad">${badge}</span>` : ''}</button>`; };
+    const lbl = (id, t) => names[id] ? esc(names[id]) : t;
+    const row = (it, sub) => { const [t, ic, , badge, on] = it, k = sub ? this.kid(it) : gid(it); return `<button class="${sub ? 'di' : 'dg one'}${on ? ' on' : ''}" data-i="${reg(it)}" data-k="${esc(k)}"${sub ? ` data-og="${esc(og[k] || '')}"` : ''}><span class="dic">${I(ic || IC.dots, sub ? 19 : 20)}</span><span class="dt">${lbl(k, t)}</span>${badge ? `<span class="dbad">${badge}</span>` : ''}</button>`; };
     d.innerHTML = (inline ? '' : `<div class="dh"><div class="dlogo">${o.head || ''}</div><button class="iconbtn dx" title="ปิดเมนู">${o.closeIcon === 'arrow' ? I('<path d="M15 6l-6 6 6 6"/>', 26) : I(IC.x, 24)}</button></div>`) +
-      `<div class="db">${groups.map(g => Array.isArray(g) ? row(g) : `<div class="dgrp${openG === g.t ? ' open' : ''}" data-k="${esc(gid(g))}" data-t="${esc(g.t)}"><button class="dg" data-g="${esc(g.t)}"><span class="dic">${I(g.ic || IC.dots, 20)}</span><span class="dt">${g.t}</span>${g.badge ? `<span class="dbad">${g.badge}</span>` : ''}<span class="dch">${I('<path d="M6 9l6 6 6-6"/>', 18)}</span></button><div class="dsub">${g.items.map(it => row(it, 1)).join('')}</div></div>`).join('')}</div>
-      <div class="dhint">กดค้างที่หัวข้อหรือรายการ แล้วลากเพื่อย้ายตำแหน่ง</div>` + (o.foot ? `<div class="df">${o.foot}</div>` : '');
+      `<div class="db">${groups.map(g => Array.isArray(g) ? row(g) : `<div class="dgrp${openG === g.t ? ' open' : ''}" data-k="${esc(gid(g))}" data-t="${esc(g.t)}"><button class="dg" data-g="${esc(g.t)}"><span class="dic">${I(g.ic || IC.dots, 20)}</span><span class="dt">${lbl('g:' + g.t, g.t)}</span>${g.badge ? `<span class="dbad">${g.badge}</span>` : ''}<span class="dch">${I('<path d="M6 9l6 6 6-6"/>', 18)}</span></button><div class="dsub">${g.items.map(it => row(it, 1)).join('')}</div></div>`).join('')}</div>
+      <div class="dhint">กดค้างแล้วลาก = ย้ายตำแหน่ง (รายการย่อยลากไปกลุ่มอื่นได้) · กดค้าง 3 วินาที = เปลี่ยนชื่อ</div>` + (o.foot ? `<div class="df">${o.foot}</div>` : '');
     const dx = $('.dx', d); if (dx) dx.onclick = () => this.close();
     // กาง/พับ: อ้างอิงชื่อกลุ่ม (ไม่ใช้ลำดับ → ไม่กางผิดกลุ่ม)
     $$('[data-g]', d).forEach(b => b.onclick = () => { if (d._dragged) return; const t = b.dataset.g; openG = openG === t ? '' : t; LS.set(openKey, openG); $$('.dgrp', d).forEach(x => x.classList.toggle('open', x.dataset.t === openG)); });
     $$('[data-i]', d).forEach(b => b.onclick = () => { if (d._dragged) return; const it = flat[+b.dataset.i]; if (!it) return; if (!inline && !this.isDock()) this.close(); else $$('[data-i]', d).forEach(x => x.classList.toggle('on', x === b)); setTimeout(() => it[2](), !inline && !this.isDock() ? 120 : 0); });
     this.dragify(d, key);
   },
-  // กดค้าง 0.45 วิ แล้วลาก: หัวข้อหลักย้ายระหว่างหัวข้อหลัก · รายการย่อยย้ายในกลุ่มเดียวกัน
+  // เปลี่ยนชื่อเมนู (จำในเครื่องนี้) · ว่าง = ใช้ชื่อเดิม
+  rename(d, key, b) {
+    const isG = b.classList.contains('dg') && !b.classList.contains('one'), id = isG ? 'g:' + b.dataset.g : b.dataset.k;
+    const names = LS.get('drwName_' + key, {}), cur = $('.dt', b).textContent;
+    const ed = document.createElement('div'); ed.className = 'drn';
+    ed.innerHTML = `<input class="in" maxlength="40" value="${esc(cur)}" data-nokp><button type="button" class="ok" title="บันทึก">✔️</button><button type="button" class="no" title="ยกเลิก">❌</button>${names[id] ? '<button type="button" class="rs" title="ใช้ชื่อเดิม">↺</button>' : ''}`;
+    b.style.display = 'none'; b.after(ed); const inp = $('input', ed); setTimeout(() => { inp.focus(); inp.select(); }, 30);
+    const done = () => { ed.remove(); b.style.display = ''; };
+    const save = v => { v = String(v || '').trim(); if (v) names[id] = v; else delete names[id]; LS.set('drwName_' + key, names); this.build(d, d._o, d._inline); toast(v ? 'เปลี่ยนชื่อแล้ว' : 'ใช้ชื่อเดิมแล้ว'); };
+    $('.ok', ed).onclick = () => save(inp.value);
+    $('.no', ed).onclick = done;
+    const rs = $('.rs', ed); if (rs) rs.onclick = () => save('');
+    inp.onkeydown = e => { if (e.key === 'Enter') save(inp.value); else if (e.key === 'Escape') done(); };
+  },
+  // กดค้าง 0.45 วิ แล้วลาก: หัวข้อหลักย้ายระหว่างหัวข้อหลัก · รายการย่อยย้ายในกลุ่มหรือข้ามกลุ่ม · กดค้างนิ่ง 3 วิ = เปลี่ยนชื่อ
   dragify(d, key) {
     const body = $('.db', d); if (!body) return;
-    let tm = null, st = null, drag = null;
-    const end = () => { clearTimeout(tm); tm = null; st = null; };
+    let tm = null, tm3 = null, st = null, drag = null;
+    const end = () => { clearTimeout(tm); clearTimeout(tm3); tm = tm3 = null; st = null; };
     body.addEventListener('pointerdown', e => {
+      if (e.target.closest('.drn')) return;
       const b = e.target.closest('.di, .dg'); if (!b) return;
       const item = b.classList.contains('di') ? b : (b.closest('.dgrp') || b);
       st = { x: e.clientX, y: e.clientY, id: e.pointerId };
-      tm = setTimeout(() => { drag = { el: item, par: item.parentElement, id: e.pointerId, y0: st.y }; item.classList.add('drag'); d._dragged = true; try { navigator.vibrate && navigator.vibrate(25); } catch (x) { } }, 450);
+      tm = setTimeout(() => { drag = { el: item, par: item.parentElement, id: e.pointerId, y0: st.y, moved: false }; item.classList.add('drag'); d._dragged = true; try { navigator.vibrate && navigator.vibrate(25); } catch (x) { } }, 450);
+      tm3 = setTimeout(() => {
+        if (!drag || drag.moved) return;
+        drag.el.classList.remove('drag'); drag = null; end(); try { navigator.vibrate && navigator.vibrate([30, 40, 30]); } catch (x) { }
+        this.rename(d, key, b); setTimeout(() => { d._dragged = false; }, 300);
+      }, 3000);
     });
     body.addEventListener('pointermove', e => {
       if (!drag) { if (st && (Math.abs(e.clientX - st.x) > 8 || Math.abs(e.clientY - st.y) > 8)) end(); return; }
       e.preventDefault();
-      const sib = [...drag.par.children].filter(x => x !== drag.el && (drag.el.classList.contains('di') ? x.classList.contains('di') : (x.classList.contains('dgrp') || x.classList.contains('one'))));
+      if (!drag.moved && st && (Math.abs(e.clientX - st.x) > 8 || Math.abs(e.clientY - st.y) > 8)) { drag.moved = true; clearTimeout(tm3); }
+      if (!drag.moved) return;
+      // เลื่อนจอเองเมื่อลากถึงขอบ
+      const sc = body.scrollHeight > body.clientHeight + 4 ? body : null, edge = e.clientY < 70 ? -12 : e.clientY > innerHeight - 70 ? 12 : 0;
+      if (edge) sc ? sc.scrollBy(0, edge) : scrollBy(0, edge);
+      const isDi = drag.el.classList.contains('di');
+      if (isDi) {   // รายการย่อย: ลากไปวางในกลุ่มอื่นได้
+        const hit = document.elementFromPoint(e.clientX, e.clientY), tg = hit && hit.closest('.dgrp');
+        if (tg && body.contains(tg) && !tg.contains(drag.el)) { tg.classList.add('open'); drag.par = $('.dsub', tg); }
+      }
+      const sib = [...drag.par.children].filter(x => x !== drag.el && (isDi ? x.classList.contains('di') : (x.classList.contains('dgrp') || x.classList.contains('one'))));
       const after = sib.find(x => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
-      if (after) drag.par.insertBefore(drag.el, after); else if (sib.length) sib[sib.length - 1].after(drag.el);
+      if (after) drag.par.insertBefore(drag.el, after); else if (sib.length) sib[sib.length - 1].after(drag.el); else if (drag.el.parentElement !== drag.par) drag.par.appendChild(drag.el);
     }, { passive: false });
     body.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
     const up = () => {
       end(); if (!drag) return;
       const el = drag.el; el.classList.remove('drag'); drag = null;
-      const ord = this.order(key);
+      const ord = this.order(key); ord.mv = ord.mv || {};
       ord.g = [...body.children].filter(x => x.dataset && x.dataset.k).map(x => x.dataset.k);
-      $$('.dgrp', body).forEach(g => { ord.i[g.dataset.t] = $$('.di', g).map(x => x.dataset.k); });
+      $$('.dgrp', body).forEach(g => { ord.i[g.dataset.t] = $$('.di', g).map(x => x.dataset.k); $$('.di', g).forEach(x => { if (x.dataset.og && x.dataset.og !== g.dataset.t) ord.mv[x.dataset.k] = g.dataset.t; else delete ord.mv[x.dataset.k]; }); });
       LS.set('drwOrd_' + key, ord);
       setTimeout(() => { d._dragged = false; }, 50);
     };
@@ -512,6 +568,66 @@ document.addEventListener('pointerdown', e => {
   if (e.pointerType === 'touch' || !numInput(e.target)) return;
   e.preventDefault(); openNumKp(e.target);
 }, true);
+/* ---------- ปฏิทินเลือกวันที่ภาษาไทย (พ.ศ.) ----------
+   ทุกช่อง <input type="date"> ในระบบ: แสดงเป็น "1 ม.ค. 2567" และเปิดปฏิทินไทยของระบบเอง
+   ค่าในช่องยังเป็น ค.ศ. (YYYY-MM-DD) เหมือนเดิม → โค้ดส่วนอื่นไม่ต้องแก้ */
+const ThaiDate = {
+  WK: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+  fmt(v) { if (!/^\d{4}-\d\d-\d\d$/.test(v || '')) return ''; return `${+v.slice(8)} ${TH_M[+v.slice(5, 7) - 1]} ${+v.slice(0, 4) + 543}`; },
+  enhance(inp) {
+    if (inp.dataset.thd) return; inp.dataset.thd = '1';
+    const b = document.createElement('button'); b.type = 'button'; b.className = (inp.className || 'in') + ' thdbtn';
+    const st = inp.getAttribute('style'); if (st) b.setAttribute('style', st);
+    const upd = () => { const t = ThaiDate.fmt(inp.value); b.innerHTML = `<span class="${t ? '' : 'muted'}">${t || 'เลือกวันที่'}</span>${I('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', 18)}`; b.disabled = inp.disabled; };
+    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    try { Object.defineProperty(inp, 'value', { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v); upd(); } }); } catch (e) { }
+    inp.addEventListener('change', upd); inp.addEventListener('input', upd);
+    inp.style.display = 'none'; inp.after(b); upd();
+    b.onclick = () => ThaiDate.open(inp, b);
+  },
+  open(inp, btn) {
+    $$('.thcalbg').forEach(x => x.remove());
+    const today = todayISO(), mn = inp.min || '', mx = inp.max || '';
+    let v = /^\d{4}-\d\d-\d\d$/.test(inp.value) ? inp.value : today, y = +v.slice(0, 4), m = +v.slice(5, 7) - 1, mode = 'd';
+    const bg = document.createElement('div'); bg.className = 'thcalbg'; const c = document.createElement('div'); c.className = 'thcal'; bg.appendChild(c);
+    const close = () => bg.remove();
+    const set = iso => { inp.value = iso; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); close(); };
+    const iso = (yy, mm, dd) => `${yy}-${String(mm + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+    const okD = x => (!mn || x >= mn) && (!mx || x <= mx);
+    const draw = () => {
+      let body = '';
+      if (mode === 'd') {
+        const f = new Date(y, m, 1).getDay(), n = new Date(y, m + 1, 0).getDate(); let cells = '';
+        for (let i = 0; i < f; i++) cells += '<span></span>';
+        for (let dd = 1; dd <= n; dd++) { const k = iso(y, m, dd); cells += `<button type="button" data-d="${k}" class="${k === inp.value ? 'sel' : ''}${k === today ? ' tdy' : ''}" ${okD(k) ? '' : 'disabled'}>${dd}</button>`; }
+        body = `<div class="thwk">${ThaiDate.WK.map((w, i) => `<span class="${i === 0 ? 'sun' : ''}">${w}</span>`).join('')}</div><div class="thgrid">${cells}</div>`;
+      } else {
+        body = `<div class="thyr"><button type="button" data-y="-1">‹</button><b>พ.ศ. ${y + 543}</b><button type="button" data-y="1">›</button></div><div class="thmon">${TH_MF.map((t, i) => `<button type="button" data-m="${i}" class="${i === m ? 'sel' : ''}">${t}</button>`).join('')}</div>`;
+      }
+      c.innerHTML = `<div class="thch"><button type="button" data-n="-1" aria-label="เดือนก่อน">‹</button><button type="button" class="thmy">${TH_MF[m]} ${y + 543} <span>▾</span></button><button type="button" data-n="1" aria-label="เดือนถัดไป">›</button></div>${body}
+        <div class="thft"><button type="button" data-t>วันนี้</button>${inp.required ? '' : '<button type="button" data-c>ล้าง</button>'}<span style="flex:1"></span><button type="button" data-x>ปิด</button></div>`;
+      $$('[data-n]', c).forEach(b => b.onclick = () => { if (mode === 'd') { m += +b.dataset.n; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } } else y += +b.dataset.n; draw(); });
+      $('.thmy', c).onclick = () => { mode = mode === 'd' ? 'm' : 'd'; draw(); };
+      $$('[data-y]', c).forEach(b => b.onclick = () => { y += +b.dataset.y; draw(); });
+      $$('[data-m]', c).forEach(b => b.onclick = () => { m = +b.dataset.m; mode = 'd'; draw(); });
+      $$('[data-d]', c).forEach(b => b.onclick = () => set(b.dataset.d));
+      $('[data-t]', c).onclick = () => okD(today) ? set(today) : toast('วันนี้อยู่นอกช่วงที่เลือกได้', 1);
+      const cl = $('[data-c]', c); if (cl) cl.onclick = () => set('');
+      $('[data-x]', c).onclick = close;
+    };
+    bg.onclick = e => { if (e.target === bg) close(); };
+    document.body.appendChild(bg); draw();
+    if (innerWidth >= 600) {   // จอใหญ่: ลอยใต้ช่อง · มือถือ: แผ่นล่างจอ
+      bg.classList.add('pop'); const r = btn.getBoundingClientRect(), w = c.offsetWidth, h = c.offsetHeight;
+      c.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px'; c.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+    }
+  },
+  scan() { this.t = 0; $$('input[type=date]:not([data-thd])').forEach(i => this.enhance(i)); },
+  start() { if (this.on) return; this.on = 1; new MutationObserver(() => { if (!this.t) this.t = setTimeout(() => this.scan(), 0); }).observe(document.body, { childList: true, subtree: true }); this.scan(); }
+};
+window.ThaiDate = ThaiDate;
+document.addEventListener('DOMContentLoaded', () => ThaiDate.start());
+if (document.readyState !== 'loading') setTimeout(() => ThaiDate.start(), 0);
 // เตรียมระบบเสียงตั้งแต่แตะจอครั้งแรก → สแกนครั้งแรกมีเสียงทันที ไม่หน่วง
 addEventListener('pointerdown', () => { try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); } catch (e) { } }, { once: true, capture: true });
 function loadScript(src, globalName) {
@@ -1977,7 +2093,7 @@ function moreGroups() {
   const jn = S.jobsN || 0;
   return [
     it('jobs', IC.alert, own ? 'งานรอดำเนินการ' : 'งานโอน/ชำระบิล', 1, jn ? jn : ''),
-    { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), (seesSales() || own) && ['รายงาน/ยอดขาย', IC.chart, () => go('reports'), '', S.view === 'reports', 'ยอดขายรายเดือน'], it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers')), it('inst', IC.receipt, 'สัญญาผ่อนสินค้า', can('customers') || can('credit'))] },
+    { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), (seesSales() || own) && ['รายงาน/ยอดขาย', IC.chart, () => go('reports'), '', S.view === 'reports', 'ยอดขายรายเดือน'], it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers')), it('rank', IC.trophy, 'อันดับลูกค้า (ภาพ)', can('customers')), it('inst', IC.receipt, 'สัญญาผ่อนสินค้า', can('customers') || can('credit'))] },
     { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
     { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
     { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', 1), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
@@ -2659,6 +2775,11 @@ VIEWS.settings = el => {
     <label class="f"><span>ที่อยู่</span><input class="in" id="s_address" value="${esc(st.address || '')}"></label>
     <div class="grid2"><label class="f"><span>โทร</span><input class="in" id="s_phone" value="${esc(st.phone || '')}"></label><label class="f"><span>อีเมลรับแจ้งเตือน</span><input class="in" id="s_alertEmail" type="email" value="${esc(st.alertEmail || '')}"></label></div>
     <div class="row"><button class="btn grow" id="ss">บันทึก</button>${S.apiUrl ? '<button class="btn ghost grow" id="ta">ทดสอบส่งอีเมลแจ้งเตือน</button>' : ''}</div></div>` : ''}
+   ${own ? `<div class="card"><h3>ออกจากระบบอัตโนมัติ</h3>
+    <label class="row" style="gap:10px;margin-bottom:8px"><input type="checkbox" id="alon" style="width:22px;height:22px"><span class="grow">เปิดใช้: ออกจากระบบเองเมื่อไม่ได้ใช้งานนาน</span></label>
+    <label class="f" id="alhw"><span>เมื่อไม่ได้ใช้งานนาน</span><select class="in" id="alh">${[[.25, '15 นาที'], [.5, '30 นาที'], [1, '1 ชั่วโมง'], [2, '2 ชั่วโมง'], [3, '3 ชั่วโมง'], [4, '4 ชั่วโมง'], [6, '6 ชั่วโมง'], [8, '8 ชั่วโมง'], [12, '12 ชั่วโมง'], [24, '24 ชั่วโมง']].map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select></label>
+    <div class="tiny muted" style="margin-bottom:8px">ปิด (ค่าเริ่มต้น) = อยู่ในระบบจนกว่าจะกดออกเอง · ใช้กับทุกเครื่อง ทั้งเจ้าของและพนักงาน · มือถือเจ้าของที่ตั้ง “ไม่ต้องออกจากระบบอัตโนมัติ” ไม่ออกเสมอ · ระหว่างนำเข้าข้อมูลใหญ่ไม่ออก</div>
+    <button class="btn block" id="alsv">บันทึก</button></div>` : ''}
    <div class="card"><h3>บัญชีของฉัน</h3><div class="kv"><span>ผู้ใช้</span><b>${esc(S.user.username)}</b></div>${isOwner() ? '<button class="btn ghost block" style="margin-top:8px" onclick="changePinDlg()">เปลี่ยนรหัสของฉัน</button>' : '<div class="tiny muted" style="margin-top:6px">ต้องการเปลี่ยนรหัส ให้เจ้าของร้านเปลี่ยนให้ที่เมนู พนักงาน</div>'}</div>
    <div class="card"><h3>การเชื่อมต่อ</h3><div class="kv"><span>ฐานข้อมูล</span><b>${S.apiUrl ? 'Google Sheet (ออนไลน์)' : 'โหมดทดลองในเครื่อง'}</b></div>
     ${own ? `<button class="btn ghost block" id="cn" style="margin-top:8px">เปลี่ยน URL เซิร์ฟเวอร์</button>` : ''}
@@ -2668,6 +2789,10 @@ VIEWS.settings = el => {
     $('#ss', el).onclick = async () => { const rows = ['shopName', 'storeLabel', 'address', 'phone', 'alertEmail'].map(k => ({ key: k, value: $('#s_' + k, el).value.trim() })); try { busy(1); await api('upsert', { table: 'Settings', rows }); await loadSettings(); busy(0); toast('บันทึกแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
     const ta = $('#ta', el); if (ta) ta.onclick = async () => { try { busy(1); const r = await api('testAlert'); busy(0); toast(r.sent ? `ส่งอีเมลแล้ว (${r.sent} รายการ)` : 'ไม่มีรายการที่ต้องแจ้งเตือนใน 90 วัน'); } catch (e) { busy(0); toast(e.message, 1); } };
     $('#cn', el).onclick = connectDlg;
+    const al = cfg('autoLogout', { on: false, hours: 8 }), alSync = () => { $('#alhw', el).style.opacity = $('#alon', el).checked ? 1 : .45; };
+    $('#alon', el).checked = !!al.on; $('#alh', el).value = String(al.hours); if (!$('#alh', el).value) $('#alh', el).value = '8'; alSync();
+    $('#alon', el).onchange = alSync;
+    $('#alsv', el).onclick = async () => { try { busy(1); await saveSetting('autoLogout', { on: $('#alon', el).checked, hours: +$('#alh', el).value }); busy(0); IdleLock.last = Date.now(); toast($('#alon', el).checked ? 'เปิดออกจากระบบอัตโนมัติ: ' + $('#alh', el).selectedOptions[0].textContent : 'ปิดออกจากระบบอัตโนมัติแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
   }
   $('#cc', el).onclick = () => { LS.del('products'); LS.del('productsAt'); S.products = []; toast('ล้างแคชแล้ว'); };
 };
@@ -2715,10 +2840,11 @@ const IdleLock = {
     setInterval(() => {
       if (!S.user) return;
       if (S.longJob) { this.last = Date.now(); return; }   // กำลังนำเข้าข้อมูลใหญ่ — ไม่ล็อก/ไม่ออกจากระบบ
-      const mins = num(cfg('idleLock', '10'));
+      // ค่าเริ่มต้น = ไม่ออกจากระบบอัตโนมัติ · เจ้าของเปิด/ตั้งชั่วโมงได้ที่ ตั้งค่า › ร้าน · การเชื่อมต่อ
+      const al = cfg('autoLogout', { on: false, hours: 8 }), mins = al.on ? Math.round(num(al.hours) * 60) : 0;
       // มือถือเจ้าของที่ตั้ง "ไม่ต้องออกจากระบบอัตโนมัติ" ไว้ → ไม่ล็อก (รับแจ้งเตือนงานได้ตลอด)
       const applies = S.user.role === 'owner' ? !LS.get('stayIn', false) : !isKiosk();
-      if (mins > 0 && applies && Date.now() - this.last > mins * 60e3) { Elev.clear(); toast('ล็อกหน้าจออัตโนมัติ (ไม่ได้ใช้งาน ' + mins + ' นาที)'); logout(); }
+      if (mins > 0 && applies && Date.now() - this.last > mins * 60e3) { Elev.clear(); toast('ออกจากระบบอัตโนมัติ (ไม่ได้ใช้งาน ' + (mins >= 60 ? (mins / 60) + ' ชั่วโมง' : mins + ' นาที') + ')'); logout(); }
     }, 20e3);
   }
 };
@@ -2761,21 +2887,21 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.48"></script>
-<script src="logic.js?v=2.6.48"></script>
-<script src="cache.js?v=2.6.48"></script>
-<script src="offline.js?v=2.6.48"></script>
-<script src="scanner.js?v=2.6.48"></script>
-<script src="printer.js?v=2.6.48"></script>
-<script src="pos.js?v=2.6.48"></script>
-<script src="idle.js?v=2.6.48"></script>
-<script src="display.js?v=2.6.48"></script>
-<script src="reports.js?v=2.6.48"></script>
-<script src="inventory.js?v=2.6.48"></script>
-<script src="people.js?v=2.6.48"></script>
-<script src="quality.js?v=2.6.48"></script>
-<script src="services.js?v=2.6.48"></script>
-<script src="owner.js?v=2.6.48"></script>
+<script src="qr.js?v=2.6.49"></script>
+<script src="logic.js?v=2.6.49"></script>
+<script src="cache.js?v=2.6.49"></script>
+<script src="offline.js?v=2.6.49"></script>
+<script src="scanner.js?v=2.6.49"></script>
+<script src="printer.js?v=2.6.49"></script>
+<script src="pos.js?v=2.6.49"></script>
+<script src="idle.js?v=2.6.49"></script>
+<script src="display.js?v=2.6.49"></script>
+<script src="reports.js?v=2.6.49"></script>
+<script src="inventory.js?v=2.6.49"></script>
+<script src="people.js?v=2.6.49"></script>
+<script src="quality.js?v=2.6.49"></script>
+<script src="services.js?v=2.6.49"></script>
+<script src="owner.js?v=2.6.49"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
