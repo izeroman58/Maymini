@@ -179,13 +179,15 @@ const OStore = {
     const rows = await this.query(from, to); if (!rows) return null;
     const pend = (window.Sync ? Sync.box : []).filter(o => o.date.slice(0, 10) >= from && o.date.slice(0, 10) <= to && !rows.some(x => x.id === o.id));
     const ex = {}; ((cfg('vatCfg', {}).exemptCats) || []).forEach(c => ex[c] = 1);
+    // ยกเว้น VAT นับตามหมวด "ปัจจุบัน" ของสินค้า (แก้หมวดแล้วยอดย้อนหลังถูกต้องทันที) · สินค้าที่ลบไปแล้วใช้หมวดตอนขาย
+    const bs = (typeof IDX !== 'undefined' && IDX.bySku) || {}, catOf = it => { const p = it.sku && bs[it.sku]; return p ? (p.category || '') : (it.cat || ''); };
     const days = {}, J = (s, d) => { try { return typeof s === 'string' ? JSON.parse(s || 'null') || d : s || d; } catch (e) { return d; } };
     rows.concat(pend).forEach(o => {
       const k = String(o.date).slice(0, 10), x = days[k] || (days[k] = { gross: 0, refund: 0, disc: 0, net: 0, cost: 0, count: 0, pass: 0, exempt: 0, src: 'POS' });
       const t = num(o.total), sg = o.status === 'refund' ? -1 : 1;
       if (sg < 0) { x.refund += -t; x.cost -= Math.abs(num(o.cost)); } else { x.gross += num(o.subtotal) || t; x.disc += num(o.discount); x.count++; x.cost += num(o.cost); }
       x.net += t;
-      J(o.items, []).forEach(it => { const a = sg * Math.abs(num(it.qty) * num(it.price)); if (it.pass) x.pass += a; else if (ex[it.cat || '']) x.exempt += a; });
+      J(o.items, []).forEach(it => { const a = sg * Math.abs(num(it.qty) * num(it.price)); if (it.pass) x.pass += a; else if (ex[catOf(it)]) x.exempt += a; });
     });
     Object.values(days).forEach(d => ['gross', 'refund', 'disc', 'net', 'cost', 'pass', 'exempt'].forEach(f => d[f] = Math.round(d[f] * 100) / 100));
     dm.set(mk, days); if (dm.size > 8) dm.delete(dm.keys().next().value);

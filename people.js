@@ -67,8 +67,24 @@ VIEWS.staff = async (el, tab) => {
   if (tab === 'users') {
     sb.innerHTML = `<div class="row" style="margin-bottom:8px"><span class="grow small muted">เจ้าของกิจการเข้าได้ทุกเมนู · พนักงานตามสิทธิ์ที่ตั้งไว้</span><button class="btn sm" id="add">${I(IC.plus, 16)} เพิ่มผู้ใช้</button></div><div class="list" id="ul"><div class="empty"><span class="spin dark"></span></div></div>`;
     const us = await loadTable('Users').catch(e => (toast(e.message, 1), []));
-    $('#ul', sb).innerHTML = us.map(u => `<div class="item" data-id="${esc(u.id)}"><div class="av">${esc(Array.from(u.name || u.username)[0])}</div><div class="grow"><div class="t">${esc(u.name)}</div><div class="m">@${esc(u.username)}</div></div><span class="tag ${u.role === 'owner' ? 'red' : 'blue'}">${u.role === 'owner' ? 'เจ้าของ' : 'พนักงาน'}</span>${u.active === 'N' ? ' <span class="tag gray">ปิดใช้</span>' : ''}</div>`).join('');
-    $$('#ul [data-id]', sb).forEach(x => x.onclick = () => userForm(us.find(u => u.id === x.dataset.id), () => go('staff', 'users')));
+    $('#ul', sb).insertAdjacentHTML('beforebegin', '<div class="card pinc" id="pc"></div>');
+    // รหัส PIN ของทุกคน: เจ้าของกดดูได้ (ยืนยันรหัสเจ้าของก่อน) · ซ่อนเองใน 60 วินาที
+    const draw = () => {
+      if (!sb.isConnected) return clearInterval(PINV.t);
+      const on = pinsShown(), left = Math.max(0, Math.ceil((PINV.until - Date.now()) / 1000));
+      $('#pc', sb).innerHTML = on
+        ? `<div class="row" style="gap:8px"><b class="grow">🔑 รหัส PIN ของทุกคน</b><span class="tiny muted">ซ่อนใน ${left} วิ</span><button class="btn ghost sm" id="hp">ซ่อน</button></div>
+           ${PINV.apSet ? `<div class="kv small" style="margin-top:6px"><span>รหัสอนุมัติ (พนักงานใช้ขออนุญาตงานสินค้า)</span>${PINV.ap ? `<b class="pinv">${esc(PINV.ap)}</b>` : '<span class="tag amber">ตั้งก่อนระบบนี้ — ตั้งใหม่เพื่อให้แสดงได้</span>'}</div>` : ''}
+           ${us.some(u => !PINV.map[u.id]) ? '<div class="tiny muted" style="margin-top:6px">“ยังไม่ทราบ” = รหัสที่ตั้งไว้ก่อนอัปเดตนี้ จะแสดงหลังคนนั้นเข้าระบบครั้งถัดไป หรือแตะชื่อเพื่อตั้งรหัสใหม่ได้ทันที</div>' : ''}`
+        : `<div class="row" style="gap:10px"><div class="grow"><b>🔑 รหัส PIN</b><div class="tiny muted">เจ้าของกิจการดูและเปลี่ยนรหัสของตนเองและพนักงานได้ทุกคน (ยืนยันรหัสเจ้าของก่อนแสดง)</div></div><button class="btn sm" id="sp">แสดงรหัส</button></div>`;
+      $('#ul', sb).innerHTML = us.map(u => `<div class="item" data-id="${esc(u.id)}"><div class="av">${esc(Array.from(u.name || u.username)[0])}</div><div class="grow"><div class="t">${esc(u.name)}</div><div class="m">@${esc(u.username)}</div></div>${on ? (PINV.map[u.id] ? `<b class="pinv">${esc(PINV.map[u.id])}</b>` : '<span class="tag amber">ยังไม่ทราบ</span>') : '<span class="pinh">••••</span>'}<span class="tag ${u.role === 'owner' ? 'red' : 'blue'}">${u.role === 'owner' ? 'เจ้าของ' : 'พนักงาน'}</span>${u.active === 'N' ? ' <span class="tag gray">ปิดใช้</span>' : ''}</div>`).join('');
+      $$('#ul [data-id]', sb).forEach(x => x.onclick = () => userForm(us.find(u => u.id === x.dataset.id), () => go('staff', 'users')));
+      const sp = $('#sp', sb); if (sp) sp.onclick = async () => { if (await revealPins()) { tick(); draw(); } };
+      const hp = $('#hp', sb); if (hp) hp.onclick = () => { PINV.until = 0; draw(); };
+    };
+    const tick = () => { clearInterval(PINV.t); PINV.t = setInterval(() => { if (!sb.isConnected) return clearInterval(PINV.t); if (!pinsShown()) { clearInterval(PINV.t); PINV.map = null; } draw(); }, 1000); };
+    if (pinsShown()) tick();
+    draw();
     $('#add', sb).onclick = () => userForm(null, () => go('staff', 'users'));
   } else if (tab === 'perms') {
     const r = await api('perms').catch(e => (toast(e.message, 1), null)); if (!r) return;
@@ -144,8 +160,8 @@ VIEWS.categories = async el => {
   if (!can('editProducts')) return ownerOnly(el);
   await loadSettings();
   const counts = {}; S.products.forEach(p => counts[p.category || ''] = (counts[p.category || ''] || 0) + 1);
-  const cats = S.categories.slice();
-  el.innerHTML = vhead('หมวดหมู่สินค้า', `<button class="btn sm" id="add">${I(IC.plus, 18)} เพิ่ม</button>`, 'more') + `<div class="list" id="cl">${cats.map((c, i) => `<div class="item" data-i="${i}"><span style="width:34px;height:34px;border-radius:10px;background:${c.color};flex:none"></span><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${counts[c.name] || 0} สินค้า</div></div><button class="iconbtn" data-up="${i}" ${i ? '' : 'disabled'}>▲</button><button class="iconbtn" data-dn="${i}" ${i < cats.length - 1 ? '' : 'disabled'}>▼</button></div>`).join('') || '<div class="empty">ยังไม่มีหมวดหมู่</div>'}</div>${counts[''] ? `<div class="small muted" style="margin-top:8px">สินค้าที่ยังไม่ระบุหมวด ${counts['']} รายการ</div>` : ''}`;
+  const cats = S.categories.slice(), vx = new Set(window.VATX ? VATX.conf().exemptCats || [] : []);
+  el.innerHTML = vhead('หมวดหมู่สินค้า', `<button class="btn sm" id="add">${I(IC.plus, 18)} เพิ่ม</button>`, 'more') + `<div class="list" id="cl">${cats.map((c, i) => `<div class="item" data-i="${i}"><span style="width:34px;height:34px;border-radius:10px;background:${c.color};flex:none"></span><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${counts[c.name] || 0} สินค้า${vx.has(c.name) ? ' · <span class="tag green">✓ ยกเว้น VAT</span>' : ''}</div></div><button class="iconbtn" data-up="${i}" ${i ? '' : 'disabled'}>▲</button><button class="iconbtn" data-dn="${i}" ${i < cats.length - 1 ? '' : 'disabled'}>▼</button></div>`).join('') || '<div class="empty">ยังไม่มีหมวดหมู่</div>'}</div>${counts[''] ? `<div class="small muted" style="margin-top:8px">สินค้าที่ยังไม่ระบุหมวด ${counts['']} รายการ</div>` : ''}${isOwner() && window.VATX ? `<button class="btn ghost block" style="margin-top:10px" onclick="go('vatcheck')">ตรวจหมวดยกเว้น VAT ตามกฎหมาย</button>` : ''}`;
   const form = c => {
     c = c || { name: '', color: TILE_COLORS[cats.length % 10] }; let color = c.color;
     const ov = sheet(c.name ? 'แก้ไขหมวด' : 'หมวดใหม่', `<label class="f"><span>ชื่อหมวด</span><input class="in" id="nm" value="${esc(c.name)}"></label><div class="row wrap" id="sw">${TILE_COLORS.map(x => `<span class="swatch ${x === color ? 'on' : ''}" data-c="${x}" style="background:${x}"></span>`).join('')}</div>${c.name && counts[c.name] ? `<div class="tiny muted" style="margin-top:8px">เปลี่ยนชื่อแล้ว สินค้า ${counts[c.name]} รายการจะย้ายไปชื่อใหม่ให้อัตโนมัติ</div>` : ''}`, `${c.name && !counts[c.name] ? '<button class="btn ghost grow" id="dl" style="color:var(--red)">ลบ</button>' : ''}<button class="btn grow" id="sv">บันทึก</button>`);
@@ -302,3 +318,19 @@ VIEWS.rank = async (el, type) => {
   };
   await loadCustomers(true).catch(() => { }); if (el.isConnected) draw();
 };
+
+
+/* ---------- รหัส PIN: เจ้าของกิจการดูได้ (ถอดจากสำเนาเข้ารหัสบนเซิร์ฟเวอร์) ---------- */
+const PINV = { map: null, ap: '', apSet: false, until: 0, t: 0 };
+const pinsShown = () => !!PINV.map && Date.now() < PINV.until;
+async function revealPins() {
+  if (!isOwner()) return false;
+  const pin = await ownerPinDlg('ยืนยันรหัสเจ้าของกิจการ เพื่อดูรหัส PIN ของทุกคน');
+  if (!pin) return false;
+  try {
+    busy(1); const r = await api('revealPins', { ownerPin: pin }); busy(0);
+    PINV.map = {}; (r.users || []).forEach(u => PINV.map[u.id] = u.pin || ''); PINV.ap = r.approve || ''; PINV.apSet = !!r.approveSet; PINV.until = Date.now() + 60000;
+    return true;
+  } catch (e) { busy(0); toast(e.message, 1); return false; }
+}
+(function () { const st = document.createElement('style'); st.textContent = `.pinv{font-family:var(--fh);font-size:20px;letter-spacing:4px;background:#FFF7E6;color:#6B4000;border-radius:8px;padding:1px 8px;font-variant-numeric:tabular-nums}.pinh{color:var(--ink3);letter-spacing:3px;font-size:13px}`; document.head.appendChild(st); })();

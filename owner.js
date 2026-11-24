@@ -3,7 +3,7 @@
    บันทึกการยื่นภาษี, รายงานเงินสดรับ-จ่าย (ประกาศอธิบดีฯ ฉบับที่ 161), ฟอนต์
    ========================================================= */
 'use strict';
-const VATCFG_DEF = { status: 'none', regDate: '', vatNo: '', reviewedYear: '', reviewer: '', note: '', exemptCats: [] };
+const VATCFG_DEF = { status: 'none', regDate: '', vatNo: '', reviewedYear: '', reviewer: '', note: '', exemptCats: [], rv: {} };
 const vatCfg = () => cfg('vatCfg', VATCFG_DEF);
 const bahtL = (v, d) => `<span class="cur">฿</span>${money(v, d != null ? d : (num(v) % 1 ? 2 : 0))}`;
 (function () { const st = document.createElement('style'); st.textContent = `.cur{opacity:.4;font-weight:400;margin-right:.06em;font-size:.82em}
@@ -106,14 +106,14 @@ async function vatDlg() {
     <div class="list" style="margin:10px 0">${[['none', 'ยังไม่ได้ดำเนินการ', 'ระบบคำนวณและเตือนตามยอดจริง'], ['registered', 'จดทะเบียน VAT แล้ว', 'ระบบจะเตือนยื่น ภ.พ.30 ทุกเดือน'], ['reviewed', 'ตรวจสอบแล้ว ยังไม่ต้องจด (เฉพาะปีนี้)', 'บันทึกว่าใครตรวจ/เหตุผล']].map(([k, t, d]) => `<label class="item"><input type="radio" name="vs" value="${k}" ${v.status === k ? 'checked' : ''}><div class="grow"><div class="t">${t}</div><div class="m">${d}</div></div></label>`).join('')}</div>
     <div id="reg" class="grid2"><label class="f"><span>วันที่จดทะเบียน</span><input class="in" type="date" id="rd" value="${esc(v.regDate)}"></label><label class="f"><span>เลขประจำตัวผู้เสียภาษี (VAT)</span><input class="in" id="vn" inputmode="numeric" value="${esc(v.vatNo)}"></label></div>
     <div id="rev"><label class="f"><span>ผู้ตรวจสอบ (เช่น ชื่อนักบัญชี / สรรพากรพื้นที่)</span><input class="in" id="rv" value="${esc(v.reviewer)}"></label><label class="f"><span>เหตุผล/ผลการตรวจ</span><input class="in" id="nt" value="${esc(v.note)}" placeholder="เช่น หักของสดและบริการรับชำระแล้วไม่ถึง 1.8 ล้าน"></label></div>
-    <details style="margin-top:6px"><summary class="small"><b>หมวดสินค้าที่ได้รับยกเว้น VAT</b> (ไม่นับรวมยอด)</summary><div class="tiny muted" style="margin:6px 0">เช่น พืชผัก ผลไม้ เนื้อสัตว์ ปลา ไข่ ที่ยังไม่แปรรูป · <b>ต้องให้นักบัญชียืนยัน</b> สินค้าแปรรูป/บรรจุขาย (นม ขนม เครื่องดื่ม) ไม่ได้รับยกเว้น · นับได้เฉพาะยอดที่ขายผ่าน POS ของระบบนี้</div>${cats.map(c => `<label class="row small" style="padding:4px 0"><input type="checkbox" data-c="${esc(c)}" ${(v.exemptCats || []).includes(c) ? 'checked' : ''}> ${esc(c)}</label>`).join('')}</details>
+    <details style="margin-top:6px"><summary class="small"><b>หมวดสินค้าที่ได้รับยกเว้น VAT</b> (ไม่นับรวมยอด)</summary><div class="tiny muted" style="margin:6px 0">เช่น พืชผัก ผลไม้ เนื้อสัตว์ ปลา ไข่ ที่ยังไม่แปรรูป · <b>ต้องให้นักบัญชียืนยัน</b> สินค้าแปรรูป/บรรจุขาย (นม ขนม เครื่องดื่ม) ไม่ได้รับยกเว้น · นับได้เฉพาะยอดที่ขายผ่าน POS ของระบบนี้</div>${cats.map(c => `<label class="row small" style="padding:4px 0"><input type="checkbox" data-c="${esc(c)}" ${(v.exemptCats || []).includes(c) ? 'checked' : ''}> ${esc(c)}</label>`).join('')}<button class="btn ghost block sm" style="margin-top:6px" onclick="this.closest('.ov').remove();go('vatcheck')">ตรวจสินค้าทีละรายการ · แนะนำย้ายหมวด</button></details>
     <div class="tiny muted" style="margin-top:10px">ยอด “เงินรับแทน” จากบริการโอนเงิน เติมเงิน จ่ายบิล ไม่นับเป็นรายรับของร้าน (นับเฉพาะค่าบริการ) · ข้อมูลนี้ช่วยประเมินเท่านั้น การตัดสินว่าต้องจด VAT หรือไม่ ควรให้นักบัญชี/สรรพากรยืนยัน</div>`,
     `<button class="btn block green" id="sv">บันทึก</button>`);
   const vis = () => { const s = ($('input[name=vs]:checked', ov) || {}).value; $('#reg', ov).style.display = s === 'registered' ? '' : 'none'; $('#rev', ov).style.display = s === 'reviewed' ? '' : 'none'; };
   $$('input[name=vs]', ov).forEach(r => r.onchange = vis); vis();
   $('#sv', ov).onclick = async () => {
     const o = { status: ($('input[name=vs]:checked', ov) || {}).value || 'none', regDate: $('#rd', ov).value, vatNo: $('#vn', ov).value.trim(), reviewer: $('#rv', ov).value.trim(), note: $('#nt', ov).value.trim(), reviewedYear: String(y), exemptCats: $$('[data-c]:checked', ov).map(c => c.dataset.c) };
-    try { busy(1); await saveSetting('vatCfg', o); Cache.staleBefore = Date.now(); busy(0); ov.remove(); toast('บันทึกสถานะ VAT แล้ว'); go(S.view, S.viewArg); } catch (e) { busy(0); toast(e.message, 1); }
+    try { busy(1); await saveSetting('vatCfg', { ...vatCfg(), ...o }); if (window.OStore) OStore.dm = null; Cache.staleBefore = Date.now(); busy(0); ov.remove(); toast('บันทึกสถานะ VAT แล้ว'); go(S.view, S.viewArg); } catch (e) { busy(0); toast(e.message, 1); }
   };
 }
 
@@ -152,7 +152,8 @@ VIEWS.tax = async el => {
     box.innerHTML = `<div class="card"><div class="row" style="margin-bottom:6px"><h3 class="grow">บันทึกการยื่น/ชำระภาษี</h3><button class="btn sm" id="af">${I(IC.plus, 16)} บันทึก</button></div>
       ${F.length ? F.map(f => `<div class="item" data-id="${esc(f.id)}" style="padding:8px 2px"><div class="grow"><div class="t">${esc(f.form)} · งวด ${esc(f.period)}</div><div class="m">ยื่น ${thDate(f.filedAt)}${f.ref ? ' · ' + esc(f.ref) : ''}${f.fileUrl ? ' · 📎' : ''}</div></div><b class="num">${f.amount !== '' ? money(f.amount) : ''}</b></div>`).join('') : '<div class="small muted">ยังไม่มี — เมื่อยื่นแล้วให้บันทึกไว้ ระบบจะเปลี่ยนกำหนดยื่นเป็น “ยื่นแล้ว ✓” และหยุดเตือน</div>'}</div>
      <div class="card"><h3>หลักฐานสำหรับยื่นกรมสรรพากร</h3><p class="small muted" style="margin-top:0">ผู้มีเงินได้ 40(8) ที่ยังไม่จด VAT ต้องจัดทำ “รายงานแสดงรายได้และรายจ่าย” เป็นประจำวัน (ประกาศอธิบดีกรมสรรพากรฯ ฉบับที่ 161) — ระบบสร้างให้จากยอดขายและใบเสร็จร้านส่ง</p>
-       <button class="btn block" onclick="go('cashreport')">${I(IC.file, 18)} รายงานเงินสดรับ-จ่าย (ดู/พิมพ์/ส่งออก)</button></div>
+       <button class="btn block" onclick="go('ledger')">${I(IC.file, 18)} บัญชีรายรับ-รายจ่าย 40(8) (ดู/พิมพ์/ส่งออก)</button>
+       <button class="btn ghost block" style="margin-top:8px" onclick="go('vatcheck')">${I(IC.tag, 18)} ตรวจสินค้ายกเว้น VAT ตามกฎหมาย</button></div>
      <div id="vatbox"></div>`;
     $('#af', box).onclick = () => filingForm(null, () => go('tax'));
     $$('[data-id]', box).forEach(x => x.onclick = () => filingForm(F.find(f => f.id === x.dataset.id), () => go('tax')));

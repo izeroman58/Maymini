@@ -167,14 +167,17 @@ body.navdock #app{padding-left:min(330px,86vw)}body.navdock .nav{left:min(330px,
 .bch g.bg path{transition:transform .14s ease;transform-box:fill-box;transform-origin:50% 100%}.bch g.bg.hov path{transform:scale(1.18,1.05)}.bch g.bg.hov .hit{fill:rgba(0,0,0,.045)}.bch g.bg{cursor:pointer}
 .bctip{position:fixed;z-index:400;display:none;pointer-events:none;background:#1F2328;color:#fff;border-radius:10px;padding:8px 11px;font-size:13px;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:260px}.bctip i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:0}.bctip .up{color:#7EE29A;font-weight:700}.bctip .dn{color:#FF8A80;font-weight:700}
 .thdbtn{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;cursor:pointer;color:var(--ink)}.thdbtn svg{flex:none;opacity:.55}
-.thcalbg{position:fixed;inset:0;z-index:350;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center}.thcalbg.pop{background:transparent;display:block}
-.thcal{background:#fff;width:100%;max-width:420px;border-radius:18px 18px 0 0;padding:12px 12px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -6px 30px rgba(0,0,0,.18);user-select:none}.thcalbg.pop .thcal{position:fixed;width:320px;border-radius:14px;box-shadow:0 10px 34px rgba(0,0,0,.22)}
-.thch{display:flex;align-items:center;gap:6px;margin-bottom:6px}.thch button{all:unset;cursor:pointer;border-radius:10px;padding:8px 12px;font-size:20px;line-height:1}.thch button:hover{background:#F2F2F0}.thch .thmy{flex:1;text-align:center;font-size:17px;font-weight:700}.thch .thmy span{font-size:12px;color:var(--ink2)}
-.thwk,.thgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}.thwk span{font-size:12.5px;color:var(--ink2);padding:4px 0;font-weight:600}.thwk .sun{color:var(--red)}
-.thgrid button{all:unset;cursor:pointer;height:40px;border-radius:10px;font-size:16px;text-align:center}.thgrid button:hover{background:#F2F2F0}.thgrid button.tdy{box-shadow:inset 0 0 0 1.5px var(--red);color:var(--red);font-weight:700}.thgrid button.sel{background:var(--red);color:#fff;font-weight:700}.thgrid button:disabled{opacity:.25;cursor:default}
-.thyr{display:flex;align-items:center;justify-content:center;gap:16px;margin:4px 0 8px;font-size:16px}.thyr button{all:unset;cursor:pointer;padding:6px 14px;font-size:20px;border-radius:10px}.thyr button:hover{background:#F2F2F0}
-.thmon{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.thmon button{all:unset;cursor:pointer;text-align:center;padding:11px 4px;border-radius:10px;background:#F6F6F4;font-size:14.5px}.thmon button.sel{background:var(--red);color:#fff;font-weight:700}
-.thft{display:flex;gap:6px;margin-top:8px}.thft button{all:unset;cursor:pointer;padding:8px 14px;border-radius:10px;font-weight:600;color:var(--red);font-size:14.5px}.thft button:hover{background:#FDECEC}
+.thcalbg{position:fixed;inset:0;z-index:350;background:transparent}
+.thcalbg .thcal{position:fixed;box-sizing:border-box;width:min(300px,calc(100vw - 16px));background:#fff;border-radius:14px;padding:8px 8px 6px;box-shadow:0 10px 34px rgba(0,0,0,.22),0 0 0 1px rgba(0,0,0,.05);user-select:none;-webkit-user-select:none;font-size:14px;line-height:1.2;overflow:hidden}
+.thcal button{all:unset;box-sizing:border-box;cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:center}
+.thcal .thch{display:flex;align-items:center;gap:2px;margin-bottom:4px}.thcal .thch button{border-radius:9px;padding:6px 10px;font-size:18px;line-height:1;color:var(--ink2)}.thcal .thch button:hover{background:#F2F2F0}
+.thcal .thch .thmy{flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.thcal .thch .thmy span{font-size:11px;color:var(--ink3)}
+.thcal .thwk,.thcal .thgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}.thcal .thwk span{font-size:11.5px;color:var(--ink3);padding:2px 0 4px;font-weight:600}.thcal .thwk .sun{color:var(--red)}
+.thcal .thgrid button{display:block;width:100%;min-width:0;height:34px;line-height:34px;border-radius:9px;font-size:14.5px;color:var(--ink)}.thcal .thgrid button:hover{background:#F2F2F0}
+.thcal .thgrid button.tdy{box-shadow:inset 0 0 0 1.5px var(--red);color:var(--red);font-weight:700}.thcal .thgrid button.sel{background:var(--red);color:#fff;font-weight:700;box-shadow:none}.thcal .thgrid button:disabled{opacity:.25;cursor:default;background:none}
+.thcal .thyr{display:flex;align-items:center;justify-content:center;gap:10px;margin:2px 0 6px;font-size:14.5px}.thcal .thyr button{padding:4px 12px;font-size:18px;border-radius:9px}.thcal .thyr button:hover{background:#F2F2F0}
+.thcal .thmon{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.thcal .thmon button{padding:9px 2px;border-radius:9px;background:#F6F6F4;font-size:13.5px}.thcal .thmon button.sel{background:var(--red);color:#fff;font-weight:700}
+.thcal .thft{display:flex;gap:2px;margin-top:4px;border-top:1px solid var(--line);padding-top:4px}.thcal .thft button{padding:7px 10px;border-radius:9px;font-weight:600;color:var(--red);font-size:13.5px}.thcal .thft button:hover{background:#FDECEC}
 .drw .di,.drw .dg,.mdrw .di,.mdrw .dg{position:relative}.di.drag::after,.dg.one.drag::after,.dgrp.drag>.dg::after{content:'';position:absolute;left:10px;right:10px;bottom:3px;height:3px;border-radius:2px;background:var(--red);transform-origin:left;animation:rnfill 2.55s linear forwards}
 @keyframes rnfill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 .drn{display:flex;gap:6px;align-items:center;padding:6px 8px}.drn .in{flex:1;min-height:42px}.drn button{all:unset;cursor:pointer;font-size:20px;padding:6px 8px;border-radius:10px;line-height:1}.drn button:hover{background:#F2F2F0}
@@ -240,7 +243,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.49';
+const APP_VER = '2.6.50';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -586,11 +589,11 @@ const ThaiDate = {
     b.onclick = () => ThaiDate.open(inp, b);
   },
   open(inp, btn) {
-    $$('.thcalbg').forEach(x => x.remove());
+    $$('.thcalbg').forEach(x => x.remove()); if (ThaiDate._off) ThaiDate._off(); ThaiDate._place = null;
     const today = todayISO(), mn = inp.min || '', mx = inp.max || '';
     let v = /^\d{4}-\d\d-\d\d$/.test(inp.value) ? inp.value : today, y = +v.slice(0, 4), m = +v.slice(5, 7) - 1, mode = 'd';
     const bg = document.createElement('div'); bg.className = 'thcalbg'; const c = document.createElement('div'); c.className = 'thcal'; bg.appendChild(c);
-    const close = () => bg.remove();
+    const close = () => { bg.remove(); if (ThaiDate._off) ThaiDate._off(); };
     const set = iso => { inp.value = iso; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); close(); };
     const iso = (yy, mm, dd) => `${yy}-${String(mm + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
     const okD = x => (!mn || x >= mn) && (!mx || x <= mx);
@@ -614,13 +617,23 @@ const ThaiDate = {
       $('[data-t]', c).onclick = () => okD(today) ? set(today) : toast('วันนี้อยู่นอกช่วงที่เลือกได้', 1);
       const cl = $('[data-c]', c); if (cl) cl.onclick = () => set('');
       $('[data-x]', c).onclick = close;
+      if (ThaiDate._place && bg.isConnected) ThaiDate._place();   // เปลี่ยนโหมดเดือน/ปี ความสูงเปลี่ยน → จัดตำแหน่งใหม่
     };
     bg.onclick = e => { if (e.target === bg) close(); };
     document.body.appendChild(bg); draw();
-    if (innerWidth >= 600) {   // จอใหญ่: ลอยใต้ช่อง · มือถือ: แผ่นล่างจอ
-      bg.classList.add('pop'); const r = btn.getBoundingClientRect(), w = c.offsetWidth, h = c.offsetHeight;
-      c.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px'; c.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
-    }
+    // กล่องเล็กลอยติดช่องวันที่ทุกขนาดจอ: ใต้ช่อง → ถ้าไม่พอวางเหนือช่อง → ไม่พอทั้งคู่วางกลางจอ · ไม่ล้นขอบจอ
+    const place = () => {
+      const r = btn.getBoundingClientRect(), w = c.offsetWidth, h = c.offsetHeight, vw = document.documentElement.clientWidth, vh = innerHeight;
+      c.style.left = Math.max(8, Math.min(vw - w - 8, r.left)) + 'px';
+      const below = r.bottom + 6, above = r.top - h - 6;
+      c.style.top = (below + h <= vh - 8 ? below : above >= 8 ? above : Math.max(8, (vh - h) / 2)) + 'px';
+    };
+    place(); ThaiDate._place = place;
+    // เลื่อนหน้าจอ = ปิดปฏิทิน (กล่องไม่ลอยค้างผิดที่) · หมุนจอ/ย่อหน้าต่าง = จัดตำแหน่งใหม่
+    const onSc = e => { if (!bg.isConnected) return off(); if (!c.contains(e.target)) close(); };
+    const onR = () => bg.isConnected ? place() : off();
+    const off = () => { removeEventListener('resize', onR); removeEventListener('scroll', onSc, true); };
+    addEventListener('resize', onR); addEventListener('scroll', onSc, true); ThaiDate._off = off;
   },
   scan() { this.t = 0; $$('input[type=date]:not([data-thd])').forEach(i => this.enhance(i)); },
   start() { if (this.on) return; this.on = 1; new MutationObserver(() => { if (!this.t) this.t = setTimeout(() => this.scan(), 0); }).observe(document.body, { childList: true, subtree: true }); this.scan(); }
@@ -748,6 +761,9 @@ const LocalDB = {
   append(t, rows) { this.save(t, this.all(t).concat(rows)); },
   remove(t, ids) { if (ids === '*') return this.save(t, []); const k = this.key(t), set = new Set(ids.map(String)); this.save(t, this.all(t).filter(r => !set.has(String(r[k])))); },
   hash: s => { let h = 5381; s = 'mm|' + s; for (let i = 0; i < s.length; i++) h = (h * 33 ^ s.charCodeAt(i)) >>> 0; return 'L' + h.toString(16); },
+  // โหมดทดลอง: เข้ารหัสแบบง่าย (ข้อมูลอยู่ในเครื่องนี้เท่านั้น) · ของจริงใช้กุญแจลับบนเซิร์ฟเวอร์
+  seal: (ctx, t) => 'D1:' + btoa(unescape(encodeURIComponent(String(t).split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ (ctx.charCodeAt(i % ctx.length) & 15))).join('')))),
+  unseal: (ctx, e) => /^D1:/.test(e || '') ? decodeURIComponent(escape(atob(e.slice(3)))).split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ (ctx.charCodeAt(i % ctx.length) & 15))).join('') : '',
   now: () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 19),
   log() { },
   settings() { const o = {}; this.all('Settings').forEach(r => o[r.key] = r.value); return o; }
@@ -824,6 +840,8 @@ function searchProducts(q, f = {}) {
     if (f.flag === 'nocost' && num(p.cost) > 0) return false;
     if (f.flag === 'best' && p.bestseller !== 'Y') return false;
     if (f.flag === 'fresh' && !/ของสด/.test(p.category || '') && p.byWeight !== 'Y') return false;
+    if (f.flag === 'vatex' && !(VATX.conf().exemptCats || []).includes(p.category || '')) return false;
+    if (f.flag === 'vatchk') { const t = VATX.tag(p); if (!t || t.c === 'green') return false; }
     return toks.every(t => p._n.includes(t));
   });
 }
@@ -1594,20 +1612,21 @@ VIEWS.products = async (el, flag) => {
      <div class="row small muted" style="margin:2px 4px 8px"><span id="cnt" class="grow"></span><button class="btn ghost sm" id="rf">รีเฟรช</button></div>
      <div class="list" id="pl"><div class="empty"><span class="spin dark"></span></div></div>`;
   const draw = () => {
-    const flags = [['', 'ทั้งหมด'], ['low', 'ใกล้หมด'], ['nobar', 'ไม่มีบาร์โค้ด'], ['nocost', 'ไม่มีต้นทุน'], ['best', 'ขายดี'], ['fresh', 'ของสด']];
+    const flags = [['', 'ทั้งหมด'], ['low', 'ใกล้หมด'], ['nobar', 'ไม่มีบาร์โค้ด'], ['nocost', 'ไม่มีต้นทุน'], ['best', 'ขายดี'], ['fresh', 'ของสด']].concat(window.VATX ? [['vatex', 'ยกเว้น VAT'], ...(isOwner() ? [['vatchk', '⚠ ตรวจ VAT']] : [])] : []);
     $('#flags', el).innerHTML = flags.map(([k, n]) => `<button class="chip ${PF.flag === k ? 'on' : ''}" data-f="${k}">${n}</button>`).join('');
     const cats = {}; S.products.forEach(p => { const c = p.category || 'ไม่ระบุหมวด'; cats[c] = (cats[c] || 0) + 1; });
-    $('#cats', el).innerHTML = `<button class="chip ${!PF.cat ? 'on' : ''}" data-c="">ทุกหมวด</button>` + Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button class="chip ${PF.cat === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)} <span class="muted">${n}</span></button>`).join('');
+    const exc = new Set(window.VATX ? VATX.conf().exemptCats || [] : []);
+    $('#cats', el).innerHTML = `<button class="chip ${!PF.cat ? 'on' : ''}" data-c="">ทุกหมวด</button>` + Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<button class="chip ${PF.cat === c ? 'on' : ''}" data-c="${esc(c)}">${exc.has(c) ? '<i class="vxd" title="หมวดยกเว้น VAT"></i>' : ''}${esc(c)} <span class="muted">${n}</span></button>`).join('');
     $$('[data-f]', el).forEach(b => b.onclick = () => { PF.flag = b.dataset.f; PF.limit = 60; draw(); });
     $$('[data-c]', el).forEach(b => b.onclick = () => { PF.cat = b.dataset.c; PF.limit = 60; draw(); });
     // ค้น/สแกนด้วยบาร์โค้ดหรือรหัส → แสดงเฉพาะรายการที่ตรงทุกตัว (ถ้าบาร์โค้ดซ้ำจะเห็นหลายรายการ เลือกแก้/ลบได้)
     const qq = String(PF.q || '').trim();
     const exact = qq.length >= 4 && /^[0-9A-Za-z\-]+$/.test(qq) ? S.products.filter(p => String(p.barcode || '') === qq || String(p.sku || '') === qq || String(p.barcode || '').split(/[,\s]+/).includes(qq)) : [];
     const res = exact.length ? exact : searchProducts(PF.q, PF);
-    $('#cnt', el).innerHTML = exact.length > 1 ? `<span class="tag red">บาร์โค้ด/รหัสนี้ซ้ำ ${exact.length} รายการ</span> แตะรายการเพื่อดู แก้ไข หรือลบรายการที่ซ้ำ` : `พบ ${res.length.toLocaleString()} รายการ`;
+    $('#cnt', el).innerHTML = PF.flag === 'vatchk' && !exact.length ? `พบ ${res.length.toLocaleString()} รายการที่ควรตรวจ VAT · <a href="javascript:void go('vatcheck')">เปิดหน้าตรวจ VAT แนะนำย้ายหมวด →</a>` : exact.length > 1 ? `<span class="tag red">บาร์โค้ด/รหัสนี้ซ้ำ ${exact.length} รายการ</span> แตะรายการเพื่อดู แก้ไข หรือลบรายการที่ซ้ำ` : `พบ ${res.length.toLocaleString()} รายการ`;
     $('#pl', el).innerHTML = res.length ? res.slice(0, PF.limit).map(p => {
       const low = p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0);
-      return `<div class="item" data-sku="${esc(p.sku)}">${pthumb(p)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.sku)} · ${p.barcode ? esc(p.barcode) : '<span class="tag amber">ไม่มีบาร์โค้ด</span>'}${p.trackStock === 'Y' ? ` · <span class="tag ${low ? 'red' : 'gray'}">คงเหลือ ${num(p.stock)}</span>` : ''}${can('viewCost') && num(p.cost) ? ` · ทุน ${money(p.cost)}` : ''}</div></div><div class="price">${baht(p.price)}</div></div>`;
+      return `<div class="item" data-sku="${esc(p.sku)}">${pthumb(p)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.sku)} · ${p.barcode ? esc(p.barcode) : '<span class="tag amber">ไม่มีบาร์โค้ด</span>'}${p.trackStock === 'Y' ? ` · <span class="tag ${low ? 'red' : 'gray'}">คงเหลือ ${num(p.stock)}</span>` : ''}${can('viewCost') && num(p.cost) ? ` · ทุน ${money(p.cost)}` : ''}${window.vatTag ? vatTag(p) : ''}</div></div><div class="price">${baht(p.price)}</div></div>`;
     }).join('') + (res.length > PF.limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red);font-weight:600">แสดงเพิ่ม (${res.length - PF.limit})</div>` : '') : `<div class="empty">ไม่พบสินค้า<br><button class="btn sm" style="margin-top:10px" onclick="editProduct(${esc(JSON.stringify(/^\d{8,14}$/.test(PF.q.trim()) ? { barcode: PF.q.trim() } : { name: PF.q }))})">เพิ่ม “${esc(PF.q)}”</button></div>`;
     $$('#pl [data-sku]', el).forEach(r => r.onclick = () => productCard(IDX.bySku[r.dataset.sku]));
     const m = $('#more', el); if (m) m.onclick = () => { PF.limit += 100; draw(); };
@@ -1640,6 +1659,7 @@ function productCard(p, embeddedPrice) {
     <div class="card">
       <div class="kv"><span class="muted">รหัส SKU</span><b>${esc(p.sku)}</b></div>
       <div class="kv"><span class="muted">บาร์โค้ด</span><b>${esc(p.barcode || '—')}</b></div>
+      ${window.VATX ? (() => { const t = VATX.tag(p); return `<div class="kv"><span class="muted">VAT</span><b style="text-align:right">${t ? `<span class="tag ${t.c}">${t.t}</span>` : '<span class="tag gray">เสีย VAT ปกติ</span>'}${t && t.c !== 'green' && isOwner() ? `<div class="tiny muted" style="font-weight:400">${esc(t.why)}</div>` : ''}</b></div>`; })() : ''}
       ${can('viewCost') ? `<div class="kv"><span class="muted">ต้นทุน</span><b>${money(p.cost)}</b></div><div class="kv"><span class="muted">กำไรขั้นต้น</span><b>${margin}</b></div>` : ''}
       <div class="kv"><span class="muted">สต็อก</span><b>${p.trackStock === 'Y' ? num(p.stock) + (p.lowStock ? ` (เตือนที่ ${p.lowStock})` : '') : 'ไม่ได้นับสต็อก'}</b></div>
       <div class="kv"><span class="muted">แก้ไขล่าสุด</span><span class="small">${esc(p.updatedAt ? String(p.updatedAt).replace('T', ' ').slice(0, 16) : '-')} ${esc(p.updatedBy || '')}</span></div>
@@ -1992,12 +2012,23 @@ function newReceipt() {
     <p class="small muted" style="margin-top:0">ถ่ายรูปใบเสร็จให้เห็นรายการชัดเจน วางบนพื้นเรียบ แสงพอ — ระบบจะอ่านรายการสินค้าและให้ตรวจสอบก่อนบันทึก</p>
     <label class="btn block" style="min-height:64px;font-size:17px">${I(IC.cam, 24)} ถ่ายรูป / เลือกรูปใบเสร็จ<input type="file" accept="image/*,application/pdf" capture="environment" id="fi" class="hidden"></label>
     <button class="btn ghost block" style="margin-top:10px" id="man">กรอกเอง (ไม่มีรูป)</button>
+    <div id="lgb"></div>
     <div class="tiny muted" style="margin-top:10px">${S.apiUrl ? 'อ่านข้อความด้วย Google OCR (หรือ Gemini ถ้าตั้งค่า API key ไว้)' : 'โหมดทดลอง: อ่านข้อความด้วย Tesseract ในเครื่อง (ช้ากว่าและแม่นน้อยกว่า)'}</div>`);
   $('#man', ov).onclick = () => { ov.remove(); receiptForm({ id: uid('R'), date: todayISO(), type: 'สินค้า', items: '[]' }, true); };
+  // บิลซื้อสินค้าที่แนบไว้ในบัญชีรายจ่ายแต่ยังไม่ลงสต๊อก → เลือกแล้วอ่านรายการอัตโนมัติ
+  if (window.stockFromBill) (S.receipts && S.receipts.length ? Promise.resolve(S.receipts) : quick(loadTable('Receipts'), 1500, [])).then(rs => {
+    S.receipts = rs || []; const L = S.receipts.filter(x => x.type === 'สินค้า' && x.stockApplied !== 'Y' && (x.fileUrl || x.fileId)).sort((a, b) => String(b.date).localeCompare(a.date)).slice(0, 8);
+    const b = $('#lgb', ov); if (!b || !L.length) return;
+    b.innerHTML = `<div class="small" style="margin:14px 2px 6px"><b>หรือใช้บิลจากบัญชีรายจ่าย</b> <span class="muted">(ยังไม่ลงสต๊อก ${L.length})</span></div><div class="list">${L.map(x => `<div class="item" data-b="${esc(x.id)}"><div class="av" style="background:#EEF3FB;color:var(--blue);overflow:hidden">${/^data:image/.test(x.fileUrl || '') ? `<img src="${x.fileUrl}" style="width:100%;height:100%;object-fit:cover">` : I(IC.file, 20)}</div><div class="grow"><div class="t">${esc(x.supplier || 'ไม่ระบุร้าน')}</div><div class="m">${thDate(x.date)}${x.docNo ? ' · ' + esc(x.docNo) : ''}</div></div><div class="price" style="font-size:15px">${baht(x.total)}</div></div>`).join('')}</div>`;
+    $$('[data-b]', b).forEach(x => x.onclick = () => { ov.remove(); stockFromBill(S.receipts.find(r => r.id === x.dataset.b), () => S.view === 'receipts' || S.view === 'ledger' ? go(S.view) : null); });
+  });
   $('#fi', ov).onchange = async e => {
     const f = e.target.files[0]; if (!f) return; ov.remove();
     try {
-      busy(1, 'กำลังย่อรูป...'); const img = await compressImage(f);
+      // ตัดขอบ/ปรับภาพให้เหมือนสแกนก่อน → อ่านรายการได้แม่นขึ้น
+      let img = window.DocScan && /^image\//.test(f.type || '') ? await DocScan.open(f) : null;
+      if (window.DocScan && /^image\//.test(f.type || '') && !img) return;
+      busy(1, 'กำลังย่อรูป...'); if (!img) img = await compressImage(f);
       busy(1, 'กำลังอัปโหลดรูปเก็บใน Google Drive...');
       const up = await api('upload', { kind: 'receipt', name: `receipt_${todayISO()}_${Date.now()}.jpg`, mime: img.mime, base64: img.dataUrl });
       busy(1, 'กำลังอ่านรายการในใบเสร็จ...');
@@ -2058,7 +2089,7 @@ function receiptForm(r, isNew) {
   $('#r_total', ov).onchange = drawItems;
   drawItems();
   $('#sv', ov).onclick = async () => {
-    const rc = { id: r.id, fileId: r.fileId || '', fileUrl: /^data:/.test(r.fileUrl || '') && r.fileUrl.length > 400000 ? '' : (r.fileUrl || ''), createdAt: r.createdAt, createdBy: r.createdBy };
+    const rc = { id: r.id, fileId: r.fileId || '', fileUrl: /^data:/.test(r.fileUrl || '') && r.fileUrl.length > 400000 ? '' : (r.fileUrl || ''), createdAt: r.createdAt, createdBy: r.createdBy, cat: r.cat || '' };
     ['date', 'type', 'supplier', 'docNo', 'supplierTaxId', 'subtotal', 'vat', 'total', 'payMethod', 'note'].forEach(k => rc[k] = $('#r_' + k, ov).value.trim());
     if (!rc.total) rc.total = String(items.reduce((s, it) => s + num(it.amount), 0));
     if (!rc.date) return toast('กรุณาใส่วันที่', 1);
@@ -2067,7 +2098,9 @@ function receiptForm(r, isNew) {
       busy(1, 'กำลังบันทึก...');
       if (applied) { rc.stockApplied = 'Y'; await api('upsert', { table: 'Receipts', rows: [rc] }); }
       else { const res = await api('applyReceipt', { receipt: rc }); toast(`บันทึกแล้ว · อัปเดตสินค้า ${res.updated} รายการ${res.created ? ` · สร้างใหม่ ${res.created}` : ''}`); await loadProducts(true); }
-      busy(0); ov.remove(); if (S.view === 'receipts') go('receipts');
+      if (rc.type === 'สินค้า' && (!rc.cat || rc.cat === 'อื่น ๆ')) rc.cat = 'ซื้อสินค้ามาขาย';
+      if (S.receipts) { const k = S.receipts.findIndex(x => x.id === rc.id); if (k >= 0) S.receipts[k] = { ...S.receipts[k], ...rc, stockApplied: 'Y' }; }
+      busy(0); ov.remove(); if (r._done) r._done(); else if (S.view === 'receipts' || S.view === 'ledger') go(S.view);
     } catch (e) { busy(0); toast(e.message, 1); }
   };
   const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg('ลบใบเสร็จนี้? (สต็อก/ต้นทุนที่อัปเดตไปแล้วจะไม่ย้อนกลับ)', 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Receipts', ids: [r.id] }); busy(0); ov.remove(); go('receipts'); } catch (e) { busy(0); toast(e.message, 1); } };
@@ -2095,7 +2128,7 @@ function moreGroups() {
     it('jobs', IC.alert, own ? 'งานรอดำเนินการ' : 'งานโอน/ชำระบิล', 1, jn ? jn : ''),
     { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), (seesSales() || own) && ['รายงาน/ยอดขาย', IC.chart, () => go('reports'), '', S.view === 'reports', 'ยอดขายรายเดือน'], it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers')), it('rank', IC.trophy, 'อันดับลูกค้า (ภาพ)', can('customers')), it('inst', IC.receipt, 'สัญญาผ่อนสินค้า', can('customers') || can('credit'))] },
     { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
-    { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
+    { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('ledger', IC.file, 'บัญชีรายรับ-รายจ่าย', own), it('vatcheck', IC.tag, 'ตรวจสินค้ายกเว้น VAT', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
     { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', 1), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
     { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ', 1), it('pins', IC.shield, 'รหัสเจ้าของ · รหัสอนุญาต', own), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ · ถ่ายเอกสาร · ผ่อน', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
   ];
@@ -2754,6 +2787,12 @@ function userForm(u, done) {
    <details id="adv"><summary class="small muted">ชื่อผู้ใช้สำหรับเข้าระบบแบบพิมพ์ชื่อ (เจ้าของ)</summary><label class="f" style="margin-top:8px"><span>ชื่อผู้ใช้ (a-z 0-9) เว้นว่าง = สร้างให้อัตโนมัติ</span><input class="in" id="u_username" autocapitalize="none" value="${esc(u.username)}"></label></details>`,
     `<button class="btn block" id="sv">บันทึก</button>`);
   $('#u_role', ov).value = u.role; $('#u_active', ov).value = u.active || 'Y';
+  // รหัสปัจจุบัน (เจ้าของกิจการดูได้ — ยืนยันรหัสเจ้าของก่อน)
+  if (!isNew && isOwner() && window.revealPins) {
+    const box = document.createElement('div'); box.className = 'kv small'; box.style.cssText = 'margin:-4px 0 10px;align-items:center';
+    const paint = () => { const k = typeof pinsShown === 'function' && pinsShown() ? PINV.map[u.id] : null; box.innerHTML = `<span class="muted">รหัสปัจจุบัน</span>${k ? `<b class="pinv">${esc(k)}</b>` : k === '' ? '<span class="tag amber">ยังไม่ทราบ — ตั้งรหัสใหม่ด้านบน</span>' : '<button class="btn ghost sm" type="button">👁 แสดงรหัส</button>'}`; const b = $('button', box); if (b) b.onclick = async () => { if (await revealPins()) paint(); }; };
+    $('#u_pin', ov).closest('label').after(box); paint();
+  }
   const upd = () => { const st = $('#u_role', ov).value === 'staff'; $('#pl', ov).textContent = (isNew ? '' : 'เปลี่ยน') + (st ? 'รหัสเข้าระบบ 4 หลัก' : 'รหัสเจ้าของ 4 หลัก') + (isNew ? ' *' : ' (เว้นว่าง = ใช้รหัสเดิม)'); $('#u_pin', ov).maxLength = 4; $('#ph', ov).textContent = st ? 'พนักงานกดรหัสนี้ที่หน้าเข้าระบบได้เลย ไม่ต้องพิมพ์ชื่อ · รหัสห้ามซ้ำกับคนอื่น · พนักงานเปลี่ยนรหัสเองไม่ได้' : 'รหัสนี้ใช้อนุมัติงานแทนพนักงานด้วย (แก้ราคา/คืนเงิน ฯลฯ) อย่าบอกพนักงาน'; };
   $('#u_role', ov).onchange = upd; upd();
   $('#u_pin', ov).oninput = e => e.target.value = e.target.value.replace(/\D/g, '');
@@ -2761,7 +2800,11 @@ function userForm(u, done) {
   $('#sv', ov).onclick = async () => {
     const p = { id: u.id }; ['name', 'username', 'pin', 'role', 'active'].forEach(k => p[k] = $('#u_' + k, ov).value.trim());
     if (p.role === 'staff' && p.pin && !/^\d{4}$/.test(p.pin)) return toast('รหัสพนักงานต้องเป็นตัวเลข 4 หลัก', 1);
-    try { busy(1); await api('saveUser', p); busy(0); ov.remove(); toast(p.pin ? `บันทึกแล้ว · รหัสของ ${p.name}: ${p.pin}` : 'บันทึกแล้ว'); done(); } catch (e) { busy(0); toast(e.message, 1); }
+    try {
+      busy(1); await api('saveUser', p); busy(0); ov.remove(); toast(p.pin ? `บันทึกแล้ว · รหัสของ ${p.name}: ${p.pin}` : 'บันทึกแล้ว');
+      if (p.pin && typeof PINV !== 'undefined' && PINV.map) { if (u.id) PINV.map[u.id] = p.pin; else { PINV.map = null; PINV.until = 0; } }
+      done();
+    } catch (e) { busy(0); toast(e.message, 1); }
   };
 }
 
@@ -2800,7 +2843,7 @@ VIEWS.settings = el => {
 /* ---------- BOOT ---------- */
 /* ตรวจว่าไฟล์ระบบโหลดครบ ถ้าไม่ครบ (เช่นเบราว์เซอร์ยังจำไฟล์เก่า) ล้างแคชแล้วโหลดใหม่ 1 ครั้ง ถ้ายังไม่ครบ แจ้งชื่อไฟล์ที่ขาด */
 function missingFiles() {
-  const chk = { 'logic.js': () => typeof Logic !== 'undefined', 'cache.js': () => typeof Cache !== 'undefined', 'offline.js': () => typeof OfflineAuth !== 'undefined', 'scanner.js': () => typeof Scanner !== 'undefined', 'printer.js': () => typeof RP !== 'undefined', 'pos.js': () => typeof POS !== 'undefined', 'display.js': () => !!VIEWS.displayset, 'idle.js': () => typeof idleScene !== 'undefined', 'reports.js': () => !!VIEWS.reports, 'inventory.js': () => !!VIEWS.stockcount, 'people.js': () => !!VIEWS.staff, 'quality.js': () => !!VIEWS.dataquality, 'services.js': () => typeof svcMenu !== 'undefined', 'owner.js': () => !!VIEWS.home };
+  const chk = { 'logic.js': () => typeof Logic !== 'undefined', 'cache.js': () => typeof Cache !== 'undefined', 'offline.js': () => typeof OfflineAuth !== 'undefined', 'scanner.js': () => typeof Scanner !== 'undefined', 'printer.js': () => typeof RP !== 'undefined', 'pos.js': () => typeof POS !== 'undefined', 'display.js': () => !!VIEWS.displayset, 'idle.js': () => typeof idleScene !== 'undefined', 'reports.js': () => !!VIEWS.reports, 'inventory.js': () => !!VIEWS.stockcount, 'people.js': () => !!VIEWS.staff, 'quality.js': () => !!VIEWS.dataquality, 'services.js': () => typeof svcMenu !== 'undefined', 'owner.js': () => !!VIEWS.home, 'books.js': () => !!VIEWS.vatcheck };
   return Object.keys(chk).filter(f => { try { return !chk[f](); } catch (e) { return true; } });
 }
 async function selfHeal(miss) {
@@ -2887,21 +2930,22 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.49"></script>
-<script src="logic.js?v=2.6.49"></script>
-<script src="cache.js?v=2.6.49"></script>
-<script src="offline.js?v=2.6.49"></script>
-<script src="scanner.js?v=2.6.49"></script>
-<script src="printer.js?v=2.6.49"></script>
-<script src="pos.js?v=2.6.49"></script>
-<script src="idle.js?v=2.6.49"></script>
-<script src="display.js?v=2.6.49"></script>
-<script src="reports.js?v=2.6.49"></script>
-<script src="inventory.js?v=2.6.49"></script>
-<script src="people.js?v=2.6.49"></script>
-<script src="quality.js?v=2.6.49"></script>
-<script src="services.js?v=2.6.49"></script>
-<script src="owner.js?v=2.6.49"></script>
+<script src="qr.js?v=2.6.50"></script>
+<script src="logic.js?v=2.6.50"></script>
+<script src="cache.js?v=2.6.50"></script>
+<script src="offline.js?v=2.6.50"></script>
+<script src="scanner.js?v=2.6.50"></script>
+<script src="printer.js?v=2.6.50"></script>
+<script src="pos.js?v=2.6.50"></script>
+<script src="idle.js?v=2.6.50"></script>
+<script src="display.js?v=2.6.50"></script>
+<script src="reports.js?v=2.6.50"></script>
+<script src="inventory.js?v=2.6.50"></script>
+<script src="people.js?v=2.6.50"></script>
+<script src="quality.js?v=2.6.50"></script>
+<script src="services.js?v=2.6.50"></script>
+<script src="owner.js?v=2.6.50"></script>
+<script src="books.js?v=2.6.50"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

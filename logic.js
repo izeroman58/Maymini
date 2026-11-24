@@ -8,7 +8,7 @@ var Logic = (function () {
     Products: { key: 'sku', read: 'all', write: 'editProducts', cols: ['sku', 'handle', 'name', 'category', 'description', 'byWeight', 'cost', 'barcode', 'trackStock', 'available', 'price', 'stock', 'lowStock', 'bestseller', 'unit', 'shelfLifeDays', 'note', 'updatedAt', 'updatedBy'] },
     Categories: { key: 'name', read: 'all', write: 'editProducts', cols: ['name', 'color', 'sort'] },
     Images: { key: 'sku', read: 'all', write: 'editProducts', cols: ['sku', 'data', 'updatedAt'] },
-    Receipts: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', own: 'createdBy', cols: ['id', 'date', 'supplier', 'supplierTaxId', 'docNo', 'type', 'subtotal', 'vat', 'total', 'payMethod', 'fileId', 'fileUrl', 'items', 'stockApplied', 'note', 'createdAt', 'createdBy'] },
+    Receipts: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', own: 'createdBy', cols: ['id', 'date', 'supplier', 'supplierTaxId', 'docNo', 'type', 'subtotal', 'vat', 'total', 'payMethod', 'fileId', 'fileUrl', 'items', 'stockApplied', 'note', 'createdAt', 'createdBy', 'cat'] },
     SalesDaily: { key: 'date', read: 'owner', write: 'owner', dateCol: 'date', cols: ['date', 'gross', 'refund', 'discount', 'net', 'cost', 'profit', 'source', 'note'] },
     TaxFilings: { key: 'id', read: 'owner', write: 'owner', cols: ['id', 'form', 'period', 'filedAt', 'amount', 'ref', 'fileId', 'fileUrl', 'note', 'createdAt'] },
     Sales: { key: 'id', read: 'owner', write: 'owner', cols: ['id', 'date', 'amount', 'gross', 'refund', 'discount', 'cost', 'profit', 'source', 'note', 'createdAt', 'createdBy'] },
@@ -20,7 +20,7 @@ var Logic = (function () {
     StockCounts: { key: 'id', read: 'stockCount', write: 'stockCount', cols: ['id', 'name', 'date', 'scope', 'status', 'items', 'by', 'finishedAt', 'note'] },
     POs: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', cols: ['id', 'date', 'supplier', 'status', 'items', 'total', 'note', 'createdBy', 'receivedAt'] },
     Licenses: { key: 'id', read: 'all', write: 'owner', cols: ['id', 'type', 'subtype', 'number', 'holder', 'issueDate', 'expiryDate', 'fileId', 'fileUrl', 'note', 'updatedAt'] },
-    Users: { key: 'id', read: 'owner', write: 'none', cols: ['id', 'name', 'username', 'pinHash', 'role', 'active', 'createdAt'] },
+    Users: { key: 'id', read: 'owner', write: 'none', cols: ['id', 'name', 'username', 'pinHash', 'role', 'active', 'createdAt', 'pinEnc'] },
     Installments: { key: 'id', read: 'customers', write: 'none', dateCol: 'date', cols: ['id', 'date', 'customerId', 'customerName', 'phone', 'product', 'price', 'down', 'financed', 'rate', 'rateMode', 'interest', 'total', 'count', 'period', 'per', 'firstDue', 'paid', 'paidCount', 'status', 'orderId', 'lastPayAt', 'closedAt', 'note', 'createdBy'] },
     Jobs: { key: 'id', read: 'owner', write: 'owner', dateCol: 'date', cols: ['id', 'date', 'orderId', 'type', 'status', 'title', 'amount', 'fee', 'bank', 'bankName', 'acc', 'accName', 'carrier', 'carrierName', 'phone', 'billType', 'ref', 'contact', 'fileUrl', 'customerName', 'cashier', 'cashierName', 'deviceName', 'note', 'doneAt', 'doneBy', 'doneRef'] },
     Settings: { key: 'key', read: 'all', write: 'owner', cols: ['key', 'value'] },
@@ -90,7 +90,7 @@ var Logic = (function () {
     if (!can(db, u, sc.read)) { if (sc.own && u) ownOnly = true; else err('สิทธิ์ไม่เพียงพอ'); }
     var rows = db.read(t, opt || {});
     if (ownOnly || (sc.own && u.role !== 'owner' && t === 'Receipts')) rows = rows.filter(function (r) { return r[sc.own] === u.username; });
-    if (t === 'Users') rows = rows.map(function (r) { var c = {}; for (var k in r) if (k !== 'pinHash') c[k] = r[k]; return c; });
+    if (t === 'Users') rows = rows.map(function (r) { var c = {}; for (var k in r) if (k !== 'pinHash' && k !== 'pinEnc') c[k] = r[k]; return c; });
     if (t === 'Products' && !strict(db, u, 'viewCost')) rows = rows.map(function (r) { var c = Object.assign({}, r); c.cost = ''; return c; });
     if (t === 'Settings' && u.role !== 'owner') rows = rows.filter(function (r) { return String(r.key).indexOf('secret') !== 0; });
     return rows;
@@ -156,6 +156,8 @@ var Logic = (function () {
       user = m[0];
     }
     var info = { id: user.id, name: user.name, username: user.username, role: user.role };
+    // เก็บสำเนารหัสแบบเข้ารหัสไว้ให้เจ้าของกิจการดูได้ (ผู้ใช้ที่ตั้งรหัสก่อนมีระบบนี้ จะมีสำเนาเมื่อเข้าระบบครั้งถัดไป)
+    if (db.seal && openPin(db, user.id, user.pinEnc) !== pin) { try { db.upsert('Users', [{ id: user.id, pinEnc: sealPin(db, user.id, pin) }]); } catch (e) { } }
     var device = registerDevice(db, info, dev || {});
     db.log(info, 'login', device ? device.name : '');
     return { user: info, device: device, shift: user.role === 'owner' ? null : openShift(db, info), mustChangePin: user.role === 'owner' && user.pinHash === db.hash('1234') };
@@ -200,7 +202,7 @@ var Logic = (function () {
       if (role === 'staff' && !/^\d{4}$/.test(pin)) err('รหัสพนักงานต้องเป็นตัวเลข 4 หลัก');
       if (role === 'owner' && !/^\d{4}$/.test(pin)) err('รหัสเจ้าของต้องเป็นตัวเลข 4 หลัก');
       if (pinTaken(db, pin, row.id)) err('รหัสนี้มีผู้ใช้อื่นใช้แล้ว กรุณาตั้งรหัสอื่น');
-      row.pinHash = db.hash(pin);
+      row.pinHash = db.hash(pin); row.pinEnc = sealPin(db, row.id, pin);
     }
     if (!row.pinHash) err('กรุณาตั้งรหัส');
     var owners = users.filter(function (x) { return x.role === 'owner' && x.active !== 'N' && x.id !== row.id; });
@@ -211,11 +213,11 @@ var Logic = (function () {
   // รหัสอนุมัติของเจ้าของร้าน (แยกจากรหัสเข้าระบบ) · ว่าง = ยกเลิก (ใช้รหัสเข้าระบบเจ้าของอนุมัติ)
   function setApprovePin(db, u, pin) {
     need(db, u, 'owner'); pin = String(pin == null ? '' : pin).trim();
-    if (!pin) { db.upsert('Settings', [{ key: 'secretApprovePin', value: '' }]); db.log(u, 'approvePin', 'off'); return { set: false }; }
+    if (!pin) { db.upsert('Settings', [{ key: 'secretApprovePin', value: '' }, { key: 'secretApprovePinEnc', value: '' }]); db.log(u, 'approvePin', 'off'); return { set: false }; }
     if (!/^\d{4}$/.test(pin)) err('รหัสอนุมัติต้องเป็นตัวเลข 4 หลัก');
     var h = db.hash(pin);
     if (db.read('Users', {}).some(function (x) { return x.active !== 'N' && x.pinHash === h; })) err('รหัสนี้ซ้ำกับรหัสเข้าระบบของผู้ใช้ — ตั้งรหัสอนุมัติให้ต่างจากรหัสเข้าระบบทุกคน');
-    db.upsert('Settings', [{ key: 'secretApprovePin', value: h }]); db.log(u, 'approvePin', 'set');
+    db.upsert('Settings', [{ key: 'secretApprovePin', value: h }, { key: 'secretApprovePinEnc', value: sealPin(db, 'AP', pin) }]); db.log(u, 'approvePin', 'set');
     return { set: true };
   }
   function changePin(db, u, oldPin, newPin) {
@@ -224,8 +226,23 @@ var Logic = (function () {
     var me = db.read('Users', {}).filter(function (x) { return x.id === u.id; })[0];
     if (!me || me.pinHash !== db.hash(String(oldPin))) err('รหัสเดิมไม่ถูกต้อง');
     if (pinTaken(db, newPin, me.id)) err('รหัสนี้มีผู้ใช้อื่นใช้แล้ว กรุณาตั้งรหัสอื่น');
-    db.upsert('Users', [{ id: me.id, pinHash: db.hash(String(newPin)) }]);
+    db.upsert('Users', [{ id: me.id, pinHash: db.hash(String(newPin)), pinEnc: sealPin(db, me.id, newPin) }]);
     return {};
+  }
+  // รหัส PIN แบบถอดได้: เข้ารหัสด้วยกุญแจลับของเซิร์ฟเวอร์ (ไม่อยู่ในชีต) — เจ้าของกิจการดูได้หลังยืนยันรหัสเจ้าของ
+  function sealPin(db, id, pin) { try { return db.seal ? db.seal('pin|' + id, String(pin)) : ''; } catch (e) { return ''; } }
+  function openPin(db, id, enc) { try { return enc && db.unseal ? String(db.unseal('pin|' + id, enc) || '') : ''; } catch (e) { return ''; } }
+  function revealPins(db, u) {
+    need(db, u, 'owner');
+    var k = pinKind(db);
+    if (k === 'ap') err('PIN_BAD: ต้องใช้รหัสเข้าระบบของเจ้าของกิจการ (ไม่ใช่รหัสอนุมัติ)');
+    if (k !== 'owner') err('PIN_REQUIRED: ใส่รหัสเจ้าของกิจการเพื่อดูรหัส PIN ทั้งหมด');
+    var s = db.settings() || {};
+    var users = db.read('Users', {}).map(function (x) { var pin = openPin(db, x.id, x.pinEnc); if (pin && db.hash(pin) !== x.pinHash) pin = ''; return { id: x.id, name: x.name, username: x.username, role: x.role, active: x.active, pin: pin }; });
+    var ap = s.secretApprovePin ? openPin(db, 'AP', s.secretApprovePinEnc) : '';
+    if (ap && db.hash(ap) !== s.secretApprovePin) ap = '';
+    db.log(u, 'revealPins', users.length + ' users');
+    return { users: users, approve: ap, approveSet: !!s.secretApprovePin };
   }
 
   // ---------- products ----------
@@ -499,13 +516,16 @@ var Logic = (function () {
   // pass = ยอดเงินรับแทน (โอนเงิน/เติมเงิน/จ่ายบิล) ซึ่งไม่ใช่รายได้ของร้าน
   function dailySummary(db, u, from, to) {
     if (!strict(db, u, 'reports')) need(db, u, 'owner');
-    var days = {}, ex = {}; (J(db.settings().vatCfg, {}).exemptCats || []).forEach(function (c) { ex[c] = 1; });
+    var days = {}, ex = {}, bs = null; (J(db.settings().vatCfg, {}).exemptCats || []).forEach(function (c) { ex[c] = 1; });
+    // ยกเว้น VAT นับตามหมวดปัจจุบันของสินค้า (แก้หมวดแล้วยอดย้อนหลังถูกต้อง) · สินค้าที่ลบแล้วใช้หมวดตอนขาย
+    if (Object.keys(ex).length) { bs = {}; db.read('Products', {}).forEach(function (p) { bs[p.sku] = p.category || ''; }); }
+    function catOf(it) { return bs && it.sku && Object.prototype.hasOwnProperty.call(bs, it.sku) ? bs[it.sku] : (it.cat || ''); }
     db.read('Orders', { from: from, to: to + 'T99' }).forEach(function (o) {
       var k = String(o.date).slice(0, 10), x = days[k] || (days[k] = { gross: 0, refund: 0, disc: 0, net: 0, cost: 0, count: 0, pass: 0, exempt: 0, src: 'POS' });
       var t = n(o.total), sg = o.status === 'refund' ? -1 : 1;
       if (sg < 0) { x.refund += -t; x.cost -= Math.abs(n(o.cost)); } else { x.gross += n(o.subtotal) || t; x.disc += n(o.discount); x.count++; x.cost += n(o.cost); }
       x.net += t;
-      J(o.items, []).forEach(function (it) { var a = sg * Math.abs(n(it.qty) * n(it.price)); if (it.pass) x.pass += a; else if (ex[it.cat || '']) x.exempt += a; });
+      J(o.items, []).forEach(function (it) { var a = sg * Math.abs(n(it.qty) * n(it.price)); if (it.pass) x.pass += a; else if (ex[catOf(it)]) x.exempt += a; });
     });
     db.read('SalesDaily', { from: from, to: to }).forEach(function (r) {
       var k = String(r.date).slice(0, 10); if (days[k]) return;
@@ -678,6 +698,7 @@ var Logic = (function () {
       case 'imagesSince': return { rows: db.read('Images', {}).filter(function (r) { return String(r.updatedAt) > String(p.since || ''); }), now: db.now() };
       case 'saveUser': return saveUser(db, u, p);
       case 'changePin': return changePin(db, u, p.oldPin, p.newPin);
+      case 'revealPins': return revealPins(db, u);
       case 'perms': return { perms: perms(db), defs: PERMS };
       case 'bootstrap': {
         var s = {}; list(db, u, 'Settings').forEach(function (r) { s[r.key] = r.value; });

@@ -117,6 +117,28 @@ function rangePicker(el, state, onChange) {
   $('#ok', el).onclick = () => { state.from = $('#f', el).value; state.to = $('#t', el).value; if (state.from > state.to) [state.from, state.to] = [state.to, state.from]; onChange(); };
 }
 const RS = { r: 'today', from: todayISO(), to: todayISO(), tab: 'day', staff: '', top: 'range' };
+RS.pays = LS.get('rsPays', []);
+// ประเภทการชำระ (ลำดับที่แสดง) — เงินสด · เงินเชื่อ · โอน/สแกนจ่าย · บัตรสวัสดิการ
+const PAYORDER = ['cash', 'credit', 'transfer', 'welfare'];
+const payName = k => (typeof PAYNAME !== 'undefined' && PAYNAME[k]) || (k === 'other' ? 'ไม่ระบุ' : k);
+// รายการชำระของบิล (บิลเก่า/นำเข้าที่ไม่มีรายละเอียด ใช้ payType หรือ "ไม่ระบุ")
+function billPays(o) {
+  const ps = (o._pays || []).filter(p => num(p.amount));
+  if (ps.length) return ps.map(p => ({ type: p.type || 'other', amount: Math.abs(num(p.amount)) }));
+  return [{ type: o.payType && o.payType !== 'split' ? o.payType : 'other', amount: Math.abs(num(o.total)) }];
+}
+// กรองตามประเภทการชำระ: บิลที่แยกชำระหลายวิธี นับเฉพาะส่วนที่ชำระด้วยวิธีที่เลือก (ปรับยอดบิล/สินค้าตามสัดส่วน)
+function payScope(rows, sel) {
+  if (!sel || !sel.length) return rows;
+  const want = new Set(sel);
+  return rows.map(o => {
+    const ps = billPays(o), all = ps.reduce((a, p) => a + p.amount, 0), part = ps.filter(p => want.has(p.type)).reduce((a, p) => a + p.amount, 0);
+    if (!part) return null;
+    const k = all ? part / all : 1; if (k > .9999) return o;
+    return { ...o, total: num(o.total) * k, subtotal: num(o.subtotal) * k, discount: num(o.discount) * k, cost: num(o.cost) * k, _split: k,
+      _items: (o._items || []).map(it => ({ ...it, qty: num(it.qty) * k })), _pays: (o._pays || []).filter(p => want.has(p.type)) };
+  }).filter(Boolean);
+}
 const spanDays = (from, to) => Math.round((new Date(to + 'T12:00:00') - new Date(from + 'T12:00:00')) / 864e5) + 1;
 const yShift = (d, k) => { const y = +d.slice(0, 4) + k, md = d.slice(5); return y + '-' + (md === '02-29' ? '02-28' : md); };
 // ช่วงก่อนหน้า: ช่วงสั้น = ช่วงยาวเท่ากันที่อยู่ติดกันก่อนหน้า · ช่วงตั้งแต่ ~1 ปี = วันเดียวกันของปีก่อน
@@ -170,26 +192,39 @@ function reportsRange(el) {
   const all = canStrict('reports'), vc = canStrict('viewCost');
   el.innerHTML = `
     ${all ? '' : `<div class="alert blue">${I(IC.user, 18)}<div>แสดงเฉพาะยอดขายของคุณ (${esc(S.user.name)})</div></div>`}
-    <div id="rp"></div><div id="sf"></div><div id="kpi"><div class="card center"><span class="spin dark"></span></div></div>
+    <div id="rp"></div><div id="sf"></div><div id="pf"></div><div id="kpi"><div class="card center"><span class="spin dark"></span></div></div>
     <div class="card"><div class="row" style="margin-bottom:6px"><h3 class="grow" id="cht">ยอดขาย</h3></div><div id="chart"></div></div>
     <div class="grid2" id="hl"></div>
-    <div class="card"><div class="row" style="gap:8px;margin-bottom:10px"><div class="seg grow" id="tabs" style="overflow-x:auto">${[['day', 'ตามวัน'], ['prod', 'ตามสินค้า'], ['cat', 'ตามหมวดหมู่'], ['staff', 'ตามพนักงาน'], ['pay', 'ตามการชำระ']].map(([k, n]) => `<button data-t="${k}" class="${RS.tab === k ? 'on' : ''}" style="white-space:nowrap">${n}</button>`).join('')}</div><button class="btn ghost sm" id="ex">ส่งออก CSV</button></div><div id="tb"></div></div>
+    <div class="card"><div class="row" style="gap:8px;margin-bottom:10px"><div class="seg grow" id="tabs" style="overflow-x:auto">${[['day', 'ตามวัน'], ['prod', 'ตามสินค้า'], ['cat', 'ตามหมวดหมู่'], ['staff', 'ตามพนักงาน'], ['pay', 'ตามการชำระ']].map(([k, n]) => `<button data-t="${k}" class="${RS.tab === k ? 'on' : ''}" style="white-space:nowrap">${n}</button>`).join('')}</div><button class="btn ghost sm" id="ex">CSV</button>${all ? '<button class="btn ghost sm" id="exx">Excel</button>' : ''}</div><div id="tb"></div></div>
     <div class="row wrap" style="gap:8px"><button class="btn ghost grow" onclick="go('salesreceipts')">${I(IC.receipt, 18)} ใบเสร็จรับเงิน</button>${vc ? `<button class="btn ghost grow" onclick="go('stockvalue')">${I(IC.box, 18)} มูลค่าสต็อก</button>` : ''}${isOwner() ? `<button class="btn ghost grow" onclick="go('tax')">${I(IC.tax, 18)} ภาษี</button>` : ''}</div>`;
-  let rows = [], prows = [], A = null, tableRows = [], imp = null, pimp = null;
+  let rows = [], prows = [], A = null, tableRows = [], imp = null, pimp = null, RV = [];
+  // ชิปเลือกประเภทการชำระ (เลือกได้หลายแบบ)
+  const drawPf = () => {
+    const sel = RS.pays || [], pf = $('#pf', el); if (!pf) return;
+    pf.innerHTML = `<div class="chips" style="align-items:center"><span class="small muted" style="flex:none">การชำระ:</span><button class="chip ${sel.length ? '' : 'on'}" data-p="">ทุกประเภท</button>${PAYORDER.map(k => `<button class="chip ${sel.includes(k) ? 'on' : ''}" data-p="${k}"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${PAYCOLOR[k]};margin-right:5px;vertical-align:1px"></i>${payName(k)}</button>`).join('')}</div>`;
+    $$('[data-p]', pf).forEach(b => b.onclick = () => {
+      const k = b.dataset.p; let v = (RS.pays || []).slice();
+      if (!k) v = []; else v = v.includes(k) ? v.filter(x => x !== k) : v.concat(k);
+      if (v.length === PAYORDER.length) v = [];
+      RS.pays = v; LS.set('rsPays', v); drawPf(); draw();
+    });
+  };
   const single = () => RS.from === RS.to;
   const monthly = () => spanDays(RS.from, RS.to) > 62;
   const draw = () => {
     const f = o => !RS.staff || (o.cashierName || o.cashier) === RS.staff;
-    const R = rows.filter(f); A = blendImported(aggregate(R), RS.staff ? null : imp); const P = blendImported(aggregate(prows.filter(f)), RS.staff ? null : pimp);
+    const sel = RS.pays || [], R = payScope(rows.filter(f), sel), PR = payScope(prows.filter(f), sel); RV = R;
+    A = blendImported(aggregate(R), RS.staff || sel.length ? null : imp); const P = blendImported(aggregate(PR), RS.staff || sel.length ? null : pimp);
     const k = (t, v, s, cur, prv, inv) => `<div class="stat"><div class="k">${t}</div><div class="v">${v}</div><div class="tiny muted">${cur != null ? chgTag(cur, prv, inv) + ' ' : ''}${s || ''}</div></div>`;
     const yoy = spanDays(RS.from, RS.to) >= 300, pn = single() ? 'เทียบวันก่อน' : yoy ? 'เทียบช่วงเดียวกันปีก่อน' : 'เทียบช่วงก่อน';
     const extra = [(A.pass || 0) - (A.debt || 0) > 0 && `เงินรับแทน (โอน/เติม/บิล) ${money((A.pass || 0) - (A.debt || 0), 0)}`, A.debt && `รับชำระหนี้ ${money(A.debt, 0)}`, A.inst && `ผ่อนสินค้า (ดาวน์/ค่างวด) ${money(A.inst, 0)}`].filter(Boolean);
     $('#kpi', el).innerHTML = `<div class="grid3" style="margin-bottom:${extra.length ? 6 : 12}px">${k('ยอดขายสุทธิ', baht(A.net), pn, A.net, P.net)}${vc ? k('กำไรขั้นต้น', baht(A.profit), A.net ? 'อัตรา ' + (A.profit / A.net * 100).toFixed(1) + '%' : '', A.profit, P.profit) : k('จำนวนบิล', A.bills, '', A.bills, P.bills)}${k('เฉลี่ย/บิล', baht(A.bills ? A.net / A.bills : 0), A.bills + ' บิล', A.bills ? A.net / A.bills : 0, P.bills ? P.net / P.bills : 0)}${k('ยอดขาย (ก่อนหัก)', baht(A.gross), '', A.gross, P.gross)}${k('ส่วนลด', baht(A.disc), '', A.disc, P.disc, 1)}${k('คืนเงิน', baht(A.refund), A.refunds + ' ใบ', A.refund, P.refund, 1)}</div>
       ${extra.length ? `<div class="tiny muted" style="margin:0 4px 12px">รวมอยู่ในยอดขายสุทธิ: ${extra.join(' · ')}</div>` : ''}
+      ${sel.length ? `<div class="alert blue small" style="margin:0 0 12px">${I(IC.sale, 18)}<div>แสดงเฉพาะการชำระแบบ <b>${sel.map(payName).join(' + ')}</b> · บิลที่แยกชำระหลายวิธีนับเฉพาะส่วนที่จ่ายด้วยวิธีนี้${imp && (imp.days && Object.keys(imp.days).length || imp.months && imp.months.length) ? ' · ไม่รวมยอดที่นำเข้า (ไม่มีข้อมูลการชำระ)' : ''}</div></div>` : ''}
       ${A.partial.length ? `<div class="alert amber small" style="margin:0 0 12px">${I(IC.alert, 18)}<div>${A.partial.map(ym => TH_MF[+ym.slice(5, 7) - 1] + ' ' + (+ym.slice(0, 4) + 543)).join(', ')} มีแค่ยอดรวมทั้งเดือน (นำเข้า) ไม่มียอดรายวัน — ช่วงที่เลือกครอบไม่ครบเดือนจึงยังไม่นับ · เลือก “เดือนก่อน”, “12 เดือน”, “ปีนี้/ปีที่แล้ว” หรือกำหนดเองให้ครอบทั้งเดือน</div></div>` : ''}
       ${A.impDN || A.impM ? `<div class="alert blue small" style="margin:0 0 12px">${I(IC.io, 18)}<div>รวมยอดที่นำเข้าแล้ว: ${[A.impDN && `รายวัน ${A.impDN} วัน ${money(A.impD, 0)}`, A.impM && `รายเดือน ${Object.keys(A.months).length} เดือน ${money(A.impM, 0)}`].filter(Boolean).join(' · ')} — ยอดนำเข้าไม่มีจำนวนบิล/รายละเอียดสินค้า (เฉลี่ยต่อบิล สินค้าขายดี และตารางสินค้า/หมวด/พนักงาน/การชำระ คิดจากใบเสร็จเท่านั้น)${A.impM ? ' · ยอดรายเดือนนับเมื่อเลือกช่วงครอบทั้งเดือน' : ''}</div></div>` : ''}`;
     // เฉลี่ย/บิล: คิดจากใบเสร็จเท่านั้น
-    { const nb = R.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), pb = prows.filter(f).filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), PA = aggregate(prows.filter(f));
+    { const nb = R.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), pb = PR.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), PA = aggregate(PR);
       const v = $$('#kpi .stat', el)[2]; if (v) v.outerHTML = k('เฉลี่ย/บิล', baht(A.bills ? nb / A.bills : 0), A.bills + ' บิล', A.bills ? nb / A.bills : 0, PA.bills ? pb / PA.bills : 0); }
     // กราฟหลัก: ช่วงนี้เทียบช่วงก่อนหน้า (แท่งเทา)
     let data, ttl;
@@ -243,8 +278,12 @@ function reportsRange(el) {
       tableRows = [['พนักงาน', 'บิล', 'คืนเงิน', 'ยอดขายสุทธิ', 'เฉลี่ย/บิล'].concat(vc ? ['กำไร'] : [])].concat(list.map(([n, s2]) => [n, s2.bills, s2.refund, s2.net, s2.bills ? s2.net / s2.bills : 0].concat(vc ? [s2.net - s2.cost] : [])));
       h += tbl(tableRows, r => [esc(r[0]), r[1]].concat(r.slice(2).map(v => money(v))));
     } else if (tab === 'pay') {
-      tableRows = [['ประเภทการชำระ', 'จำนวนบิล', 'ยอดเงิน']].concat(Object.entries(A.pay).sort((a, b) => b[1].amt - a[1].amt).map(([k2, p]) => [PAYNAME[k2] || k2, p.n, p.amt]));
-      h = tbl(tableRows, r => [`<span style="font-weight:600">${esc(r[0])}</span>`, r[1], money(r[2])]);
+      // ยอดรวมแต่ละประเภท + ตารางรายวัน/รายเดือนแยกคอลัมน์ตามประเภท
+      const M = payMatrix(RV, RS.pays, monthly()), tot = M.types.reduce((a2, k2) => a2 + M.tot[k2], 0);
+      h = M.types.length ? hBars(M.types.map(k2 => ({ n: payName(k2), v: M.tot[k2], c: PAYCOLOR[k2] || '#999', s: M.n[k2] + ' บิล · ' + (tot ? (M.tot[k2] / tot * 100).toFixed(1) : 0) + '%' }))) : '';
+      tableRows = [[monthly() ? 'เดือน' : 'วันที่'].concat(M.types.map(payName), ['รวม'])].concat(M.keys.map(d => [d].concat(M.types.map(k2 => M.cell[d][k2] || 0), [M.types.reduce((a2, k2) => a2 + (M.cell[d][k2] || 0), 0)])));
+      h += tbl(tableRows, r => [r[0].length === 7 ? TH_MF[+r[0].slice(5, 7) - 1] + ' ' + (+r[0].slice(0, 4) + 543) : thDate(r[0])].concat(r.slice(1).map((v, i) => i === r.length - 2 ? `<b>${money(v)}</b>` : v ? money(v) : '<span class="muted">–</span>')))
+        + (M.keys.length ? `<div class="kv small" style="margin-top:6px"><b>รวมทั้งช่วง</b><b class="num">${money(tot)}</b></div>` : '');
     }
     $('#tb', el).innerHTML = h;
   };
@@ -262,6 +301,8 @@ function reportsRange(el) {
   };
   $$('#tabs button', el).forEach(b => b.onclick = () => { RS.tab = b.dataset.t; $$('#tabs button', el).forEach(x => x.classList.toggle('on', x === b)); drawTab(); });
   $('#ex', el).onclick = () => download(`sales_${RS.tab}_${RS.from}_${RS.to}.csv`, toCSV(tableRows.map(r => r.map(v => typeof v === 'number' ? Math.round(v * 100) / 100 : v))));
+  const exx = $('#exx', el); if (exx) exx.onclick = () => payExportDlg(rows.filter(o => !RS.staff || (o.cashierName || o.cashier) === RS.staff), RS.from, RS.to);
+  drawPf();
   rangePicker($('#rp', el), RS, () => load());
   load();
   // สถานะข้อมูลในเครื่อง
@@ -538,4 +579,57 @@ function receiptsIO(rows, reload) {
       const g2 = $('#go2', pv); if (g2) g2.onclick = () => start(resume.done);
     } catch (err) { busy(0); pv.innerHTML = ''; toast(err.message, 1); }
   };
+}
+
+
+/* ---------- ยอดขายตามประเภทการชำระ: ตาราง + ส่งออก Excel ---------- */
+function payMatrix(rows, sel, byMonth) {
+  const want = sel && sel.length ? new Set(sel) : null, cell = {}, tot = {}, n = {}, seen = new Set();
+  rows.forEach(o => {
+    const sg = o.status === 'refund' ? -1 : 1, d = String(o.date).slice(0, byMonth ? 7 : 10), c = cell[d] || (cell[d] = {});
+    billPays(o).forEach(p => { if (want && !want.has(p.type)) return; const a = sg * p.amount; c[p.type] = (c[p.type] || 0) + a; tot[p.type] = (tot[p.type] || 0) + a; seen.add(p.type); if (sg > 0) n[p.type] = (n[p.type] || 0) + 1; });
+  });
+  const types = PAYORDER.filter(k => seen.has(k) || (want && want.has(k))).concat([...seen].filter(k => !PAYORDER.includes(k)));
+  types.forEach(k => { tot[k] = tot[k] || 0; n[k] = n[k] || 0; });
+  return { types, cell, tot, n, keys: Object.keys(cell).sort() };
+}
+function payExportDlg(rows, from, to) {
+  const all = payMatrix(rows, null, false), sel0 = (RS.pays || []).length ? RS.pays : all.types;
+  const ov = sheet('ส่งออก Excel ตามการชำระเงิน', `
+    <div class="small muted" style="margin-bottom:8px">ช่วง ${thLong(from)}${from !== to ? ' – ' + thLong(to) : ''} · ${rows.length.toLocaleString()} บิล</div>
+    <div class="card" style="padding:10px 12px"><b class="small">เลือกประเภทการชำระที่จะส่งออก</b>
+      ${all.types.length ? all.types.map(k => `<label class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-k="${k}" ${sel0.includes(k) ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--green)"><i style="width:10px;height:10px;border-radius:3px;background:${PAYCOLOR[k] || '#999'}"></i><span class="grow">${payName(k)}</span><span class="small num">${money(all.tot[k])} · ${all.n[k]} บิล</span></label>`).join('') : '<div class="empty small">ไม่มียอดขายในช่วงนี้</div>'}
+      <div class="row" style="gap:6px;margin-top:8px"><button class="btn ghost sm" id="sa">เลือกทั้งหมด</button><button class="btn ghost sm" id="sn">ไม่เลือก</button></div></div>
+    <div class="card" style="padding:10px 12px"><b class="small">เนื้อหาในไฟล์</b>
+      ${[['sum', 'สรุปยอดตามประเภท', 1], ['day', 'ยอดรายวัน แยกคอลัมน์ตามประเภท', 1], ['bill', 'รายการใบเสร็จ (บิลละแถว)', 1], ['each', 'แยกใบเสร็จแต่ละประเภทเป็นชีตของตัวเอง', 0]].map(([k, n2, on]) => `<label class="row small" style="padding:6px 0"><input type="checkbox" data-o="${k}" ${on ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--green)"> ${n2}</label>`).join('')}
+      <div class="tiny muted" style="margin-top:4px">ไฟล์ .xlsx ฟอนต์ TH SarabunPSK · บิลที่แยกชำระหลายวิธี แสดงยอดแยกตามแต่ละวิธี</div></div>`,
+    `<button class="btn block green" id="go">${I(IC.file, 18)} ดาวน์โหลด Excel</button>`);
+  $('#sa', ov).onclick = () => $$('[data-k]', ov).forEach(c => c.checked = true);
+  $('#sn', ov).onclick = () => $$('[data-k]', ov).forEach(c => c.checked = false);
+  $('#go', ov).onclick = () => {
+    const sel = $$('[data-k]:checked', ov).map(c => c.dataset.k), opt = {}; $$('[data-o]', ov).forEach(c => opt[c.dataset.o] = c.checked);
+    if (!sel.length) return toast('เลือกประเภทการชำระอย่างน้อย 1 แบบ', 1);
+    if (!opt.sum && !opt.day && !opt.bill && !opt.each) return toast('เลือกเนื้อหาอย่างน้อย 1 อย่าง', 1);
+    try { XL.save(`sales-by-payment_${from}_${to}.xlsx`, payBook(rows, sel, from, to, opt), { title: 'ยอดขายตามการชำระเงิน' }); ov.remove(); toast('ดาวน์โหลด Excel แล้ว'); } catch (e) { toast(e.message, 1); }
+  };
+}
+function payBook(rows, sel, from, to, opt) {
+  const M = payMatrix(rows, sel, false), T = M.types, shop = S.settings.shopName || 'ร้านเมย์ มินิมาร์ท';
+  const span = `ช่วงวันที่ ${thLong(from)}${from !== to ? ' ถึง ' + thLong(to) : ''}`, which = 'ประเภทการชำระ: ' + T.map(payName).join(', ');
+  const head = (title, w) => ({ rows: [[{ v: title, s: 'T' }], [{ v: shop + ' · ' + span, s: 'c' }], [{ v: which, s: 'sub' }], []], merges: [`A1:${XL.col(w - 1)}1`, `A2:${XL.col(w - 1)}2`, `A3:${XL.col(w - 1)}3`] });
+  const sheets = [], grand = T.reduce((a, k) => a + M.tot[k], 0);
+  if (opt.sum) { const h = head('สรุปยอดขายตามประเภทการชำระเงิน', 4); sheets.push({ name: 'สรุปตามการชำระ', cols: [26, 14, 18, 12], merges: h.merges, rows: h.rows.concat(XL.table(['ประเภทการชำระ', 'จำนวนบิล', 'ยอดเงิน (บาท)', 'สัดส่วน %'], T.map(k => [payName(k), M.n[k], M.tot[k], grand ? M.tot[k] / grand * 100 : 0]), ['t', 'i', 'n', 'n'], ['รวม', T.reduce((a, k) => a + M.n[k], 0), grand, grand ? 100 : 0])) }); }
+  if (opt.day) { const w = T.length + 2, h = head('ยอดขายรายวัน แยกตามประเภทการชำระเงิน', w); sheets.push({ name: 'รายวัน', cols: [16].concat(T.map(() => 16), [17]), merges: h.merges, freeze: 5, rows: h.rows.concat(XL.table(['วันที่'].concat(T.map(payName), ['รวม']), M.keys.map(d => [thDate(d)].concat(T.map(k => M.cell[d][k] || 0), [T.reduce((a, k) => a + (M.cell[d][k] || 0), 0)])), ['d'], ['รวม'].concat(T.map(k => M.tot[k]), [grand]))) }); }
+  const want = new Set(T), billRows = list => list.slice().sort((a, b) => String(a.date).localeCompare(b.date)).map(o => {
+    const sg = o.status === 'refund' ? -1 : 1, ps = billPays(o), by = {}; ps.forEach(p => by[p.type] = (by[p.type] || 0) + sg * p.amount);
+    return { o, by, any: ps.some(p => want.has(p.type)) };
+  }).filter(r => r.any);
+  const billSheet = (name, title, types) => {
+    const w = 6 + types.length + 1, h = head(title, w), L = billRows(rows).filter(r => types.some(k => r.by[k]));
+    const body = L.map(({ o, by }) => [thDate(o.date), String(o.date).slice(11, 16), o.id, o.cashierName || o.cashier || '', o.customerName || '', o.status === 'refund' ? 'คืนเงิน' : Object.keys(by).length > 1 ? 'แยกชำระ' : 'ขาย'].concat(types.map(k => by[k] || ''), [types.reduce((a, k) => a + (by[k] || 0), 0)]));
+    sheets.push({ name, cols: [13, 8, 20, 16, 18, 10].concat(types.map(() => 15), [16]), merges: h.merges, freeze: 5, landscape: types.length > 2, rows: h.rows.concat(XL.table(['วันที่', 'เวลา', 'เลขที่ใบเสร็จ', 'พนักงาน', 'ลูกค้า', 'ประเภทบิล'].concat(types.map(payName), ['รวม']), body, ['d', 'd', 't', 't', 't', 'd'], ['รวม', '', `${L.length} บิล`, '', '', ''].concat(types.map(k => body.reduce((a, r, i) => a + (L[i].by[k] || 0), 0)), [body.reduce((a, r) => a + r[r.length - 1], 0)]))) });
+  };
+  if (opt.bill) billSheet('ใบเสร็จ', 'รายการใบเสร็จรับเงิน แยกตามประเภทการชำระ', T);
+  if (opt.each) T.forEach(k => billSheet(payName(k).replace('/', '-'), 'ใบเสร็จที่ชำระด้วย ' + payName(k), [k]));
+  return sheets;
 }
