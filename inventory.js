@@ -4,6 +4,7 @@
 'use strict';
 VIEWS.inventory = el => {
   const it = [
+    ['restock', IC.box, 'วางแผนสั่งของ', 'สินค้าหมด/ใกล้หมด · แนะนำจำนวนสั่งจากยอดขายให้พอถึงสิ้นเดือน', isOwner() && window.Restock && Restock.on()],
     ['stockcount', IC.count, 'ตรวจนับสต็อก', 'ทั้งหมด / ตามหมวด / เฉพาะที่สแกน · ใช้เครื่องยิงหรือกล้อง', can('stockCount')],
     ['polist', IC.file, 'ใบสั่งซื้อ', 'สร้างจากสินค้าใกล้หมด พิมพ์ส่งร้านค้า รับของเข้าสต็อก', can('receiveGoods')],
     ['stockvalue', IC.chart, 'มูลค่าสต็อก', 'ต้นทุน มูลค่าขาย กำไรคาดการณ์ ตามหมวด', can('viewCost')],

@@ -10,6 +10,8 @@ var Logic = (function () {
     Images: { key: 'sku', read: 'all', write: 'editProducts', cols: ['sku', 'data', 'updatedAt'] },
     Receipts: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', own: 'createdBy', cols: ['id', 'date', 'supplier', 'supplierTaxId', 'docNo', 'type', 'subtotal', 'vat', 'total', 'payMethod', 'fileId', 'fileUrl', 'items', 'stockApplied', 'note', 'createdAt', 'createdBy', 'cat'] },
     SalesDaily: { key: 'date', read: 'owner', write: 'owner', dateCol: 'date', cols: ['date', 'gross', 'refund', 'discount', 'net', 'cost', 'profit', 'source', 'note'] },
+    // ประวัติขายรายสินค้าจากระบบเดิม (สรุปแล้ว: รายเดือน + รายวันช่วงท้าย) ใช้วางแผนสั่งของ
+    ItemHist: { key: 'sku', read: 'owner', write: 'owner', cols: ['sku', 'name', 'months', 'recent', 'recentFrom', 'first', 'last', 'qty', 'updatedAt'] },
     TaxFilings: { key: 'id', read: 'owner', write: 'owner', cols: ['id', 'form', 'period', 'filedAt', 'amount', 'ref', 'fileId', 'fileUrl', 'note', 'createdAt'] },
     Sales: { key: 'id', read: 'owner', write: 'owner', cols: ['id', 'date', 'amount', 'gross', 'refund', 'discount', 'cost', 'profit', 'source', 'note', 'createdAt', 'createdBy'] },
     Orders: { key: 'id', read: 'none', write: 'none', dateCol: 'date', cols: ['id', 'date', 'deviceId', 'deviceName', 'cashier', 'cashierName', 'customerId', 'customerName', 'items', 'itemCount', 'subtotal', 'discount', 'total', 'cost', 'payments', 'payType', 'cash', 'change', 'pointsEarned', 'pointsUsed', 'status', 'refundOf', 'note', 'syncedAt'] },

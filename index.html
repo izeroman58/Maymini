@@ -243,7 +243,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.50';
+const APP_VER = '2.6.51';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -2127,7 +2127,7 @@ function moreGroups() {
   return [
     it('jobs', IC.alert, own ? 'งานรอดำเนินการ' : 'งานโอน/ชำระบิล', 1, jn ? jn : ''),
     { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), (seesSales() || own) && ['รายงาน/ยอดขาย', IC.chart, () => go('reports'), '', S.view === 'reports', 'ยอดขายรายเดือน'], it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers')), it('rank', IC.trophy, 'อันดับลูกค้า (ภาพ)', can('customers')), it('inst', IC.receipt, 'สัญญาผ่อนสินค้า', can('customers') || can('credit'))] },
-    { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
+    { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('restock', IC.box, 'วางแผนสั่งของ', own && window.Restock && Restock.on()), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
     { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('ledger', IC.file, 'บัญชีรายรับ-รายจ่าย', own), it('vatcheck', IC.tag, 'ตรวจสินค้ายกเว้น VAT', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
     { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', 1), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
     { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ', 1), it('pins', IC.shield, 'รหัสเจ้าของ · รหัสอนุญาต', own), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ · ถ่ายเอกสาร · ผ่อน', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
@@ -2843,7 +2843,7 @@ VIEWS.settings = el => {
 /* ---------- BOOT ---------- */
 /* ตรวจว่าไฟล์ระบบโหลดครบ ถ้าไม่ครบ (เช่นเบราว์เซอร์ยังจำไฟล์เก่า) ล้างแคชแล้วโหลดใหม่ 1 ครั้ง ถ้ายังไม่ครบ แจ้งชื่อไฟล์ที่ขาด */
 function missingFiles() {
-  const chk = { 'logic.js': () => typeof Logic !== 'undefined', 'cache.js': () => typeof Cache !== 'undefined', 'offline.js': () => typeof OfflineAuth !== 'undefined', 'scanner.js': () => typeof Scanner !== 'undefined', 'printer.js': () => typeof RP !== 'undefined', 'pos.js': () => typeof POS !== 'undefined', 'display.js': () => !!VIEWS.displayset, 'idle.js': () => typeof idleScene !== 'undefined', 'reports.js': () => !!VIEWS.reports, 'inventory.js': () => !!VIEWS.stockcount, 'people.js': () => !!VIEWS.staff, 'quality.js': () => !!VIEWS.dataquality, 'services.js': () => typeof svcMenu !== 'undefined', 'owner.js': () => !!VIEWS.home, 'books.js': () => !!VIEWS.vatcheck };
+  const chk = { 'logic.js': () => typeof Logic !== 'undefined', 'cache.js': () => typeof Cache !== 'undefined', 'offline.js': () => typeof OfflineAuth !== 'undefined', 'scanner.js': () => typeof Scanner !== 'undefined', 'printer.js': () => typeof RP !== 'undefined', 'pos.js': () => typeof POS !== 'undefined', 'display.js': () => !!VIEWS.displayset, 'idle.js': () => typeof idleScene !== 'undefined', 'reports.js': () => !!VIEWS.reports, 'inventory.js': () => !!VIEWS.stockcount, 'people.js': () => !!VIEWS.staff, 'quality.js': () => !!VIEWS.dataquality, 'services.js': () => typeof svcMenu !== 'undefined', 'owner.js': () => !!VIEWS.home, 'books.js': () => !!VIEWS.vatcheck, 'restock.js': () => !!VIEWS.restock };
   return Object.keys(chk).filter(f => { try { return !chk[f](); } catch (e) { return true; } });
 }
 async function selfHeal(miss) {
@@ -2930,22 +2930,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.50"></script>
-<script src="logic.js?v=2.6.50"></script>
-<script src="cache.js?v=2.6.50"></script>
-<script src="offline.js?v=2.6.50"></script>
-<script src="scanner.js?v=2.6.50"></script>
-<script src="printer.js?v=2.6.50"></script>
-<script src="pos.js?v=2.6.50"></script>
-<script src="idle.js?v=2.6.50"></script>
-<script src="display.js?v=2.6.50"></script>
-<script src="reports.js?v=2.6.50"></script>
-<script src="inventory.js?v=2.6.50"></script>
-<script src="people.js?v=2.6.50"></script>
-<script src="quality.js?v=2.6.50"></script>
-<script src="services.js?v=2.6.50"></script>
-<script src="owner.js?v=2.6.50"></script>
-<script src="books.js?v=2.6.50"></script>
+<script src="qr.js?v=2.6.51"></script>
+<script src="logic.js?v=2.6.51"></script>
+<script src="cache.js?v=2.6.51"></script>
+<script src="offline.js?v=2.6.51"></script>
+<script src="scanner.js?v=2.6.51"></script>
+<script src="printer.js?v=2.6.51"></script>
+<script src="pos.js?v=2.6.51"></script>
+<script src="idle.js?v=2.6.51"></script>
+<script src="display.js?v=2.6.51"></script>
+<script src="reports.js?v=2.6.51"></script>
+<script src="inventory.js?v=2.6.51"></script>
+<script src="people.js?v=2.6.51"></script>
+<script src="quality.js?v=2.6.51"></script>
+<script src="services.js?v=2.6.51"></script>
+<script src="owner.js?v=2.6.51"></script>
+<script src="books.js?v=2.6.51"></script>
+<script src="restock.js?v=2.6.51"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

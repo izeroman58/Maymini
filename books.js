@@ -200,6 +200,7 @@ VIEWS.vatcheck = async el => {
             <div class="to"><span class="muted">ย้ายไป →</span><select data-to="${i}">${cats.map(c => `<option${c === m.to ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="tag ${kind === 'toEx' ? 'green' : 'gray'}">${kind === 'toEx' ? 'ยกเว้น VAT' : 'เสีย VAT'}</span></div></div>
             <button class="iconbtn" data-no="${i}" title="ไม่ใช่ — คงหมวดเดิม">${I(IC.x, 16)}</button></div>`; }).join('')}</div>`; }).join('')}
         <div style="position:sticky;bottom:8px;z-index:2"><button class="btn block green" id="ap" style="box-shadow:var(--sh)">ย้ายหมวดที่เลือก</button></div>`;
+      if (window.rsSticky) rsSticky($('#ap', pane).parentElement);
       const cnt = () => { const n = $$('[data-m]:checked', pane).length; $('#ap', pane).textContent = n ? `ย้ายหมวดที่เลือก (${n} รายการ)` : 'เลือกรายการที่จะย้าย'; $('#ap', pane).disabled = !n; };
       $$('[data-all]', pane).forEach(c => c.onchange = () => { $$(`[data-g="${CSS.escape(c.dataset.all)}"]`, pane).forEach(x => x.checked = c.checked); cnt(); });
       $$('[data-m]', pane).forEach(c => c.onchange = cnt); cnt();
@@ -505,8 +506,90 @@ window.DocScan = DocScan;
 /* ---------- บัญชีรายรับ-รายจ่าย (เงินได้ ม.40(8)) ----------
    รายรับ = ยอดขายสุทธิจาก POS/ยอดนำเข้า (ไม่รวมเงินรับแทน) · รายจ่าย = ใบเสร็จ/บิลที่บันทึก (ตาราง Receipts)
    รูปแบบรายงานตามประกาศอธิบดีกรมสรรพากรเกี่ยวกับภาษีเงินได้ (ฉบับที่ 161) "รายงานเงินสดรับ-จ่าย" */
-const EXP_CATS = ['ซื้อสินค้ามาขาย', 'ค่าเช่าร้าน/สถานที่', 'ค่าไฟฟ้า', 'ค่าน้ำประปา', 'ค่าโทรศัพท์/อินเทอร์เน็ต', 'ค่าจ้างพนักงาน', 'ค่าขนส่ง/น้ำมันรถ', 'ค่าซ่อมแซม/อุปกรณ์', 'ค่าวัสดุสิ้นเปลือง/บรรจุภัณฑ์', 'ค่าธรรมเนียม/ภาษีป้าย/ใบอนุญาต', 'อื่น ๆ'];
-const EXP_COLOR = ['#1F5FBF', '#7B3FB8', '#E3A008', '#00ACC1', '#3949AB', '#D81B60', '#6D4C41', '#00897B', '#7CB342', '#F4511E', '#757575'];
+/* หมวดรายจ่าย: เจ้าของเพิ่ม/ลบ/เปลี่ยนชื่อ/อิโมจิ/ปักหมุดได้ (ตั้งค่า expCats) · หมวด "ซื้อสินค้ามาขาย" มีเสมอ (ใช้ลงสต๊อก) */
+const EXP_DEF = [['ซื้อสินค้ามาขาย', '🛒', 1], ['ค่าเช่าร้าน/สถานที่', '🏠'], ['ค่าไฟฟ้า', '⚡'], ['ค่าน้ำประปา', '🚰'], ['ค่าโทรศัพท์/อินเทอร์เน็ต', '📶'], ['ค่าจ้างพนักงาน', '👷'], ['ค่าขนส่ง/น้ำมันรถ', '⛽'], ['ค่าซ่อมแซม/อุปกรณ์', '🔧'], ['ค่าวัสดุสิ้นเปลือง/บรรจุภัณฑ์', '🛍️'], ['ค่าธรรมเนียม/ภาษีป้าย/ใบอนุญาต', '🧾'], ['อื่น ๆ', '📦']];
+const EXP_SUGGEST = [['ค่าน้ำแข็ง', '🧊'], ['ค่าแก๊สหุงต้ม', '🔥'], ['ค่าเก็บขยะ', '🗑️'], ['ค่าอาหารพนักงาน', '🍱'], ['ค่าธรรมเนียมธนาคาร', '🏦'], ['ของใช้ในร้าน', '🧴'], ['ค่าโฆษณา', '📣'], ['ค่าส่งสินค้า', '🚚'], ['ค่าถุง/บรรจุภัณฑ์', '🛍️'], ['ค่าน้ำดื่ม', '💧']];
+const EXP_EMO = ['🛒', '🧊', '🔥', '⚡', '🚰', '💧', '📶', '📱', '🏠', '👷', '🍱', '⛽', '🚚', '🛵', '🔧', '🛠️', '🧹', '🧴', '🛍️', '📦', '🧾', '🏦', '💳', '📣', '🗑️', '🧯', '💡', '❄️', '🖨️', '📄', '🥚', '🥬', '🍚', '🥤', '🍺', '🚬', '💊', '🎁', '🏷️', '💰', '📝', '⭐'];
+const EXP_PAL = ['#1F5FBF', '#7B3FB8', '#E3A008', '#00ACC1', '#3949AB', '#D81B60', '#6D4C41', '#00897B', '#7CB342', '#F4511E', '#5E35B1', '#039BE5', '#C2185B', '#558B2F'];
+const ExpCats = {
+  BUY: 'ซื้อสินค้ามาขาย',
+  list() {
+    let L = null; try { const v = S.settings.expCats; L = v ? (typeof v === 'string' ? JSON.parse(v) : v) : null; } catch (e) { }
+    if (!Array.isArray(L) || !L.length) L = EXP_DEF.map(([n, e, pin]) => ({ n, e, pin: !!pin }));
+    L = L.filter(c => c && c.n).map(c => ({ n: String(c.n), e: c.e || '🏷️', pin: !!c.pin }));
+    if (!L.some(c => c.n === this.BUY)) L.unshift({ n: this.BUY, e: '🛒', pin: true });
+    return L;
+  },
+  color(n) { if (n === this.BUY) return EXP_PAL[0]; let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) >>> 0; return EXP_PAL[1 + h % (EXP_PAL.length - 1)]; },
+  meta(n) { const c = this.list().find(x => x.n === n); return { e: c ? c.e : (n === 'อื่น ๆ' ? '📦' : '🏷️'), c: this.color(n) }; },
+  label(n) { return this.meta(n).e + ' ' + n; },
+  // ใช้บ่อยแค่ไหน (120 วันล่าสุด) → แสดงเป็นตัวเลือกด่วน ที่เหลือซ่อนไว้ใต้ "อื่น ๆ"
+  usage() { const from = addDays(todayISO(), -120), u = {}; (S.receipts || []).forEach(r => { if (String(r.date) >= from) { const k = expCat(r); u[k] = (u[k] || 0) + 1; } }); return u; },
+  quick(cur) {
+    const L = this.list(), u = this.usage(), pin = L.filter(c => c.pin), used = L.filter(c => !c.pin && u[c.n]).sort((a, b) => u[b.n] - u[a.n]), rest = L.filter(c => !c.pin && !u[c.n]);
+    const set = new Set(pin.concat(used, rest).slice(0, Math.max(6, pin.length)).map(c => c.n)); if (cur) set.add(cur);
+    return { all: L, show: L.filter(c => set.has(c.n)), hidden: L.filter(c => !set.has(c.n)) };
+  },
+  async save(L) { await saveSetting('expCats', JSON.stringify(L.map(c => ({ n: c.n, e: c.e, pin: c.pin ? 1 : 0 })))); }
+};
+window.ExpCats = ExpCats;
+// จัดการหมวดรายจ่าย: เพิ่ม · ลบ · เปลี่ยนชื่อ/อิโมจิ · 📌 แสดงเป็นตัวเลือกด่วนเสมอ · เรียงลำดับ
+function expCatsDlg(done) {
+  if (!isOwner()) return toast('เฉพาะเจ้าของกิจการ', 1);
+  let L = ExpCats.list().map(c => ({ ...c, o: c.n })), pick = -1, newE = '🏷️';
+  const ov = sheet('หมวดรายจ่าย', `<div class="tiny muted" style="margin:-4px 2px 10px">📌 = แสดงเป็นตัวเลือกด่วนเสมอ · หมวดอื่นแสดงตามที่ใช้บ่อย ที่เหลือซ่อนใต้ “อื่น ๆ” (กดขยายได้) · ลบหมวดแล้ว รายการที่บันทึกไว้ยังอยู่ครบ</div>
+    <div class="card" style="padding:10px 12px"><b class="small">เพิ่มหมวดใหม่</b>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="ecemo" id="ne" type="button">${newE}</button><input class="in grow" id="nn" placeholder="เช่น ค่าน้ำแข็ง" maxlength="40"><button class="btn sm green" id="na" type="button">${I(IC.plus, 16)} เพิ่ม</button></div>
+      <div id="ng"></div>
+      <div class="tiny muted" style="margin:10px 0 4px">แนะนำ (แตะเพื่อเพิ่ม)</div><div class="row wrap" id="sg" style="gap:6px"></div></div>
+    <div class="list" id="ec"></div>`,
+    `<button class="btn ghost" id="rs" type="button">ค่าเริ่มต้น</button><button class="btn grow green" id="sv" type="button">${I(IC.check, 18)} บันทึก</button>`, { sticky: true });
+  const grid = (cur, on) => `<div class="ecgrid">${EXP_EMO.map(e => `<button type="button" data-e="${e}" class="${e === cur ? 'on' : ''}">${e}</button>`).join('')}<input class="in" data-own placeholder="พิมพ์เอง" maxlength="4"></div>`;
+  const draw = () => {
+    $('#ec', ov).innerHTML = L.map((c, i) => `<div class="ecr"><div class="row" style="gap:8px;padding:8px 10px">
+        <button class="ecemo" type="button" data-pe="${i}">${c.e}</button>
+        ${c.n === ExpCats.BUY ? `<div class="grow small" style="font-weight:600">${esc(c.n)}<div class="tiny muted" style="font-weight:400">ใช้ลงสต๊อก · ลบไม่ได้</div></div>` : `<input class="in grow" data-nm="${i}" value="${esc(c.n)}" maxlength="40" style="min-height:38px;padding:6px 10px">`}
+        <button class="ecpin ${c.pin ? 'on' : ''}" type="button" data-pin="${i}" title="แสดงเป็นตัวเลือกด่วนเสมอ">📌</button>
+        <button class="iconbtn" type="button" data-up="${i}" ${i ? '' : 'disabled'} style="padding:4px">▲</button><button class="iconbtn" type="button" data-dn="${i}" ${i < L.length - 1 ? '' : 'disabled'} style="padding:4px">▼</button>
+        ${c.n === ExpCats.BUY ? '<span style="width:30px"></span>' : `<button class="iconbtn" type="button" data-del="${i}" style="color:var(--red);padding:4px">${I(IC.trash, 18)}</button>`}</div>
+        ${pick === i ? grid(c.e) : ''}</div>`).join('');
+    $('#sg', ov).innerHTML = EXP_SUGGEST.filter(([n]) => !L.some(c => c.n === n)).map(([n, e]) => `<button class="chip" type="button" data-sn="${esc(n)}" data-se="${e}">${e} ${esc(n)}</button>`).join('') || '<span class="tiny muted">—</span>';
+    $('#ne', ov).textContent = newE;
+    $$('[data-nm]', ov).forEach(x => x.oninput = () => { L[+x.dataset.nm].n = x.value; });
+    $$('[data-pe]', ov).forEach(b => b.onclick = () => { pick = pick === +b.dataset.pe ? -1 : +b.dataset.pe; $('#ng', ov).innerHTML = ''; draw(); });
+    $$('[data-pin]', ov).forEach(b => b.onclick = () => { const c = L[+b.dataset.pin]; c.pin = !c.pin; draw(); });
+    $$('[data-up]', ov).forEach(b => b.onclick = () => { const i = +b.dataset.up; [L[i - 1], L[i]] = [L[i], L[i - 1]]; pick = -1; draw(); });
+    $$('[data-dn]', ov).forEach(b => b.onclick = () => { const i = +b.dataset.dn; [L[i + 1], L[i]] = [L[i], L[i + 1]]; pick = -1; draw(); });
+    $$('[data-del]', ov).forEach(b => b.onclick = () => { L.splice(+b.dataset.del, 1); pick = -1; draw(); });
+    $$('[data-sn]', ov).forEach(b => b.onclick = () => { L.splice(1, 0, { n: b.dataset.sn, e: b.dataset.se, pin: true }); draw(); toast(`เพิ่ม ${b.dataset.se} ${b.dataset.sn} แล้ว (📌 แสดงเป็นตัวเลือกด่วน)`); });
+    const g = pick >= 0 && $('.ecgrid', ov);
+    if (g) { $$('[data-e]', g).forEach(b => b.onclick = () => { L[pick].e = b.dataset.e; pick = -1; draw(); }); const own = $('[data-own]', g); own.onchange = () => { if (own.value.trim()) { L[pick].e = own.value.trim(); pick = -1; draw(); } }; }
+  };
+  $('#ne', ov).onclick = () => { const ng = $('#ng', ov); if (ng.innerHTML) { ng.innerHTML = ''; return; } pick = -1; draw(); ng.innerHTML = grid(newE); $$('[data-e]', ng).forEach(b => b.onclick = () => { newE = b.dataset.e; ng.innerHTML = ''; $('#ne', ov).textContent = newE; }); const own = $('[data-own]', ng); own.onchange = () => { if (own.value.trim()) { newE = own.value.trim(); ng.innerHTML = ''; $('#ne', ov).textContent = newE; } }; };
+  $('#na', ov).onclick = () => { const n = $('#nn', ov).value.trim(); if (!n) return toast('ใส่ชื่อหมวด', 1); if (L.some(c => c.n === n)) return toast('มีหมวดนี้แล้ว', 1); L.splice(1, 0, { n, e: newE, pin: true }); $('#nn', ov).value = ''; newE = '🏷️'; draw(); };
+  $('#nn', ov).onkeydown = e => { if (e.key === 'Enter') $('#na', ov).click(); };
+  $('#rs', ov).onclick = async () => { if (!(await confirmDlg('คืนหมวดรายจ่ายเป็นค่าเริ่มต้น? (หมวดที่เพิ่มเองจะหายจากตัวเลือก รายการที่บันทึกไว้ยังอยู่)', 'คืนค่าเริ่มต้น', true))) return; L = EXP_DEF.map(([n, e, pin]) => ({ n, e, pin: !!pin, o: n })); pick = -1; draw(); };
+  $('#sv', ov).onclick = async () => {
+    L.forEach(c => c.n = String(c.n || '').trim());
+    if (L.some(c => !c.n)) return toast('ชื่อหมวดห้ามว่าง', 1);
+    if (new Set(L.map(c => c.n)).size !== L.length) return toast('ชื่อหมวดซ้ำกัน', 1);
+    try {
+      busy(1, 'กำลังบันทึก...');
+      // เปลี่ยนชื่อหมวด → ย้ายรายการเดิมไปชื่อใหม่ด้วย
+      const ren = L.filter(c => c.o && c.o !== c.n), rows = [];
+      ren.forEach(c => (S.receipts || []).forEach(r => { if (expCat(r) === c.o) { rows.push({ id: r.id, cat: c.n }); r.cat = c.n; } }));
+      for (let i = 0; i < rows.length; i += 200) await api('upsert', { table: 'Receipts', rows: rows.slice(i, i + 200) });
+      await ExpCats.save(L);
+      busy(0); ov.remove(); toast('บันทึกหมวดรายจ่ายแล้ว' + (rows.length ? ` · ย้ายรายการเดิม ${rows.length} รายการไปชื่อใหม่` : '')); done && done();
+    } catch (e) { busy(0); toast(e.message, 1); }
+  };
+  draw();
+}
+(function () { const st = document.createElement('style'); st.textContent = `.ecr{border-bottom:1px solid var(--line)}.ecr:last-child{border-bottom:0}
+.ecemo{all:unset;box-sizing:border-box;cursor:pointer;width:40px;height:40px;flex:none;border-radius:11px;background:#F4F1EF;display:flex;align-items:center;justify-content:center;font-size:22px}
+.ecpin{all:unset;cursor:pointer;font-size:17px;padding:4px 6px;border-radius:8px;opacity:.25;filter:grayscale(1)}.ecpin.on{opacity:1;filter:none;background:#FFF3DC}
+.ecgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:4px;padding:6px 10px 10px}.ecgrid button{all:unset;cursor:pointer;text-align:center;font-size:22px;height:40px;line-height:40px;border-radius:9px}.ecgrid button:hover,.ecgrid button.on{background:#FFF3DC}.ecgrid .in{grid-column:span 3;min-height:38px;padding:4px 8px;text-align:center}
+.lg-cats .chip .e{font-size:16px;margin-right:4px;vertical-align:-1px}.lg-cats .chip.more{border-style:dashed;color:var(--ink2)}.lg-cats .chip.mng{color:var(--ink2)}`; document.head.appendChild(st); })();
 const expCat = r => r.cat || (r.type === 'ค่าใช้จ่าย' ? 'อื่น ๆ' : 'ซื้อสินค้ามาขาย');
 const lastDay = ym => addDays(addDays(ym + '-01', 32).slice(0, 8) + '01', -1);
 async function ledgerData(y) {
@@ -564,7 +647,7 @@ VIEWS.ledger = async el => {
       const ks = Object.keys(days).sort().reverse(), lim = L.lim || 40;
       pane.innerHTML = ks.length ? `<div class="list">${ks.slice(0, lim).map(d => { const g = days[d], si = g.i.reduce((a, x) => a + x.amt, 0), se = g.e.reduce((a, x) => a + x.amt, 0); return `<div class="lg-day"><span class="grow">${thLong(d)}</span>${si ? `<span style="color:var(--green)">+${money(si, 0)}</span>` : ''}${se ? `<span style="color:var(--red-d)">−${money(se, 0)}</span>` : ''}</div>`
         + g.i.map(x => `<div class="lg-row"><div class="lg-ic" style="background:var(--green-l);color:var(--green)">${I(IC.sale, 20)}</div><div class="grow"><div style="font-weight:600">${esc(x.item)}</div>${x.note ? `<div class="tiny muted">${esc(x.note)}</div>` : ''}</div><div class="lg-amt lgp">+${money(x.amt)}</div></div>`).join('')
-        + g.e.map(x => { const im = /^data:image/.test(x.r.fileUrl || '') ? x.r.fileUrl : ''; const ci = EXP_CATS.indexOf(x.cat); return `<div class="lg-row x" data-id="${esc(x.r.id)}"><div class="lg-ic" style="background:${x.r.fileUrl || x.r.fileId ? '#EEF3FB' : 'var(--amber-l)'};color:${x.r.fileUrl || x.r.fileId ? 'var(--blue)' : 'var(--amber)'}">${im ? `<img src="${im}" alt="">` : I(x.r.fileUrl || x.r.fileId ? IC.file : IC.alert, 20)}</div><div class="grow" style="min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.r.supplier || x.cat)}</div><div class="tiny muted"><span class="tag" style="background:${(EXP_COLOR[ci] || '#757575')}1a;color:${EXP_COLOR[ci] || '#757575'}">${esc(x.cat)}</span>${x.r.type === 'สินค้า' ? (x.r.stockApplied === 'Y' ? ' <span class="tag green">ลงสต๊อกแล้ว</span>' : ' <span class="tag amber">ยังไม่ลงสต๊อก</span>') : ''}${x.r.fileUrl || x.r.fileId ? '' : ' <span class="tag amber">ไม่มีบิล</span>'}</div></div><div class="lg-amt lgn">−${money(x.amt)}</div></div>`; }).join('');
+        + g.e.map(x => { const im = /^data:image/.test(x.r.fileUrl || '') ? x.r.fileUrl : ''; const cm = ExpCats.meta(x.cat); return `<div class="lg-row x" data-id="${esc(x.r.id)}"><div class="lg-ic" style="background:${x.r.fileUrl || x.r.fileId ? '#EEF3FB' : 'var(--amber-l)'};color:${x.r.fileUrl || x.r.fileId ? 'var(--blue)' : 'var(--amber)'}">${im ? `<img src="${im}" alt="">` : I(x.r.fileUrl || x.r.fileId ? IC.file : IC.alert, 20)}</div><div class="grow" style="min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.r.supplier || x.cat)}</div><div class="tiny muted"><span class="tag" style="background:${cm.c}1a;color:${cm.c}">${cm.e} ${esc(x.cat)}</span>${x.r.type === 'สินค้า' ? (x.r.stockApplied === 'Y' ? ' <span class="tag green">ลงสต๊อกแล้ว</span>' : ' <span class="tag amber">ยังไม่ลงสต๊อก</span>') : ''}${x.r.fileUrl || x.r.fileId ? '' : ' <span class="tag amber">ไม่มีบิล</span>'}</div></div><div class="lg-amt lgn">−${money(x.amt)}</div></div>`; }).join('');
       }).join('')}${ks.length > lim ? `<div class="item center" id="more" style="justify-content:center;color:var(--red);font-weight:600">แสดงเพิ่ม (${ks.length - lim} วัน)</div>` : ''}</div>` : `<div class="card empty">ยังไม่มีรายการ${L.m ? 'ในเดือนนี้' : 'ในปีนี้'}</div>`;
       $$('[data-id]', pane).forEach(x => x.onclick = () => expenseForm(S.receipts.find(r => r.id === x.dataset.id), () => go('ledger')));
       const mo = $('#more', pane); if (mo) mo.onclick = () => { L.lim = lim + 60; draw(); };
@@ -576,7 +659,7 @@ VIEWS.ledger = async el => {
     } else if (tab === 'cat') {
       const by = {}; E.forEach(x => { const c = by[x.cat] || (by[x.cat] = { n: 0, a: 0 }); c.n++; c.a += x.amt; });
       const list = Object.entries(by).sort((a, b) => b[1].a - a[1].a);
-      pane.innerHTML = list.length ? `<div class="card">${hBars(list.map(([n, c]) => ({ n, v: c.a, c: EXP_COLOR[EXP_CATS.indexOf(n)] || '#757575', s: c.n + ' รายการ · ' + (TE ? (c.a / TE * 100).toFixed(1) : 0) + '%' })))}</div>` : `<div class="card empty">ยังไม่มีรายจ่าย</div>`;
+      pane.innerHTML = `<div class="row" style="margin:0 2px 8px"><span class="grow small muted">รายจ่ายแยกตามหมวด${L.m ? ' (เดือนนี้)' : ' (ทั้งปี)'}</span><button class="btn ghost sm" onclick="expCatsDlg(()=>go('ledger'))">⚙️ จัดการหมวด</button></div>` + (list.length ? `<div class="card">${hBars(list.map(([n, c]) => ({ n: ExpCats.label(n), v: c.a, c: ExpCats.color(n), s: c.n + ' รายการ · ' + (TE ? (c.a / TE * 100).toFixed(1) : 0) + '%' })))}</div>` : `<div class="card empty">ยังไม่มีรายจ่าย</div>`);
     } else {
       const yi = D.inc.reduce((a, x) => a + x.amt, 0), ye = D.exp.reduce((a, x) => a + x.amt, 0), flat = yi * .6, noBill = D.exp.filter(x => x.note.startsWith('ไม่มี'));
       const better = ye > flat ? 'actual' : 'flat';
@@ -655,7 +738,7 @@ function ledgerBook(D, L, h) {
 /* ---------- ฟอร์มรายจ่าย: ถ่ายรูปบิล → ตัดขอบอัตโนมัติ → อ่านยอด (OCR) → บันทึก ---------- */
 function expenseForm(r0, done) {
   if (!isOwner()) return toast('เฉพาะเจ้าของกิจการ', 1);
-  const isNew = !r0, r = r0 ? { ...r0 } : { id: uid('R'), date: todayISO(), type: 'ค่าใช้จ่าย', cat: LS.get('lastExpCat', 'ซื้อสินค้ามาขาย'), items: '[]', payMethod: 'เงินสด' };
+  const isNew = !r0, r = r0 ? { ...r0 } : { id: uid('R'), date: todayISO(), type: 'ค่าใช้จ่าย', cat: ExpCats.list().some(c => c.n === LS.get('lastExpCat', '')) ? LS.get('lastExpCat', '') : ExpCats.BUY, items: '[]', payMethod: 'เงินสด' };
   let cat = expCat(r), shot = null;
   const sups = [...new Set((S.receipts || []).map(x => x.supplier).filter(Boolean))].slice(0, 200);
   const ov = sheet(isNew ? 'บันทึกรายจ่าย' : 'รายจ่าย', `
@@ -669,7 +752,17 @@ function expenseForm(r0, done) {
     ${!isNew ? `<button class="btn ghost sm" id="del" style="color:var(--red);margin-top:6px">${I(IC.trash, 16)} ลบรายการนี้</button>` : ''}`,
     `<button class="btn grow green" id="sv">${I(IC.check, 18)} บันทึก</button>`, { sticky: true });
   $('#e_payMethod', ov).value = r.payMethod || 'เงินสด';
-  const drawCats = () => { $('#cs', ov).innerHTML = EXP_CATS.map((c, i) => `<button class="chip ${c === cat ? 'on' : ''}" data-c="${i}" style="${c === cat ? `background:${EXP_COLOR[i]};border-color:${EXP_COLOR[i]}` : ''}">${esc(c)}</button>`).join(''); $$('[data-c]', ov).forEach(b => b.onclick = () => { cat = EXP_CATS[+b.dataset.c]; drawCats(); drawStk(); }); };
+  // ตัวเลือกด่วน: หมวดที่ปักหมุด + ใช้บ่อย · ที่เหลือซ่อนใต้ "อื่น ๆ" กดขยายได้
+  let showAll = false;
+  const drawCats = () => {
+    const Q = ExpCats.quick(cat), list = showAll ? Q.all : Q.show;
+    $('#cs', ov).innerHTML = list.map(c => { const col = ExpCats.color(c.n); return `<button type="button" class="chip ${c.n === cat ? 'on' : ''}" data-c="${esc(c.n)}" style="${c.n === cat ? `background:${col};border-color:${col}` : ''}"><span class="e">${c.e}</span>${esc(c.n)}</button>`; }).join('')
+      + (Q.hidden.length ? `<button type="button" class="chip more" id="cm">${showAll ? '▴ ย่อ' : `＋ อื่น ๆ ${Q.hidden.length}`}</button>` : '')
+      + `<button type="button" class="chip mng" id="cg">⚙️ จัดการ</button>`;
+    $$('[data-c]', ov).forEach(b => b.onclick = () => { cat = b.dataset.c; drawCats(); drawStk(); });
+    const m = $('#cm', ov); if (m) m.onclick = () => { showAll = !showAll; drawCats(); };
+    $('#cg', ov).onclick = () => expCatsDlg(() => { if (!ExpCats.list().some(c => c.n === cat) && cat !== expCat(r)) cat = ExpCats.BUY; drawCats(); drawStk(); });
+  };
   const imgSrc = () => shot ? shot.dataUrl : /^data:image/.test(r.fileUrl || '') ? r.fileUrl : '';
   const drawPh = () => {
     const src = imgSrc();
@@ -699,7 +792,7 @@ function expenseForm(r0, done) {
   };
   const drawStk = () => {
     const b = $('#stk', ov); if (!b) return;
-    b.innerHTML = cat !== 'ซื้อสินค้ามาขาย' ? '' : r.stockApplied === 'Y' ? `<div class="alert green small">${I(IC.check, 18)}<div>บิลนี้ลงสต๊อก/ต้นทุนแล้ว</div></div>`
+    b.innerHTML = cat !== ExpCats.BUY ? '' : r.stockApplied === 'Y' ? `<div class="alert green small">${I(IC.check, 18)}<div>บิลนี้ลงสต๊อก/ต้นทุนแล้ว</div></div>`
       : `<div class="alert blue small" style="align-items:center">${I(IC.box, 18)}<div class="grow">บิลซื้อสินค้า — เพิ่มสต๊อกและอัปเดตต้นทุนจากรายการในบิลได้</div></div>${isNew ? '<div class="tiny muted" style="margin:-4px 2px 8px">บันทึกแล้วกด “เพิ่มสต๊อกจากบิลนี้” ได้ทันที หรือทำภายหลังที่หน้าเพิ่มสต๊อก</div>' : `<button class="btn block" id="tostk" style="margin-bottom:8px">${I(IC.box, 18)} เพิ่มสต๊อกจากบิลนี้ (อ่านรายการอัตโนมัติ)</button>`}`;
     const t2 = $('#tostk', ov); if (t2) t2.onclick = () => { ov.remove(); stockFromBill(r, done); };
   };
@@ -708,7 +801,7 @@ function expenseForm(r0, done) {
     const rc = { ...r }; delete rc._ocr;
     ['date', 'total', 'supplier', 'docNo', 'payMethod', 'note'].forEach(k => rc[k] = $('#e_' + k, ov).value.trim());
     if (!num(rc.total)) return toast('ใส่จำนวนเงิน', 1); if (!rc.date) return toast('ใส่วันที่', 1);
-    rc.cat = cat; rc.type = cat === 'ซื้อสินค้ามาขาย' ? 'สินค้า' : 'ค่าใช้จ่าย'; if (!rc.items) rc.items = '[]';
+    rc.cat = cat; rc.type = cat === ExpCats.BUY ? 'สินค้า' : 'ค่าใช้จ่าย'; if (!rc.items) rc.items = '[]';
     try {
       busy(1, 'กำลังบันทึก...');
       if (shot) { const up = await api('upload', { kind: 'receipt', name: `bill_${rc.date}_${Date.now()}.jpg`, mime: shot.mime, base64: shot.dataUrl }); rc.fileId = up.fileId || ''; rc.fileUrl = up.fileUrl || ''; }

@@ -8,7 +8,7 @@ const vatCfg = () => cfg('vatCfg', VATCFG_DEF);
 const bahtL = (v, d) => `<span class="cur">฿</span>${money(v, d != null ? d : (num(v) % 1 ? 2 : 0))}`;
 (function () { const st = document.createElement('style'); st.textContent = `.cur{opacity:.4;font-weight:400;margin-right:.06em;font-size:.82em}
 .kpi3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}@media(max-width:560px){.kpi3{grid-template-columns:1fr}}
-.kpi3 .stat .v{font-size:24px}.skel{color:transparent;background:#EFE9E8;border-radius:8px;min-width:80px;display:inline-block}`; document.head.appendChild(st); })();
+.kpi3 .stat .v{font-size:24px}.qa button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:transform .15s,box-shadow .15s}.qa.qsort button:not(.qdrag){opacity:.75}.qa button.qdrag{transform:scale(1.08);box-shadow:0 10px 26px rgba(0,0,0,.22);position:relative;z-index:2;opacity:1}.skel{color:transparent;background:#EFE9E8;border-radius:8px;min-width:80px;display:inline-block}`; document.head.appendChild(st); })();
 
 /* ---------- ข้อมูลยอดขายแบบรวม (POS + นำเข้า) ---------- */
 function sumDays(days, from, to) {
@@ -17,20 +17,56 @@ function sumDays(days, from, to) {
   return s;
 }
 
+/* ---------- ปุ่มด่วนหน้าหลัก: กดค้างแล้วลากเพื่อย้ายตำแหน่ง (จำในเครื่อง) ---------- */
+const IC_LEDGER = '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h5"/>';
+function qaButtons(own) {
+  return [
+    own ? { k: 'ledger', c: 'var(--green)', ic: IC_LEDGER, t: 'บันทึกรายรับ-รายจ่าย', fn: () => go('ledger') } : { k: 'pos', c: 'var(--green)', ic: IC.cart, t: 'ขายสินค้า', fn: () => go('pos') },
+    own ? { k: 'reports', c: '#2B4C9B', ic: IC.chart, t: 'รายงาน', fn: () => go('reports') } : { k: 'scan', c: 'var(--red)', ic: IC.scan, t: 'เช็คราคา', fn: () => go('scan') },
+    can('receiveGoods') && { k: 'receipt', c: '#E07A00', ic: IC.cam, t: 'ใบเสร็จร้านส่ง', fn: () => newReceipt() },
+    own ? { k: 'tax', c: '#7B3FB8', ic: IC.tax, t: 'ภาษี', fn: () => go('tax') } : { k: 'labels', c: '#2B4C9B', ic: IC.print, t: 'พิมพ์ฉลาก', fn: () => go('labels') }
+  ].filter(Boolean);
+}
+function qaDraw(box, own) {
+  if (!box) return;
+  const key = 'qaOrd_' + (own ? 'o' : 's'), B = qaButtons(own), ord = LS.get(key, []);
+  B.sort((a, b) => { const i = ord.indexOf(a.k), j = ord.indexOf(b.k); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); });
+  let cur = B.map(b => b.k);
+  box.innerHTML = B.map(b => `<button type="button" data-k="${b.k}"><span class="ic" style="background:${b.c}">${I(b.ic)}</span>${b.t}</button>`).join('');
+  let tm = null, st = null, drag = null, last = 0;
+  box.oncontextmenu = e => e.preventDefault();
+  box.onclick = e => { const b = e.target.closest('button[data-k]'); if (!b || Date.now() - last < 450) return; const x = B.find(y => y.k === b.dataset.k); x && x.fn(); };
+  box.onpointerdown = e => {
+    const b = e.target.closest('button[data-k]'); if (!b) return;
+    st = { x: e.clientX, y: e.clientY }; clearTimeout(tm);
+    tm = setTimeout(() => { drag = b; b.classList.add('qdrag'); box.classList.add('qsort'); try { navigator.vibrate && navigator.vibrate(25); } catch (x) { } }, 450);
+  };
+  box.addEventListener('pointermove', e => {
+    if (!drag) { if (st && (Math.abs(e.clientX - st.x) > 8 || Math.abs(e.clientY - st.y) > 8)) { clearTimeout(tm); st = null; } return; }
+    e.preventDefault();
+    const hit = [...box.children].find(x => { if (x === drag) return false; const r = x.getBoundingClientRect(); return e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom; });
+    if (hit) { const all = [...box.children]; if (all.indexOf(drag) < all.indexOf(hit)) hit.after(drag); else hit.before(drag); }
+  }, { passive: false });
+  box.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
+  const up = () => {
+    clearTimeout(tm); st = null; if (!drag) return;
+    drag.classList.remove('qdrag'); box.classList.remove('qsort'); drag = null; last = Date.now();
+    const now = [...box.children].map(x => x.dataset.k); if (now.join() !== cur.join()) { LS.set(key, now); cur = now; toast('ย้ายตำแหน่งปุ่มแล้ว'); }
+  };
+  box.onpointerup = up; box.onpointercancel = up;
+}
+
 /* ---------- หน้าหลัก ---------- */
 VIEWS.home = async el => {
   const own = isOwner();
   const h = new Date(Date.now() + 7 * 3600e3).getUTCHours();
   const greet = h < 11 ? 'สวัสดีตอนเช้า' : h < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น';
   el.innerHTML = `<div class="row" style="margin:2px 2px 12px"><div class="grow"><div class="muted small">${greet} · ${thDate(todayISO())}</div><h2 style="font-size:22px">${esc(S.user.name)}</h2></div></div>
-   <div class="qa">
-     <button onclick="go('pos')"><span class="ic" style="background:var(--green)">${I(IC.cart)}</span>ขายสินค้า</button>
-     ${own ? `<button onclick="go('reports')"><span class="ic" style="background:#2B4C9B">${I(IC.chart)}</span>รายงาน</button>` : `<button onclick="go('scan')"><span class="ic" style="background:var(--red)">${I(IC.scan)}</span>เช็คราคา</button>`}
-     ${can('receiveGoods') ? `<button onclick="newReceipt()"><span class="ic" style="background:#E07A00">${I(IC.cam)}</span>ใบเสร็จร้านส่ง</button>` : ''}
-     ${own ? `<button onclick="go('tax')"><span class="ic" style="background:#7B3FB8">${I(IC.tax)}</span>ภาษี</button>` : `<button onclick="go('labels')"><span class="ic" style="background:#2B4C9B">${I(IC.print)}</span>พิมพ์ฉลาก</button>`}
-   </div>
-   ${own ? '<div id="jobsb"></div><div id="kpi"></div><div id="vat"></div>' : ''}<div id="alerts"></div><div id="stats"></div>
+   <div class="qa" id="qa"></div>
+   ${own ? '<div id="jobsb"></div><div id="rsh"></div><div id="kpi"></div><div id="vat"></div>' : ''}<div id="alerts"></div><div id="stats"></div>
    ${S.apiUrl ? '' : `<div class="alert blue">${I(IC.alert, 20)}<div>กำลังใช้ <b>โหมดทดลอง</b> ข้อมูลอยู่ในเครื่องนี้เท่านั้น</div></div>`}`;
+  qaDraw($('#qa', el), own);
+  if (own && window.restockHome) restockHome($('#rsh', el));
   const t = todayISO(), m0 = t.slice(0, 8) + '01', lmEnd = addDays(m0, -1), lm0 = lmEnd.slice(0, 8) + '01';
   if (own && window.jobsBadge) jobsBadge($('#jobsb', el));
   if (own) {
@@ -54,7 +90,7 @@ VIEWS.home = async el => {
     const al = [];
     (lic || []).forEach(l => { if (!l.expiryDate) return; const d = daysTo(l.expiryDate); if (d < 0) al.push(['red', `${esc(l.type)} <b>หมดอายุแล้ว ${-d} วัน</b> — ต้องต่ออายุ`, 'licenses']); else if (d <= 60) al.push([d <= 15 ? 'red' : 'amber', `${esc(l.type)} จะหมดอายุใน <b>${d} วัน</b> (${thDate(l.expiryDate)})`, 'licenses']); });
     const low = S.products.filter(p => p.trackStock === 'Y' && p.lowStock !== '' && num(p.stock) <= num(p.lowStock || 0));
-    if (low.length) al.push(['amber', `สินค้าใกล้หมด/หมดสต็อก <b>${low.length}</b> รายการ`, 'products:low']);
+    if (low.length && !(own && window.Restock && Restock.on() && Restock.conf().home)) al.push(['amber', `สินค้าใกล้หมด/หมดสต็อก <b>${low.length}</b> รายการ`, 'products:low']);   // เปิดวางแผนสั่งของ = ใช้การ์ด "ควรสั่งของ" แทน
     if (own) TAX.deadlines().forEach(d => { if (isFiled(filings, d.form, d.period)) return; const n = daysTo(d.paper); if (n >= 0 && n <= 45) al.push(['blue', `อีก <b>${n} วัน</b> ครบกำหนดยื่น ${d.form} (${d.what}) — ${thDate(d.paper)}`, 'tax']); });
     const a = $('#alerts', el); if (!a) return;
     a.innerHTML = al.map(([c, tx, v]) => `<div class="alert ${c}" style="cursor:pointer" data-go="${v}">${I(IC.alert, 20)}<div>${tx}</div></div>`).join('');
