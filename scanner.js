@@ -48,9 +48,13 @@ const Scanner = {
     const b = this.b;
     // เครื่องยิง Bluetooth ส่งเป็นชุด ๆ อาจเว้นช่วงได้ → เมื่อยืนยันแล้วว่าเป็นเครื่องยิง (ตัวอักษรมาเร็ว ≥ 3 ตัว) ยอมให้เว้นได้ถึง 250ms
     const fastSoFar = b && b.gaps.length >= 2 && b.gaps.filter(g => g <= cfg.maxGap).length >= b.gaps.length - 1;
-    const allow = b ? (fastSoFar ? Math.max(cfg.maxGap, 250) : cfg.maxGap) : 0;
+    // ไม่ได้อยู่ในช่องพิมพ์ (เช่น หน้าขาย) = ไม่มีคนพิมพ์ → ยอมช่วงห่างได้มากขึ้นตั้งแต่ตัวแรก กันตัวแรกหลุด
+    const inField = this.isField(document.activeElement);
+    const allow = b ? (fastSoFar || !inField ? Math.max(cfg.maxGap, 250) : cfg.maxGap) : 0;
     if (!b || now - b.last > allow) {
       if (b && fastSoFar && b.chars.length >= cfg.minLen) this.finish('idle');
+      // ชุดก่อนสั้นเกิน (1–3 ตัว) และเพิ่งจบไม่นาน → เก็บไว้ต่อหน้ารหัส ถ้าชุดนี้กลายเป็นการยิง
+      else if (b && b.chars.length < cfg.minLen && now - b.last <= 350) this.prev = { chars: b.chars.slice(), keys: b.keys.slice(), last: b.last, el: b.el, before: b.before, thai: b.thai, noCode: b.noCode };
       const el = document.activeElement, f = this.isField(el);
       this.b = { chars: [ch], keys: [e.key], t0: now, last: now, gaps: [], el: f ? el : null, before: f ? { v: el.value, s: el.selectionStart ?? el.value.length, e: el.selectionEnd ?? el.value.length } : null, thai: /[฀-๿]/.test(e.key), noCode: !e.code, swallowed: 0 };
     } else {
@@ -76,9 +80,15 @@ const Scanner = {
     if (!b) return false;
     const cfg = this.cfg;
     if (b.chars.length < cfg.minLen) {
+      this.prev = { chars: b.chars.slice(), keys: b.keys.slice(), last: b.last, el: b.el, before: b.before, thai: b.thai, noCode: b.noCode };
       // ไม่ใช่การยิง (คนพิมพ์เร็ว) → คืนตัวอักษรที่กันไว้ให้ช่องพิมพ์
       if (b.swallowed && b.el) { const add = b.keys.slice(b.keys.length - b.swallowed).join(''); const s = b.el.selectionStart ?? b.el.value.length; b.el.value = b.el.value.slice(0, s) + add + b.el.value.slice(b.el.selectionEnd ?? s); b.el.setSelectionRange && b.el.setSelectionRange(s + add.length, s + add.length); b.el.dispatchEvent(new Event('input', { bubbles: true })); }
       return false;
+    }
+    // ตัวแรกของการยิงมาช้ากว่าที่เหลือ (Bluetooth) → ต่อกลับเข้าไป
+    const pv = this.prev; this.prev = null;
+    if (pv && b.t0 - pv.last <= 350 && pv.el === b.el && /^[0-9A-Za-z฀-๿\-\/]+$/.test(pv.keys.join(''))) {
+      b.chars = pv.chars.concat(b.chars); b.keys = pv.keys.concat(b.keys); b.thai = b.thai || pv.thai; b.noCode = b.noCode || pv.noCode; if (pv.before) b.before = pv.before; b.t0 = Math.min(b.t0, pv.last);
     }
     // แป้นไทยที่ไม่ส่งตำแหน่งปุ่ม: ตัว - / + ฯลฯ ก็คือปุ่มตัวเลขบนแป้นไทย → แปลงจากตัวอักษรที่กดทั้งหมด
     const code = this.clean(b.thai && b.noCode ? this.thai2en(b.keys.join('')) : b.chars.join(''));
@@ -126,6 +136,11 @@ const Scanner = {
       el.dispatchEvent(new Event('input', { bubbles: true }));
       if (term === 'Tab' && ev) ev.preventDefault();
       if (term !== 'Enter' && cfg.autoEnter) el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+    } else if (overlay && [...document.querySelectorAll('.ov')].pop().querySelector('input[data-scan-field]')) {
+      // หน้าต่างแก้ไขสินค้าเปิดอยู่ ไม่ได้แตะช่องไหน → ยิงแล้วบาร์โค้ดลงช่องบาร์โค้ดให้เลย
+      const f = [...document.querySelectorAll('.ov')].pop().querySelector('input[data-scan-field]');
+      f.value = code; f.dispatchEvent(new Event('input', { bubbles: true })); beep && beep();
+      try { f.scrollIntoView({ block: 'nearest' }); } catch (e) { }
     } else if (S.user && !overlay) {
       // ไม่มีหน้าที่รับ → เปิดดูราคาสินค้า
       const f = window.findByCode && findByCode(code);
@@ -344,7 +359,7 @@ window.ImgScan = ImgScan;
 
 /* ช่องบาร์โค้ด + ไอคอนกล้องท้ายช่อง (ใช้ซ้ำได้ทุกฟอร์ม) */
 function barcodeFieldHTML(id, value) {
-  return `<div style="position:relative;flex:1;min-width:0"><input class="in" id="${id}" inputmode="numeric" autocomplete="off" data-scan-field value="${esc(value || '')}" style="padding-right:48px;width:100%">
+  return `<div style="position:relative;flex:1;min-width:0"><input class="in" id="${id}" inputmode="numeric" enterkeyhint="done" autocomplete="off" data-scan-field data-nokp value="${esc(value || '')}" style="padding-right:48px;width:100%">
     <label class="camin" title="ถ่ายรูปบาร์โค้ด" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);width:38px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--red);cursor:pointer;background:var(--red-l)">${I(IC.cam, 19)}<input type="file" accept="image/*" capture="environment" class="hidden" data-for="${id}"></label></div>`;
 }
 function bindBarcodeField(root, id, onFill) {

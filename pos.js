@@ -99,6 +99,23 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .kp{--kk:min(96px,12.5vh,26vw);display:grid;grid-template-columns:repeat(3,var(--kk));gap:10px;margin-top:10px;justify-content:center}.sndt{all:unset;cursor:pointer;font-size:20px;padding:4px 8px;border-radius:10px;opacity:.75}.sndt:active{background:#0001}.cashwrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:6px 16px;align-items:start}.cashwrap .qcash{padding:0}.cpad{--kk:min(74px,9.5vh,17vw);margin-top:0}
 .kp button{aspect-ratio:1/1;min-height:0;border-radius:16px;border:0;background:#fff;box-shadow:var(--sh);font-family:var(--fh);font-size:clamp(22px,4vh,32px);font-weight:600;cursor:pointer;touch-action:manipulation;user-select:none}.kp button:active{background:#e8ecf1;transform:scale(.96)}
 .kpv{font-family:var(--fh);font-size:34px;text-align:right;padding:6px 10px;background:#fff;border-radius:12px;min-height:56px}
+/* v2.6.56 หน้าชำระเงิน: ตัวเลขใหญ่ ปุ่มใหญ่ กดง่าย (ผู้สูงอายุ/สายตาไม่ดี) */
+.paytop{padding:8px 10px 2px}
+.paytop .amt{font-size:clamp(54px,10.5vh,100px);font-weight:800;letter-spacing:-1px;line-height:1.05}
+.paytop>.muted{font-size:clamp(16px,2.4vh,20px)}
+.ptypes{gap:10px;padding:8px 16px}
+.ptypes button{min-height:clamp(66px,9.2vh,96px);font-size:clamp(19px,2.8vh,25px);font-weight:800;border-radius:14px;gap:6px;border-width:2px;line-height:1.15}
+.ptypes button svg{width:clamp(30px,4.6vh,42px)!important;height:clamp(30px,4.6vh,42px)!important;stroke-width:2.2}
+.ptypes button.on{box-shadow:0 0 0 3px currentColor inset}
+.cashin>span{font-size:clamp(17px,2.4vh,21px)!important;font-weight:700}
+.cashin input{font-size:clamp(34px,5.6vh,54px);font-weight:800;padding:2px 4px}
+#cok{min-height:clamp(54px,7.4vh,76px);font-size:clamp(22px,3.4vh,30px)!important;font-weight:800;padding:0 26px}
+.qcash{gap:10px}
+.qcash button{min-height:clamp(60px,9.4vh,92px);font-size:clamp(26px,4.4vh,40px);font-weight:800;border-radius:12px;line-height:1.05}
+.qcash button span{font-size:clamp(13px,1.8vh,16px)!important;font-weight:700;margin-bottom:2px}
+.cpad{--kk:min(100px,9.6vh,19vw)}
+.cpad button{font-size:clamp(30px,5vh,44px);font-weight:700}
+.done .chg{font-size:clamp(56px,11vw,110px)}
 .swatch{width:34px;height:34px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1.5px #ccc;cursor:pointer}
 .swatch.on{box-shadow:0 0 0 3px var(--ink)}
 @media (max-width:899px){
@@ -276,7 +293,7 @@ function pickCustomer(cb) {
   const draw = () => {
     const t = norm(q), all = S.customers || [];
     const res = all.filter(c => !t || norm(c.name + c.phone).includes(t) || String(c.phone).replace(/\D/g, '').includes(q.replace(/\D/g, '') || '§')).slice(0, 60);
-    $('#cl', ov).innerHTML = res.length ? res.map(c => `<div class="item" data-id="${esc(c.id)}"><div class="av">${esc(Array.from(c.name || '?')[0])}</div><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${esc(c.phone || '-')} · ${num(c.points)} แต้ม${num(c.credit) ? ` · <span style="color:var(--amber)">ค้าง ${money(c.credit)}</span>` : ''}</div></div></div>`).join('') : `<div class="empty">ไม่พบลูกค้า${q ? ' “' + esc(q) + '”' : ''}</div>`;
+    $('#cl', ov).innerHTML = res.length ? res.map(c => `<div class="item cit" data-id="${esc(c.id)}"><div class="av cav">${esc(Array.from(c.name || '?')[0])}</div><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${esc(c.phone || '-')} · ${num(c.points)} แต้ม${num(c.credit) ? ` · <span style="color:var(--amber)">ค้าง ${money(c.credit)}</span>` : ''}</div></div></div>`).join('') : `<div class="empty">ไม่พบลูกค้า${q ? ' “' + esc(q) + '”' : ''}</div>`;
     $$('[data-id]', ov).forEach(x => x.onclick = () => { ov.remove(); cb(all.find(c => c.id === x.dataset.id)); });
   };
   $('#cq', ov).oninput = e => { q = e.target.value; draw(); };
@@ -292,7 +309,7 @@ function customerForm(c0, done) {
   const ov = sheet(isNew ? 'ลูกค้าใหม่' : 'แก้ไขลูกค้า', `<label class="f"><span>ชื่อลูกค้า *</span><input class="in" id="c_name" value="${esc(c.name)}"></label>
     <label class="f"><span>เบอร์โทร</span><input class="in" id="c_phone" type="tel" inputmode="tel" value="${esc(c.phone)}"></label>
     <label class="f"><span>วงเงินเชื่อสูงสุด (เว้นว่าง = ไม่จำกัด)</span><input class="in" id="c_creditLimit" type="number" value="${esc(c.creditLimit)}"></label>
-    <label class="f"><span>หมายเหตุ</span><input class="in" id="c_note" value="${esc(c.note)}"></label>`, `<button class="btn block" id="sv">บันทึก</button>`);
+    <label class="f"><span>หมายเหตุ</span><input class="in" id="c_note" value="${esc(c.note)}"></label>`, `<button class="btn block" id="sv">บันทึก</button>`, { sticky: true });
   $('#sv', ov).onclick = async () => {
     const o = { id: c.id || Logic.uid('C'), createdAt: c.createdAt }; ['name', 'phone', 'creditLimit', 'note'].forEach(k => o[k] = $('#c_' + k, ov).value.trim());
     o.phone = o.phone.replace(/[^\d+]/g, '');

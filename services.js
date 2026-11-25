@@ -46,7 +46,7 @@ function svcFee(kind, amt) {
 }
 /* เมนูบริการ (เปิดจากปุ่มบนแถบหน้าขาย) */
 function svcMenu() {
-  const ov = sheet('บริการ', `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${Object.values(SVC).map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color};min-height:92px;flex-direction:column;gap:2px;font-size:18px"><span style="font-size:26px">${s.icon}</span>${s.name}<span class="tiny" style="font-weight:400;opacity:.9">${s.desc}</span></button>`).join('')}</div>`);
+  const ov = sheet('บริการ', `<div class="svmg">${Object.values(SVC).map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color}"><span class="ic">${s.icon}</span><b>${s.name}</b><span class="ds">${s.desc}</span></button>`).join('')}</div>`, '', { cls: 'svmenu' });
   $$('[data-k]', ov).forEach(b => b.onclick = () => { ov.remove(); svcDialog(b.dataset.k); });
 }
 function svcDialog(kind) {
@@ -483,12 +483,12 @@ function svcCopy(kind) {
   const s = SVC[kind], cc = svcCfg().copy, key = m => kind + (m === 'bw' ? 'BW' : 'Color');
   let mode = 'bw', pages = '', priceOv = null;
   const unit = () => priceOv != null ? priceOv : num(cc[key(mode)]);
-  const ov = sheet(`${s.icon} ${s.name}`, `<div class="seg" id="cm" style="margin-bottom:10px"><button data-m="bw" style="min-height:52px">⚫ ขาวดำ <span class="tiny">${money(cc[key('bw')])}/หน้า</span></button><button data-m="color" style="min-height:52px">🌈 สี <span class="tiny">${money(cc[key('color')])}/หน้า</span></button></div>
+  const ov = sheet(`${s.icon} ${s.name}`, `<div class="svl"><div class="seg" id="cm" style="margin-bottom:10px"><button data-m="bw" style="min-height:52px">⚫ ขาวดำ <span class="tiny">${money(cc[key('bw')])}/หน้า</span></button><button data-m="color" style="min-height:52px">🌈 สี <span class="tiny">${money(cc[key('color')])}/หน้า</span></button></div>
     <div class="small">จำนวนหน้า</div><div class="kpv" id="kv" style="margin-bottom:4px">0</div>
-    <div class="kp">${[7, 8, 9, 4, 5, 6, 1, 2, 3].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button data-k="00">00</button><button data-k="0">0</button><button data-k="del">⌫</button></div>
     <div class="row wrap" style="gap:6px;margin-top:8px">${[1, 2, 5, 10, 20, 50, 100].map(v => `<button class="btn ghost sm" data-q="${v}">${v}</button>`).join('')}</div>
-    <div class="card" style="margin-top:10px;padding:10px 12px" id="sum"></div>`,
-    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`);
+    <div class="card" style="margin-top:10px;padding:10px 12px" id="sum"></div></div>
+    <div class="svr"><div class="svh"><span>กำลังกรอก: <b>จำนวนหน้า</b></span>${sndBtn()}</div><div class="kp">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button data-k="00">00</button><button data-k="0">0</button><button data-k="del">⌫</button></div></div>`,
+    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`, { cls: 'svs', sticky: true });
   const draw = () => {
     $$('#cm button', ov).forEach(b => b.classList.toggle('on', b.dataset.m === mode));
     $('#kv', ov).textContent = pages || '0';
