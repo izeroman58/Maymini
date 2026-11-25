@@ -155,17 +155,19 @@ const Sync = {
   get box() { return LS.get('outbox', []); },
   add(order) { const b = this.box; b.push(order); LS.set('outbox', b); this.badge(); this.flush(); },
   badge() {
-    let el = $('#obx'); const n = this.box.length;
+    let el = $('#obx'); const nb = this.box.length, nc = window.CustQ ? CustQ.list.length : 0, n = nb + nc;
     if (!n) { el && el.remove(); return; }
     if (!el) { el = document.createElement('div'); el.id = 'obx'; el.className = 'outbox'; el.onclick = () => this.flush(true); document.body.appendChild(el); }
-    el.textContent = `รอส่ง ${n} บิล`;
+    el.textContent = nc ? `รอส่ง ${nb ? nb + ' บิล · ' : ''}${nc} รายการลูกค้า` : `รอส่ง ${n} บิล`;
   },
   async flush(manual) {
     if (window.Clock) Clock.flush().catch(() => { });
-    if (this.busy || !S.user) return; const b = this.box; if (!b.length) return this.badge();
+    if (this.busy || !S.user) return; const b = this.box; if (!b.length) { CustQ.flush(); return this.badge(); }
     this.busy = true;
     try {
+      await CustQ.flush(); if (CustQ.list.length) throw Object.assign(new Error('offline'), { offline: true });
       const batch = b.slice(0, 25);
+      await this.photos(batch);
       const r = await api('syncOrders', { orders: batch });
       const ok = new Set(r.saved || []);
       LS.set('outbox', this.box.filter(o => !ok.has(o.id)));
@@ -178,6 +180,24 @@ const Sync = {
       if (this.box.length) setTimeout(() => this.flush(), 300);
     } catch (e) { if (manual || !e.offline) toast('ส่งบิลไม่สำเร็จ: ' + e.message, 1); }
     this.busy = false; this.badge();
+  },
+  // รูปบิลชำระแทนลูกค้าที่ถ่ายไว้ในเครื่อง → อัปโหลดก่อนส่งบิล (เบื้องหลัง ไม่หน่วงหน้าขาย)
+  async photos(batch) {
+    const bp = LS.get('billPhotos', {}); let ch = false;
+    for (const o of batch) {
+      const its = Logic.J(o.items, []); let mod = false;
+      for (const it of its) {
+        const k = it && it.job && it.job.photoKey; if (!k) continue;
+        if (bp[k]) {
+          try { const up = await api('upload', { kind: 'bill', name: bp[k].name, mime: 'image/jpeg', base64: bp[k].b64 }); it.job.fileUrl = up.fileUrl || ''; }
+          catch (e) { if (e.offline) throw e; toast('ส่งรูปบิลไม่ได้ — ส่งงานโดยไม่มีรูป (' + e.message + ')', 1); }
+          delete bp[k]; ch = true;
+        }
+        delete it.job.photoKey; mod = true;
+      }
+      if (mod) { o.items = typeof o.items === 'string' ? JSON.stringify(its) : its; const ob = this.box, x = ob.find(y => y.id === o.id); if (x) { x.items = o.items; LS.set('outbox', ob); } }
+    }
+    if (ch) LS.set('billPhotos', bp);
   },
   start() {
     this.badge(); clearInterval(this.timer); this.timer = setInterval(() => this.flush(), 20000);
@@ -195,12 +215,49 @@ const Sync = {
 window.Sync = Sync;
 
 /* ---------- ลูกค้า ---------- */
+// ลูกค้า: ใช้ข้อมูลในเครื่องทันที แล้วอัปเดตจาก Google เบื้องหลัง (หน้าขายไม่ต้องรอเน็ต)
+// งานแก้ไขลูกค้า (เพิ่ม/แก้/ลบ/รับชำระ/ปรับยอด/ปรับแต้ม) เห็นผลในเครื่องทันที แล้วเข้าคิวส่ง Google เบื้องหลัง (ออฟไลน์ได้)
+const CustQ = {
+  get list() { return LS.get('custOps', []); },
+  push(a, p) { const l = this.list; l.push({ opId: Logic.uid('Q'), a, p }); LS.set('custOps', l); Sync.badge(); setTimeout(() => this.flush(), 0); },
+  async flush() {
+    if (this.busy || !S.user || !this.list.length) return;
+    this.busy = true;
+    try {
+      while (this.list.length) {
+        const op = this.list[0];
+        try { await api(op.a, { ...op.p, opId: op.opId }); }
+        catch (e) { if (e.offline) break; toast('บันทึกข้อมูลลูกค้าไม่สำเร็จ: ' + String(e.message).replace(/^\w+:\s*/, ''), 1); this.failed = true; }
+        LS.set('custOps', this.list.filter(x => x.opId !== op.opId));
+      }
+    } finally { this.busy = false; Sync.badge(); document.dispatchEvent(new Event('mm:custq')); }
+    if (this.failed && !this.list.length) { this.failed = false; refreshCustomers(); }
+  }
+};
+window.CustQ = CustQ;
+// แก้ข้อมูลลูกค้าในเครื่อง (เห็นผลทันทีทุกหน้า) · patch = null → ลบ
+function custLocal(id, patch) {
+  S.customers = S.customers || LS.get('customers', []);
+  const i = S.customers.findIndex(x => x.id === id);
+  if (patch === null) { if (i >= 0) S.customers.splice(i, 1); }
+  else if (i >= 0) S.customers[i] = { ...S.customers[i], ...patch }; else S.customers.unshift({ id, ...patch });
+  LS.set('customers', S.customers); document.dispatchEvent(new Event('mm:customers'));
+  return patch === null ? null : S.customers.find(x => x.id === id);
+}
+function custTxLocal(id, tx) { const m = LS.get('custTx', {}); m[id] = [{ date: LocalDB.now(), by: S.user ? S.user.username : '', _local: 1, ...tx }].concat(m[id] || []).slice(0, 80); LS.set('custTx', m); }
+function refreshCustomers() {
+  // ยังมีงานลูกค้าค้างส่ง → ส่งก่อน แล้วค่อยดึง (ไม่ให้ข้อมูลเก่าจาก Google ทับของที่เพิ่งแก้)
+  if (CustQ.list.length) return CustQ.flush().then(() => CustQ.list.length ? (S.customers || LS.get('customers', [])) : refreshCustomers());
+  return S._custP || (S._custP = api('list', { table: 'Customers' }).then(r => {
+    S.customers = r.rows; S.customersAt = Date.now(); LS.set('customers', S.customers); document.dispatchEvent(new Event('mm:customers')); return S.customers;
+  }).catch(() => S.customers || (S.customers = LS.get('customers', []))).finally(() => { S._custP = null; }));
+}
 async function loadCustomers(force) {
   if (!can('customers') && !can('credit')) return S.customers = S.customers || [];
-  if (!force && S.customers && Date.now() - (S.customersAt || 0) < 60e3) return S.customers;
-  try { S.customers = (await api('list', { table: 'Customers' })).rows; S.customersAt = Date.now(); LS.set('customers', S.customers); }
-  catch (e) { S.customers = S.customers || LS.get('customers', []); }
-  return S.customers;
+  if (!S.customers) { const c = LS.get('customers', null); if (c) S.customers = c; }
+  if (force) return refreshCustomers();
+  if (S.customers) { if (Date.now() - (S.customersAt || 0) > 60e3) refreshCustomers(); return S.customers; }
+  return refreshCustomers();
 }
 function pickCustomer(cb) {
   let q = '';
@@ -215,7 +272,10 @@ function pickCustomer(cb) {
   };
   $('#cq', ov).oninput = e => { q = e.target.value; draw(); };
   $('#cn', ov).onclick = () => customerForm({ name: /\d/.test(q) ? '' : q, phone: /\d/.test(q) ? q : '' }, c => { ov.remove(); cb(c); });
-  loadCustomers().then(draw);
+  if (!S.customers) S.customers = LS.get('customers', null);
+  if (S.customers) draw();
+  loadCustomers().then(() => { if (ov.isConnected) draw(); });
+  const h = () => { if (!ov.isConnected) return document.removeEventListener('mm:customers', h); draw(); }; document.addEventListener('mm:customers', h);
   setTimeout(() => $('#cq', ov).focus(), 150);
 }
 function customerForm(c0, done) {
@@ -228,7 +288,11 @@ function customerForm(c0, done) {
     const o = { id: c.id || Logic.uid('C'), createdAt: c.createdAt }; ['name', 'phone', 'creditLimit', 'note'].forEach(k => o[k] = $('#c_' + k, ov).value.trim());
     o.phone = o.phone.replace(/[^\d+]/g, '');
     if (!o.name) return toast('กรุณาใส่ชื่อ', 1);
-    try { busy(1); await api('upsert', { table: 'Customers', rows: [o] }); await loadCustomers(true); busy(0); ov.remove(); toast('บันทึกลูกค้าแล้ว'); done && done(S.customers.find(x => x.id === o.id) || o); } catch (e) { busy(0); toast(e.message, 1); }
+    const dup = o.phone && (S.customers || LS.get('customers', [])).find(x => x.phone === o.phone && x.id !== o.id); if (dup) return toast('เบอร์โทร ' + o.phone + ' มีอยู่แล้ว: ' + dup.name, 1);
+    // บันทึกในเครื่องทันที แล้วส่ง Google เบื้องหลัง (ไม่ต้องรอเน็ต)
+    const saved = custLocal(o.id, isNew ? { ...o, createdAt: LocalDB.now(), totalSpent: '0', visits: '0', points: '0', credit: '0' } : o);
+    CustQ.push('upsert', { table: 'Customers', rows: [o] });
+    ov.remove(); toast('บันทึกลูกค้าแล้ว'); done && done(saved || o);
   };
   setTimeout(() => $('#c_name', ov).focus(), 150);
 }
@@ -345,10 +409,20 @@ window.keypad = keypad;
 // เจ้าของร้านใส่รหัสครั้งเดียวตอนเข้าใช้ฟังก์ชัน (เช่น นับสต็อก) แล้วใช้งานต่อได้จนออกจากหน้านั้น
 // ยืนยันแบบลอยเหนือหน้ากล้องสแกน
 function confirmDlgZ(msg) { return new Promise(res => { const ov = sheet('ยืนยัน', `<p>${esc(msg)}</p>`, `<button class="btn ghost grow" id="n">ยกเลิก</button><button class="btn grow" id="y" style="background:var(--red)">ตกลง</button>`); ov.style.zIndex = 90; $('#n', ov).onclick = () => { ov.remove(); res(false); }; $('#y', ov).onclick = () => { ov.remove(); res(true); }; }); }
+// รหัสเจ้าของที่เครื่องนี้เคยยืนยันกับ Google แล้ว → อนุมัติทันทีในเครื่อง (ไม่ต้องรอเน็ต) แล้วยืนยันซ้ำเบื้องหลัง
+// (คำสั่งสำคัญอย่างคืนเงิน Apps Script ยังตรวจรหัสอีกครั้งเสมอ)
+async function localApprove(pin, perm, scope) {
+  if (!(await OfflineAuth.checkOwnerPin(pin))) return false;
+  Elev.set(pin, scope);
+  apiRaw('checkPin', { ownerPin: pin, scope: perm }).then(r => { if (r && r.kind !== 'ap') OfflineAuth.rememberOwnerPin(pin); })
+    .catch(e => { if (!e.offline) { Elev.clear(); toast('รหัสเจ้าของถูกเปลี่ยนแล้ว — ใส่รหัสใหม่อีกครั้ง', 1); } });
+  return true;
+}
 async function ownerGate(reason, scope) {
   const perm = scope === 'stock' ? 'stockCount' : 'editProducts';
   if (!S.user || S.user.role === 'owner' || Elev.covers(perm)) return true;
   const pin = await ownerPinDlg(reason, true); if (!pin) return false;
+  if (await localApprove(pin, perm, scope)) return true;
   try { busy(1, 'กำลังตรวจรหัส...'); const r = await apiRaw('checkPin', { ownerPin: pin, scope: perm }); busy(0); Elev.set(pin, scope, r.kind); if (r.kind !== 'ap') OfflineAuth.rememberOwnerPin(pin); return true; }
   catch (e) { busy(0); if (e.offline && await OfflineAuth.checkOwnerPin(pin)) { Elev.set(pin, scope); toast('อนุมัติแบบออฟไลน์'); return true; } toast(String(e.message).replace(/^PIN_\w+:\s*/, ''), 1); return false; }
 }
@@ -358,6 +432,7 @@ async function gate(perm) {
   const apOK = ['editProducts', 'stockCount', 'receiveGoods'].includes(perm);
   const pin = await ownerPinDlg((S.defs[perm] || [])[0] || '', apOK);
   if (!pin) return false;
+  if (await localApprove(pin, perm, perm === 'editProducts' && ELEV_AREA.includes(S.view) ? 'products' : '')) return true;
   try { busy(1, 'กำลังตรวจรหัส...'); const r = await apiRaw('checkPin', { ownerPin: pin, scope: perm }); busy(0); Elev.set(pin, perm === 'editProducts' && ELEV_AREA.includes(S.view) ? 'products' : '', r.kind); if (r.kind !== 'ap') OfflineAuth.rememberOwnerPin(pin); return true; }
   catch (e) {
     busy(0);
@@ -400,7 +475,7 @@ const POS = {
     const go = (price, qty) => {
       const same = !o.price && p.byWeight !== 'Y' && this.t.items.find(it => it.sku === p.sku && num(it.price) === num(price));
       if (same) same.qty = num(same.qty) + (qty || 1);
-      else this.t.items.push({ sku: p.sku, name: p.name, price: num(price), qty: qty || 1, cost: num(p.cost), cat: p.category || '', byWeight: p.byWeight === 'Y' ? 'Y' : '' });
+      else this.t.items.push({ sku: p.sku, name: p.name, price: num(price), qty: qty || 1, cost: num(p.costPct) > 0 ? Math.round(num(price) * num(p.costPct)) / 100 : num(p.cost), ...(num(p.costPct) > 0 ? { cp: num(p.costPct) } : {}), cat: p.category || '', byWeight: p.byWeight === 'Y' ? 'Y' : '' });
       this.lastAdded = this.t.items.length - 1;
       if (!o.silent) beep();
       this.save();
@@ -716,7 +791,7 @@ const POS = {
     const unl = $('#unl', ov); if (unl) unl.onclick = async () => { if (await gate('priceEdit')) { canPr = true; $('#pr', ov).readOnly = false; $('#pr', ov).focus(); unl.remove(); } };
     $('#m', ov).onclick = () => q.value = Math.max(step, Math.round((num(q.value) - step) * 1000) / 1000);
     $('#p', ov).onclick = () => q.value = Math.round((num(q.value) + step) * 1000) / 1000;
-    $('#ok', ov).onclick = async () => { const v = num(q.value); if (v <= 0) { if (!(await gate('clearTicket'))) return; this.t.items.splice(i, 1); } else { if (v < num(it.qty) && !(await gate('clearTicket'))) return; it.qty = v; if (canPr) it.price = num($('#pr', ov).value); } ov.remove(); this.save(); };
+    $('#ok', ov).onclick = async () => { const v = num(q.value); if (v <= 0) { if (!(await gate('clearTicket'))) return; this.t.items.splice(i, 1); } else { if (v < num(it.qty) && !(await gate('clearTicket'))) return; it.qty = v; if (canPr) { it.price = num($('#pr', ov).value); if (it.cp) it.cost = Math.round(it.price * it.cp) / 100; } } ov.remove(); this.save(); };
     const rm = $('#rm', ov); if (rm) rm.onclick = async () => { if (!(await gate('clearTicket'))) return; this.t.items.splice(i, 1); ov.remove(); this.save(); };
   },
   ticketMenu() {

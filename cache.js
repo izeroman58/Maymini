@@ -227,6 +227,7 @@ function prefetchAll() {
     try { typeof loadProducts === 'function' && loadProducts().catch(() => { }); } catch (e) { }
     try { window.Img && Img.sync(); } catch (e) { }
     try { typeof loadCustomers === 'function' && loadCustomers().catch(() => { }); } catch (e) { }
+    try { window.Inst && (can('customers') || can('credit')) && Inst.list().catch(() => { }); } catch (e) { }
     OStore.start();
   }, 2500);
 }

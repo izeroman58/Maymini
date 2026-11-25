@@ -13,7 +13,7 @@ VIEWS.dataquality = async el => {
   const P = S.products.filter(p => p.available !== 'N'), N = P.length || 1;
   const isVar = p => !num(p.price);
   const fixed = P.filter(p => !isVar(p));
-  const hasCost = fixed.filter(p => num(p.cost) > 0), hasBar = P.filter(p => p.barcode), hasCat = P.filter(p => p.category), track = P.filter(p => p.trackStock === 'Y');
+  const hasCost = fixed.filter(p => num(p.cost) > 0 || num(p.costPct) > 0), hasBar = P.filter(p => p.barcode), hasCat = P.filter(p => p.category), track = P.filter(p => p.trackStock === 'Y');
   const below = fixed.filter(p => num(p.cost) > 0 && num(p.cost) >= num(p.price)), neg = track.filter(p => num(p.stock) < 0), vars = P.filter(isVar);
   const pct = (a, b) => b ? a / b * 100 : 0;
   // จากยอดขาย POS 30 วัน
@@ -21,7 +21,7 @@ VIEWS.dataquality = async el => {
   orders.filter(o => o.status === 'sale' || o.status === 'refunded').forEach(o => o._items.forEach(it => {
     const amt = num(it.qty) * num(it.price), p = IDX.bySku[it.sku];
     soldTot += amt; sold[it.sku] = (sold[it.sku] || 0) + amt;
-    if (!p || isVar(p)) varAmt += amt; else if (!num(p.cost)) noCostAmt += amt;
+    if (!p || isVar(p)) varAmt += amt; else if (!num(p.cost) && !num(p.costPct)) noCostAmt += amt;
   }));
   const hasPOS = soldTot > 0;
   // ใบเสร็จร้านส่ง เดือนนี้
@@ -80,7 +80,7 @@ VIEWS.dataquality = async el => {
   const edits = {}; let lim = 30;
   const drawFill = () => {
     const c = $('#fc', el).value;
-    const list = fixed.filter(p => !num(p.cost) && !(p.sku in edits && num(edits[p.sku]) > 0 && false) && (!c || (p.category || '') === c))
+    const list = fixed.filter(p => !num(p.cost) && !num(p.costPct) && !(p.sku in edits && num(edits[p.sku]) > 0 && false) && (!c || (p.category || '') === c))
       .sort((a, b) => (sold[b.sku] || 0) - (sold[a.sku] || 0) || (b.bestseller === 'Y') - (a.bestseller === 'Y') || a.name.localeCompare(b.name, 'th'));
     $('#fl', el).innerHTML = list.slice(0, lim).map(p => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><div class="grow"><div class="small" style="font-weight:600;line-height:1.3">${esc(p.name)}</div><div class="tiny muted">ขาย ${money(p.price)}${sold[p.sku] ? ' · ขายได้ ' + baht(sold[p.sku]) + '/30วัน' : ''}</div></div><input class="in num right" style="width:96px;min-height:38px" type="number" inputmode="decimal" step="any" placeholder="ทุน" data-s="${esc(p.sku)}" value="${esc(edits[p.sku] || '')}"></div>`).join('') + (list.length > lim ? `<button class="btn ghost block sm" id="fm" style="margin-top:8px">แสดงเพิ่ม (${list.length - lim})</button>` : '') || '<div class="muted small">ทุกรายการมีต้นทุนแล้ว</div>';
     $$('#fl [data-s]', el).forEach(i => i.oninput = () => { edits[i.dataset.s] = i.value; const p = IDX.bySku[i.dataset.s]; i.style.borderColor = num(i.value) >= num(p.price) && num(i.value) ? 'var(--red)' : ''; $('#fn', el).textContent = Object.values(edits).filter(v => num(v) > 0).length + ' รายการรอบันทึก'; });

@@ -5,7 +5,7 @@
  */
 var Logic = (function () {
   var SCHEMA = {
-    Products: { key: 'sku', read: 'all', write: 'editProducts', cols: ['sku', 'handle', 'name', 'category', 'description', 'byWeight', 'cost', 'barcode', 'trackStock', 'available', 'price', 'stock', 'lowStock', 'bestseller', 'unit', 'shelfLifeDays', 'note', 'updatedAt', 'updatedBy'] },
+    Products: { key: 'sku', read: 'all', write: 'editProducts', cols: ['sku', 'handle', 'name', 'category', 'description', 'byWeight', 'cost', 'costPct', 'barcode', 'trackStock', 'available', 'price', 'stock', 'lowStock', 'bestseller', 'unit', 'shelfLifeDays', 'note', 'updatedAt', 'updatedBy'] },
     Categories: { key: 'name', read: 'all', write: 'editProducts', cols: ['name', 'color', 'sort'] },
     Images: { key: 'sku', read: 'all', write: 'editProducts', cols: ['sku', 'data', 'updatedAt'] },
     Receipts: { key: 'id', read: 'receiveGoods', write: 'receiveGoods', own: 'createdBy', cols: ['id', 'date', 'supplier', 'supplierTaxId', 'docNo', 'type', 'subtotal', 'vat', 'total', 'payMethod', 'fileId', 'fileUrl', 'items', 'stockApplied', 'note', 'createdAt', 'createdBy', 'cat'] },
@@ -43,6 +43,8 @@ var Logic = (function () {
 
   function n(v) { var x = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(x) ? x : 0; }
   function r2(x) { return Math.round(x * 100) / 100; }
+  // ต้นทุนต่อหน่วย: ตั้งเป็น % ของราคาขาย (สินค้าราคาเปิด/ราคาไม่แน่นอน) → คิดจากราคาที่ขายจริง · ไม่ตั้ง % → ใช้ต้นทุนบาท
+  function unitCost(p, price) { var pct = n(p && p.costPct); return pct > 0 ? r2(n(price != null && price !== '' ? price : p.price) * pct / 100) : n(p && p.cost); }
   function J(s, d) { try { return typeof s === 'string' ? (s ? JSON.parse(s) : d) : (s == null ? d : s); } catch (e) { return d; } }
   function err(m) { throw new Error(m); }
   function uid(p) { return p + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); }
@@ -93,7 +95,7 @@ var Logic = (function () {
     var rows = db.read(t, opt || {});
     if (ownOnly || (sc.own && u.role !== 'owner' && t === 'Receipts')) rows = rows.filter(function (r) { return r[sc.own] === u.username; });
     if (t === 'Users') rows = rows.map(function (r) { var c = {}; for (var k in r) if (k !== 'pinHash' && k !== 'pinEnc') c[k] = r[k]; return c; });
-    if (t === 'Products' && !strict(db, u, 'viewCost')) rows = rows.map(function (r) { var c = Object.assign({}, r); c.cost = ''; return c; });
+    if (t === 'Products' && !strict(db, u, 'viewCost')) rows = rows.map(function (r) { var c = Object.assign({}, r); c.cost = ''; c.costPct = ''; return c; });
     if (t === 'Settings' && u.role !== 'owner') rows = rows.filter(function (r) { return String(r.key).indexOf('secret') !== 0; });
     return rows;
   }
@@ -106,7 +108,7 @@ var Logic = (function () {
     rows = (rows || []).map(function (r) {
       var c = clean(t, r);
       if (!c[sc.key]) err('ไม่มีค่า ' + sc.key);
-      if (t === 'Products') { c.updatedAt = db.now(); c.updatedBy = u.username; if (!strict(db, u, 'viewCost') && 'cost' in c) delete c.cost; }
+      if (t === 'Products') { c.updatedAt = db.now(); c.updatedBy = u.username; if (!strict(db, u, 'viewCost')) { delete c.cost; delete c.costPct; } }
       if (t === 'Images') c.updatedAt = db.now();
       if ((t === 'Receipts' || t === 'Sales') && !r.createdAt) { c.createdAt = db.now(); c.createdBy = u.username; }
       if (t === 'Licenses') c.updatedAt = db.now();
@@ -359,13 +361,13 @@ var Logic = (function () {
     var exist = db.read('Orders', { ids: orders.map(function (o) { return o.id; }) });
     var have = {}; exist.forEach(function (o) { have[o.id] = 1; });
     var now = db.now(), prods = db.read('Products', {}), pc = {};
-    prods.forEach(function (p) { pc[p.sku] = n(p.cost); });
+    prods.forEach(function (p) { pc[p.sku] = p; });
     var fresh = orders.filter(function (o) { return o.id && !have[o.id]; }).map(function (o) {
       if (payPart(o, 'credit') && !o.customerId) err('ขายเงินเชื่อต้องเลือกลูกค้า (บิล ' + o.id + ')');
       if (!o.customerId && J(o.items, []).some(function (it) { return it && (it.debt || it.inst); })) err('ใช้หนี้/ผ่อนสินค้า ต้องเลือกลูกค้า (บิล ' + o.id + ')');
       // ต้นทุนคิดจากฐานข้อมูลเสมอ (เครื่องพนักงานไม่มีข้อมูลต้นทุน)
       var items = J(o.items, []), cost = 0;
-      items.forEach(function (it) { if (it.sku in pc) it.cost = pc[it.sku]; cost += n(it.qty) * n(it.cost); });
+      items.forEach(function (it) { if (it.sku in pc) it.cost = unitCost(pc[it.sku], it.price); cost += n(it.qty) * n(it.cost); });
       o.items = JSON.stringify(items); o.cost = String(r2(cost));
       var c = clean('Orders', o); c.status = c.status || 'sale'; c.syncedAt = now; return c;
     });
@@ -584,23 +586,52 @@ var Logic = (function () {
   }
 
   // ---------- customers ----------
-  function customerPay(db, u, id, amount, note) {
+  // รายการที่ส่งซ้ำ (เน็ตหลุดแล้วส่งใหม่) → ไม่ตัดยอดซ้ำ ดูจากเลขอ้างอิง opId ในประวัติลูกค้า
+  function opDone(db, opId) { return !!opId && db.read('CustomerTx', {}).some(function (t) { return t.ref === opId; }); }
+  function customerOf(db, id) { var c = db.read('Customers', {}).filter(function (x) { return x.id === id; })[0]; if (!c) err('ไม่พบลูกค้า'); return c; }
+  function customerPay(db, u, id, amount, note, opId) {
     need(db, u, 'credit');
     amount = n(amount); if (amount <= 0) err('จำนวนเงินไม่ถูกต้อง');
-    var c = db.read('Customers', {}).filter(function (x) { return x.id === id; })[0]; if (!c) err('ไม่พบลูกค้า');
+    var c = customerOf(db, id); if (opDone(db, opId)) return { credit: c.credit, dup: true };
     c.credit = String(r2(n(c.credit) - amount));
     db.upsert('Customers', [{ id: c.id, credit: c.credit }]);
-    db.append('CustomerTx', [{ id: uid('T'), date: db.now(), customerId: id, type: 'credit_pay', amount: String(-amount), points: '', ref: '', by: u.username, note: note || '' }]);
+    db.append('CustomerTx', [{ id: uid('T'), date: db.now(), customerId: id, type: 'credit_pay', amount: String(-amount), points: '', ref: opId || '', by: u.username, note: note || '' }]);
     db.log(u, 'customerPay', c.name + ' ' + amount);
     return { credit: c.credit };
   }
-  function adjustPoints(db, u, id, pts, note) {
+  function adjustPoints(db, u, id, pts, note, opId) {
     need(db, u, 'customers');
-    var c = db.read('Customers', {}).filter(function (x) { return x.id === id; })[0]; if (!c) err('ไม่พบลูกค้า');
+    var c = customerOf(db, id); if (opDone(db, opId)) return { points: c.points, dup: true };
     c.points = String(Math.max(0, n(c.points) + n(pts)));
     db.upsert('Customers', [{ id: c.id, points: c.points }]);
-    db.append('CustomerTx', [{ id: uid('T'), date: db.now(), customerId: id, type: 'points_adjust', amount: '', points: String(n(pts)), ref: '', by: u.username, note: note || '' }]);
+    db.append('CustomerTx', [{ id: uid('T'), date: db.now(), customerId: id, type: 'points_adjust', amount: '', points: String(n(pts)), ref: opId || '', by: u.username, note: note || '' }]);
     return { points: c.points };
+  }
+  // ปรับยอดค้างชำระ (เจ้าของ): ตั้งยอดใหม่ เช่น ยกหนี้เก่ามาจากสมุด / แก้ยอดผิด · บันทึกส่วนต่างในประวัติ
+  function adjustCredit(db, u, id, credit, note, opId) {
+    if (u.role !== 'owner' && !pinOk(db, 'credit')) err('ปรับยอดค้างชำระได้เฉพาะเจ้าของร้าน');
+    var c = customerOf(db, id); if (opDone(db, opId)) return { credit: c.credit, dup: true };
+    var nv = r2(n(credit)); if (!isFinite(nv) || nv < 0) err('ยอดค้างไม่ถูกต้อง');
+    var diff = r2(nv - n(c.credit)); if (!diff) return { credit: c.credit };
+    db.upsert('Customers', [{ id: c.id, credit: String(nv) }]);
+    db.append('CustomerTx', [{ id: uid('T'), date: db.now(), customerId: id, type: 'credit_adjust', amount: String(diff), points: '', ref: opId || '', by: u.username, note: note || '' }]);
+    db.log(u, 'adjustCredit', c.name + ' ' + c.credit + '→' + nv);
+    return { credit: String(nv) };
+  }
+  // ลบลูกค้า (เจ้าของ): ประวัติเดิมและบิลเก่ายังอยู่ · มีสัญญาผ่อนค้างลบไม่ได้
+  function customerRemove(db, u, id, force) {
+    if (u.role !== 'owner' && !pinOk(db, 'customers')) err('ลบลูกค้าได้เฉพาะเจ้าของร้าน');
+    var c = db.read('Customers', {}).filter(function (x) { return x.id === id; })[0]; if (!c) return { removed: 0 };
+    if (db.read('Installments', {}).some(function (p) { return p.customerId === id && p.status === 'active'; })) err('ลูกค้านี้มีสัญญาผ่อนที่ยังไม่ปิด — ปิดหรือยกเลิกสัญญาก่อน');
+    if (n(c.credit) > 0 && !force) err('ลูกค้านี้มียอดค้างชำระ ' + c.credit + ' บาท');
+    db.remove('Customers', [id]);
+    db.log(u, 'customerRemove', c.name + ' ' + (c.phone || '') + (n(c.credit) ? ' ค้าง ' + c.credit : ''));
+    return { removed: 1 };
+  }
+  // ประวัติของลูกค้าคนเดียว (ไม่ต้องส่งทั้งตาราง)
+  function customerTx(db, u, id, limit) {
+    need(db, u, 'customers');
+    return db.read('CustomerTx', {}).filter(function (t) { return t.customerId === id; }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); }).slice(0, n(limit) || 60);
   }
 
   // ---------- time clock ----------
@@ -687,9 +718,12 @@ var Logic = (function () {
       case 'importOrders': return importOrders(db, u, p.rows, p.dry);
       case 'backupTable': return backupTable(db, u, p.table, p.offset, p.limit);
       case 'restoreTable': return restoreTable(db, u, p.table, p.rows, p.dry);
-      case 'customerPay': return customerPay(db, u, p.id, p.amount, p.note);
+      case 'customerPay': return customerPay(db, u, p.id, p.amount, p.note, p.opId);
+      case 'adjustCredit': return adjustCredit(db, u, p.id, p.credit, p.note, p.opId);
+      case 'customerRemove': return customerRemove(db, u, p.id, p.force);
+      case 'customerTx': return { rows: customerTx(db, u, p.id, p.limit) };
       case 'instCancel': return instCancel(db, u, p.id, p.note);
-      case 'adjustPoints': return adjustPoints(db, u, p.id, p.points, p.note);
+      case 'adjustPoints': return adjustPoints(db, u, p.id, p.points, p.note, p.opId);
       case 'clockIn': return clockIn(db, u, p.deviceId, p.at);
       case 'clockOut': return clockOut(db, u, p.at);
       case 'dailySummary': return { days: dailySummary(db, u, p.from, p.to) };

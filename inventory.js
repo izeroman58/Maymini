@@ -122,7 +122,7 @@ VIEWS.stockvalue = async el => {
   el.innerHTML = vhead('มูลค่าสต็อก', `<button class="btn ghost sm" id="ex">CSV</button>`, 'inventory') + '<div id="sv"><div class="card center"><span class="spin dark"></span></div></div>';
   await loadProducts(true).catch(() => { });
   const tr = S.products.filter(p => p.trackStock === 'Y');
-  const pos = tr.filter(p => num(p.stock) > 0), neg = tr.filter(p => num(p.stock) < 0), nocost = pos.filter(p => !num(p.cost));
+  const pos = tr.filter(p => num(p.stock) > 0), neg = tr.filter(p => num(p.stock) < 0), nocost = pos.filter(p => !num(p.cost) && !num(p.costPct));
   const cats = {}; let T = { qty: 0, cost: 0, retail: 0, n: 0 };
   pos.forEach(p => { const k = p.category || 'ไม่ระบุหมวด', c = cats[k] || (cats[k] = { qty: 0, cost: 0, retail: 0, n: 0 }); const q = num(p.stock); c.qty += q; c.cost += q * num(p.cost); c.retail += q * num(p.price); c.n++; T.qty += q; T.cost += q * num(p.cost); T.retail += q * num(p.price); T.n++; });
   const k = (t, v, s) => `<div class="stat"><div class="k">${t}</div><div class="v">${v}</div>${s ? `<div class="tiny muted">${s}</div>` : ''}</div>`;

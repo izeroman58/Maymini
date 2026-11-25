@@ -11,10 +11,10 @@ VIEWS.customers = async el => {
     <div class="chips" style="margin-top:10px">${[['recent', 'มาล่าสุด'], ['spent', 'ยอดซื้อสูงสุด'], ['points', 'แต้มมากสุด'], ['credit', 'ค้างชำระ']].map(([k, n]) => `<button class="chip ${k === sort ? 'on' : ''}" data-s="${k}">${n}</button>`).join('')}</div>
     <div id="rkb"></div><div class="grid3" id="sm" style="margin-bottom:10px"></div><div class="list" id="cl"><div class="empty"><span class="spin dark"></span></div></div>`;
   const draw = () => {
-    const all = S.customers || [], t = norm(q);
+    const all = S.customers || [], t = norm(q), cr = c => num(c.credit) + (typeof custPending === 'function' ? custPending(c.id) : 0);
     let res = all.filter(c => !t || norm(c.name + c.phone).includes(t));
-    if (sort === 'credit') res = res.filter(c => num(c.credit) > 0);
-    res.sort((a, b) => sort === 'spent' ? num(b.totalSpent) - num(a.totalSpent) : sort === 'points' ? num(b.points) - num(a.points) : sort === 'credit' ? num(b.credit) - num(a.credit) : String(b.lastVisit || b.createdAt).localeCompare(a.lastVisit || a.createdAt));
+    if (sort === 'credit') res = res.filter(c => cr(c) > 0);
+    res.sort((a, b) => sort === 'spent' ? num(b.totalSpent) - num(a.totalSpent) : sort === 'points' ? num(b.points) - num(a.points) : sort === 'credit' ? cr(b) - cr(a) : String(b.lastVisit || b.createdAt).localeCompare(a.lastVisit || a.createdAt));
     $('#sm', el).innerHTML = `<div class="stat center"><div class="k">ลูกค้า</div><div class="v">${all.length}</div></div><div class="stat center"><div class="k">ยอดค้างเชื่อรวม</div><div class="v" style="color:var(--amber)">${money(all.reduce((s, c) => s + Math.max(0, num(c.credit)), 0), 0)}</div></div><div class="stat center"><div class="k">แต้มคงค้าง</div><div class="v">${all.reduce((s, c) => s + num(c.points), 0).toLocaleString()}</div></div>`;
     $('#cl', el).innerHTML = res.slice(0, 200).map(c => `<div class="item" data-id="${esc(c.id)}"><div class="av">${esc(Array.from(c.name || '?')[0])}</div><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${esc(c.phone || '-')} · ${num(c.visits)} ครั้ง · ${num(c.points)} แต้ม${c.lastVisit ? ' · ล่าสุด ' + thDate(String(c.lastVisit).slice(0, 10)) : ''}</div></div><div class="right"><div class="num" style="font-weight:600">${baht(c.totalSpent)}</div>${num(c.credit) ? `<div class="tag amber">ค้าง ${money(c.credit)}</div>` : ''}</div></div>`).join('') || '<div class="empty">ไม่พบลูกค้า</div>';
     $$('#cl [data-id]', el).forEach(x => x.onclick = () => customerDetail(all.find(c => c.id === x.dataset.id)));
@@ -24,35 +24,90 @@ VIEWS.customers = async el => {
   $('#q', el).oninput = e => { q = e.target.value; draw(); };
   $$('[data-s]', el).forEach(b => b.onclick = () => { sort = b.dataset.s; $$('[data-s]', el).forEach(x => x.classList.toggle('on', x === b)); draw(); });
   $('#nw', el).onclick = () => customerForm(null, () => draw());
-  await loadCustomers(true); draw();
+  // แสดงจากข้อมูลในเครื่องทันที → อัปเดตจาก Google เบื้องหลัง แล้ววาดใหม่ให้เอง
+  if (!S.customers) S.customers = LS.get('customers', null);
+  if (S.customers) draw();
+  const h = () => { if (!el.isConnected) return document.removeEventListener('mm:customers', h); draw(); }; document.addEventListener('mm:customers', h);
+  loadCustomers(!S.customers).then(() => { if (el.isConnected) draw(); });
 };
-async function customerDetail(c) {
-  const ov = sheet(esc(c.name), `<div class="grid2" style="margin-bottom:10px"><div class="stat"><div class="k">ยอดซื้อรวม</div><div class="v">${baht(c.totalSpent)}</div><div class="tiny muted">${num(c.visits)} ครั้ง</div></div><div class="stat"><div class="k">แต้มสะสม</div><div class="v">${num(c.points)}</div></div>
-     <div class="stat"><div class="k">ยอดค้างชำระ (เชื่อ)</div><div class="v" style="color:${num(c.credit) > 0 ? 'var(--amber)' : 'inherit'}">${baht(c.credit)}</div>${num(c.creditLimit) ? `<div class="tiny muted">วงเงิน ${money(c.creditLimit)}</div>` : ''}</div><div class="stat"><div class="k">เบอร์โทร</div><div class="v" style="font-size:16px">${esc(c.phone || '-')}</div></div></div>
-     ${c.note ? `<div class="small muted" style="margin-bottom:8px">${esc(c.note)}</div>` : ''}
-     <div id="cinst"></div>
-     <div class="card"><h3>ความเคลื่อนไหว</h3><div id="tx"><span class="spin dark"></span></div></div>`,
-    `<button class="btn ghost grow" id="ed">${I(IC.edit, 16)} แก้ไข</button><button class="btn ghost grow" id="pt">± แต้ม</button>${can('credit') && num(c.credit) > 0 ? `<button class="btn grow green" id="py">รับชำระหนี้</button>` : ''}`);
-  $('#ed', ov).onclick = () => { ov.remove(); customerForm(c, () => go('customers')); };
+const CTX_T = { credit_sale: 'ซื้อเงินเชื่อ', credit_pay: 'ชำระหนี้', credit_pay_void: 'ยกเลิกการชำระหนี้ (คืนเงินบิล)', credit_refund: 'คืนเงิน (เชื่อ)', credit_adjust: 'ปรับยอดค้างชำระ', points_adjust: 'ปรับแต้ม' };
+function customerDetail(c0) {
+  const id = c0.id, own = isOwner();
+  const cur = () => (S.customers || []).find(x => x.id === id) || c0;
+  const ov = sheet(esc(c0.name), `<div id="cdb"></div><div id="cinst"></div><div class="card"><h3>ความเคลื่อนไหว <span id="txs" class="tiny muted" style="font-weight:400"></span></h3><div id="tx"></div></div>`,
+    `<button class="btn ghost grow" id="ed">${I(IC.edit, 16)} แก้ไข</button><button class="btn ghost grow" id="pt">± แต้ม</button>${own ? '<button class="btn ghost grow" id="cr">± ยอดค้าง</button>' : ''}<span id="pyw" style="display:contents"></span>${own ? `<button class="btn ghost" id="rm" title="ลบลูกค้า" style="color:var(--red)">${I(IC.trash, 18)}</button>` : ''}`);
+  const pend = () => typeof custPending === 'function' ? custPending(id) : 0;
+  const paint = () => {
+    if (!ov.isConnected) return document.removeEventListener('mm:customers', paint);
+    const c = cur(), pd = pend(), credit = Math.round((num(c.credit) + pd) * 100) / 100;
+    $('#cdb', ov).innerHTML = `<div class="grid2" style="margin-bottom:10px"><div class="stat"><div class="k">ยอดซื้อรวม</div><div class="v">${baht(c.totalSpent)}</div><div class="tiny muted">${num(c.visits)} ครั้ง</div></div><div class="stat"><div class="k">แต้มสะสม</div><div class="v">${num(c.points)}</div></div>
+     <div class="stat"><div class="k">ยอดค้างชำระ (เชื่อ)</div><div class="v" style="color:${credit > 0 ? 'var(--amber)' : 'inherit'}">${baht(credit)}</div>${pd ? `<div class="tiny muted">รวมบิลที่รอส่ง ${money(pd)}</div>` : ''}${num(c.creditLimit) ? `<div class="tiny muted">วงเงิน ${money(c.creditLimit)}</div>` : ''}</div><div class="stat"><div class="k">เบอร์โทร</div><div class="v" style="font-size:16px">${esc(c.phone || '-')}</div></div></div>
+     ${c.note ? `<div class="small muted" style="margin-bottom:8px">${esc(c.note)}</div>` : ''}`;
+    $('#pyw', ov).innerHTML = can('credit') && credit > 0 ? '<button class="btn grow green" id="py">รับชำระหนี้</button>' : '';
+    const py = $('#py', ov); if (py) py.onclick = () => keypad('รับชำระหนี้ — ค้าง ' + money(credit), credit, v => {
+      v = Math.min(credit, num(v)); if (v <= 0) return;
+      const left = Math.round((num(cur().credit) - v) * 100) / 100;
+      custLocal(id, { credit: String(left) }); custTxLocal(id, { type: 'credit_pay', amount: String(-v), note: '' });
+      CustQ.push('customerPay', { id, amount: v }); toast('รับชำระแล้ว · คงค้าง ' + money(left + pend())); drawTx();
+      RP.printOrder({ id: 'PAY-' + Date.now().toString().slice(-6), date: LocalDB.now(), title: 'ใบรับชำระหนี้', cashierName: S.user.name, customerName: cur().name, customerId: id, items: [{ name: 'รับชำระหนี้เงินเชื่อ', qty: 1, price: v }], subtotal: v, discount: 0, total: v, payments: [{ type: 'cash', amount: v }], creditBalance: left + pend() }).catch(() => { });
+    }, { min: 0 });
+    const h2 = $('.sh h3', ov); if (h2 && h2.textContent !== c.name) h2.textContent = c.name;
+  };
+  const drawTx = () => {
+    if (!ov.isConnected) return;
+    const tx = (LS.get('custTx', {})[id] || []);
+    $('#tx', ov).innerHTML = tx.length ? tx.slice(0, 40).map(t => `<div class="kv small"><span>${CTX_T[t.type] || t.type}${t._local ? ' <span class="tag gray" style="font-size:10px">รอส่ง</span>' : ''}<div class="tiny muted">${esc(String(t.date).replace('T', ' ').slice(0, 16))} ${/^Q/.test(t.ref || '') ? '' : esc(t.ref || '')} ${esc(t.note || '')}</div></span><b>${t.amount ? money(t.amount) : (num(t.points) > 0 ? '+' : '') + t.points + ' แต้ม'}</b></div>`).join('') : '<div class="muted small">ยังไม่มีรายการเงินเชื่อ/แต้ม — ประวัติการซื้อดูได้ที่ใบเสร็จรับเงิน (ค้นหาชื่อลูกค้า)</div>';
+  };
+  paint(); drawTx(); document.addEventListener('mm:customers', paint);
+  // ประวัติ: แสดงที่เก็บไว้ในเครื่องก่อน แล้วดึงเฉพาะของลูกค้าคนนี้เบื้องหลัง
+  $('#txs', ov).textContent = '⟳ กำลังอัปเดต';
+  const pullTx = () => api('customerTx', { id, limit: 60 }).then(r => {
+    const m = LS.get('custTx', {}), loc = CustQ.list.length ? (m[id] || []).filter(t => t._local) : []; m[id] = loc.concat(r.rows || []); LS.set('custTx', m);
+    if (ov.isConnected) { drawTx(); $('#txs', ov).textContent = ''; }
+  }).catch(e => { if (ov.isConnected) $('#txs', ov).textContent = e.offline ? '(ออฟไลน์ — แสดงข้อมูลในเครื่อง)' : ''; });
+  (CustQ.list.length ? CustQ.flush() : Promise.resolve()).then(pullTx);
+  const qh = () => { if (!ov.isConnected) return document.removeEventListener('mm:custq', qh); if (!CustQ.list.length) pullTx(); }; document.addEventListener('mm:custq', qh);
+  if (window.Inst) Inst.list().then(L => { const mine = L.filter(p => p.customerId === id && p.status === 'active'), b = $('#cinst', ov); if (!b || !mine.length) return;
+    b.innerHTML = `<div class="card"><div class="row"><h3 class="grow">📆 สัญญาผ่อน ${mine.length} สัญญา</h3><button class="btn ghost sm" id="ci">ดูทั้งหมด</button></div>${mine.map(p => instRow(p, false)).join('')}</div>`;
+    $('#ci', b).onclick = () => { ov.remove(); IV.cust = id; IV.f = ''; go('inst'); };
+    $$('[data-iv]', b).forEach(r => r.onclick = () => instDetail(mine.find(p => p.id === r.dataset.iv))); }).catch(() => { });
+  $('#ed', ov).onclick = () => customerForm(cur(), () => paint());
   $('#pt', ov).onclick = () => {
     const o2 = sheet('ปรับแต้ม', `<div class="seg" id="sg"><button data-s="1" class="on">เพิ่มแต้ม</button><button data-s="-1">หักแต้ม</button></div><input class="in" id="pv" type="number" inputmode="numeric" style="margin-top:10px;font-size:22px" placeholder="จำนวนแต้ม"><input class="in" id="pn" style="margin-top:8px" placeholder="เหตุผล (เช่น แลกของรางวัล)">`, '<button class="btn block" id="ok">บันทึก</button>');
     let sg = 1; $$('#sg button', o2).forEach(b => b.onclick = () => { sg = +b.dataset.s; $$('#sg button', o2).forEach(x => x.classList.toggle('on', x === b)); });
-    $('#ok', o2).onclick = async () => { const v = Math.floor(num($('#pv', o2).value)); if (!v) return toast('ใส่จำนวนแต้ม', 1); try { busy(1); const r = await api('adjustPoints', { id: c.id, points: sg * v, note: $('#pn', o2).value || 'ปรับโดย ' + S.user.name }); busy(0); o2.remove(); ov.remove(); toast('แต้มคงเหลือ ' + r.points); await loadCustomers(true); if (S.view === 'customers') go('customers'); } catch (e) { busy(0); toast(e.message, 1); } };
+    $('#ok', o2).onclick = () => {
+      const v = Math.floor(num($('#pv', o2).value)); if (!v) return toast('ใส่จำนวนแต้ม', 1);
+      const note = $('#pn', o2).value || 'ปรับโดย ' + S.user.name, pts = Math.max(0, num(cur().points) + sg * v);
+      custLocal(id, { points: String(pts) }); custTxLocal(id, { type: 'points_adjust', points: String(sg * v), note });
+      CustQ.push('adjustPoints', { id, points: sg * v, note }); o2.remove(); toast('แต้มคงเหลือ ' + pts); drawTx();
+    };
   };
-  if (window.Inst) Inst.list().then(L => { const mine = L.filter(p => p.customerId === c.id && p.status === 'active'), b = $('#cinst', ov); if (!b || !mine.length) return;
-    b.innerHTML = `<div class="card"><div class="row"><h3 class="grow">📆 สัญญาผ่อน ${mine.length} สัญญา</h3><button class="btn ghost sm" id="ci">ดูทั้งหมด</button></div>${mine.map(p => instRow(p, false)).join('')}</div>`;
-    $('#ci', b).onclick = () => { ov.remove(); IV.cust = c.id; IV.f = ''; go('inst'); };
-    $$('[data-iv]', b).forEach(r => r.onclick = () => instDetail(mine.find(p => p.id === r.dataset.iv))); }).catch(() => { });
-  const py = $('#py', ov); if (py) py.onclick = () => keypad('รับชำระหนี้ — ค้าง ' + money(c.credit), num(c.credit), async v => {
-    try { busy(1); const r = await api('customerPay', { id: c.id, amount: v }); busy(0); ov.remove(); toast('รับชำระแล้ว · คงค้าง ' + money(r.credit)); await loadCustomers(true); if (S.view === 'customers') go('customers');
-      RP.printOrder({ id: 'PAY-' + Date.now().toString().slice(-6), date: LocalDB.now(), title: 'ใบรับชำระหนี้', cashierName: S.user.name, customerName: c.name, customerId: c.id, items: [{ name: 'รับชำระหนี้เงินเชื่อ', qty: 1, price: v }], subtotal: v, discount: 0, total: v, payments: [{ type: 'cash', amount: v }], creditBalance: r.credit }).catch(() => { });
-    } catch (e) { busy(0); toast(e.message, 1); }
-  }, { min: 0 });
-  try {
-    const tx = (await api('list', { table: 'CustomerTx' })).rows.filter(t => t.customerId === c.id).sort((a, b) => String(b.date).localeCompare(a.date)).slice(0, 40);
-    const T = { credit_sale: 'ซื้อเงินเชื่อ', credit_pay: 'ชำระหนี้', credit_pay_void: 'ยกเลิกการชำระหนี้ (คืนเงินบิล)', credit_refund: 'คืนเงิน (เชื่อ)', points_adjust: 'ปรับแต้ม' };
-    $('#tx', ov).innerHTML = tx.length ? tx.map(t => `<div class="kv small"><span>${T[t.type] || t.type}<div class="tiny muted">${esc(String(t.date).replace('T', ' ').slice(0, 16))} ${esc(t.ref || '')} ${esc(t.note || '')}</div></span><b>${t.amount ? money(t.amount) : (num(t.points) > 0 ? '+' : '') + t.points + ' แต้ม'}</b></div>`).join('') : '<div class="muted small">ยังไม่มีรายการเงินเชื่อ/แต้ม — ประวัติการซื้อดูได้ที่ใบเสร็จรับเงิน (ค้นหาชื่อลูกค้า)</div>';
-  } catch (e) { $('#tx', ov).textContent = e.message; }
+  const crb = $('#cr', ov); if (crb) crb.onclick = () => {
+    const now = num(cur().credit);
+    const o2 = sheet('ปรับยอดค้างชำระ', `<div class="small muted" style="margin-bottom:8px">ยอดค้างตอนนี้ <b>${money(now)}</b>${pend() ? ` (ไม่รวมบิลที่รอส่ง ${money(pend())})` : ''} · ใช้ยกหนี้เก่าจากสมุดมาใส่ แก้ยอดที่ผิด หรือยกหนี้ให้ลูกค้า — ระบบบันทึกส่วนต่างในประวัติ</div>
+      <div class="seg" id="cm"><button data-m="set" class="on">ตั้งยอดใหม่</button><button data-m="add">เพิ่มหนี้</button><button data-m="sub">ลดหนี้</button></div>
+      <input class="in" id="cv" type="number" inputmode="decimal" step="any" style="margin-top:10px;font-size:22px" value="${now}">
+      <div class="small" id="cpv" style="margin:6px 2px;font-weight:600"></div>
+      <input class="in" id="cn" placeholder="เหตุผล (เช่น ยกยอดจากสมุดหนี้ / ยกหนี้ให้)">`, '<button class="btn block" id="ok">บันทึก</button>');
+    let m = 'set'; const nv = () => { const v = num($('#cv', o2).value); return Math.max(0, Math.round((m === 'set' ? v : m === 'add' ? now + v : now - v) * 100) / 100); };
+    const pv = () => { const d = nv() - now; $('#cpv', o2).textContent = `ยอดค้างใหม่ ${money(nv())} (${d >= 0 ? '+' : ''}${money(d)})`; };
+    $$('#cm button', o2).forEach(b => b.onclick = () => { m = b.dataset.m; $$('#cm button', o2).forEach(x => x.classList.toggle('on', x === b)); $('#cv', o2).value = m === 'set' ? now : ''; pv(); $('#cv', o2).focus(); });
+    $('#cv', o2).oninput = pv; pv();
+    $('#ok', o2).onclick = () => {
+      const v = nv(), d = Math.round((v - now) * 100) / 100; if (!d) return o2.remove();
+      const note = $('#cn', o2).value.trim() || 'ปรับโดย ' + S.user.name;
+      custLocal(id, { credit: String(v) }); custTxLocal(id, { type: 'credit_adjust', amount: String(d), note });
+      CustQ.push('adjustCredit', { id, credit: v, note }); o2.remove(); toast('ยอดค้างชำระ ' + money(v)); drawTx();
+    };
+  };
+  const rmb = $('#rm', ov); if (rmb) rmb.onclick = async () => {
+    const c = cur(), credit = num(c.credit) + pend();
+    const ip = window.Inst ? Inst.view(Inst.cache()).filter(p => p.customerId === id && p.status === 'active') : [];
+    if (ip.length) return toast(`${c.name} มีสัญญาผ่อนที่ยังไม่ปิด ${ip.length} สัญญา — ปิดหรือยกเลิกสัญญาก่อน`, 1);
+    if (POS.t.customer && POS.t.customer.id === id) return toast('ลูกค้านี้อยู่ในบิลที่กำลังขาย — ชำระหรือล้างบิลก่อน', 1);
+    if (!(await confirmDlg(`ลบลูกค้า <b>${esc(c.name)}</b> ${esc(c.phone || '')}?${credit > 0 ? `<div class="alert amber small" style="margin-top:8px">มียอดค้างชำระ ${money(credit)} — ยอดนี้จะหายไปด้วย</div>` : ''}<div class="tiny muted" style="margin-top:8px">บิลเก่าและประวัติยังอยู่ · แต้มสะสมหายไปด้วย</div>`, 'ลบลูกค้า', true))) return;
+    ov.remove(); custLocal(id, null); CustQ.push('customerRemove', { id, force: credit > 0 ? 1 : 0 }); toast('ลบลูกค้าแล้ว');
+  };
 }
 
 /* ---------- พนักงาน ---------- */

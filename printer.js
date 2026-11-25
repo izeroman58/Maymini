@@ -104,7 +104,9 @@ function canvasToEscPos(cv, o = {}) {
 /* ---------- การเชื่อมต่อ ---------- */
 const BLE_SVCS = ['000018f0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '0000ae30-0000-1000-8000-00805f9b34fb', '0000fee7-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '0000ae00-0000-1000-8000-00805f9b34fb', '0000ff12-0000-1000-8000-00805f9b34fb'];
 const SPP = '00001101-0000-1000-8000-00805f9b34fb';
-const canBtc = () => !!(navigator.serial && /Android/i.test(navigator.userAgent));
+// แท็บเล็ต Samsung มักเปิด Chrome แบบ "เว็บไซต์เดสก์ท็อป" → ไม่มีคำว่า Android ใน userAgent จึงดูจากจอสัมผัสบน Linux ด้วย
+const isAndroidish = () => /Android/i.test(navigator.userAgent) || (/Linux/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0);
+const canBtc = () => !!navigator.serial;
 const RP = {
   t: null, dev: null, ch: null, usb: null, ep: null, port: null, writer: null,
   get ok() {
@@ -259,6 +261,7 @@ VIEWS.printer = el => {
   const c = rcfg(); let logo = S.settings.receiptLogo || '';
   const pc = pconn();
   el.innerHTML = vhead('เครื่องพิมพ์ใบเสร็จ', '', 'more') + `
+  ${isAndroidish() && !canBtc() ? `<div class="card" style="border:2px solid #C62828"><h3>Chrome เครื่องนี้ยังต่อเครื่องพิมพ์ Bluetooth ตรงไม่ได้</h3><div class="small" style="line-height:1.7">เปิด Play Store › ค้นหา Chrome › กด <b>อัปเดต</b> (ต้องเวอร์ชัน 138 ขึ้นไป) แล้วปิด-เปิด Chrome ใหม่ จะมีปุ่มสีเขียว “ใช้ Bluetooth ตรง” ขึ้นที่หน้านี้ · ระหว่างนี้ใช้ RawBT ไปก่อน</div></div>` : ''}
   ${canBtc() ? `<div class="card" style="border:2px solid #2E7D32"><h3>✨ ต่อเครื่องพิมพ์ Bluetooth ตรง — ไม่ต้องใช้ RawBT</h3>
     <div class="small" style="line-height:1.7">เร็วกว่า ไม่มีหน้าต่าง RawBT เด้ง ลิ้นชักเด้งทันที ใช้ได้แม้ไม่มีเน็ต<br>
     1) เปิดเครื่องพิมพ์ › แท็บเล็ต การตั้งค่า › การเชื่อมต่อ › Bluetooth › จับคู่เครื่องพิมพ์ไว้ (ถ้าเคยจับคู่กับ RawBT แล้ว ข้ามได้)<br>
@@ -266,7 +269,7 @@ VIEWS.printer = el => {
     3) กด <b>ใช้ Bluetooth ตรง</b> › เลือกชื่อเครื่องพิมพ์ในรายการ › อนุญาต<br>
     4) กด “ทดสอบพิมพ์” และ “ทดสอบเปิดลิ้นชัก” — ครั้งต่อไประบบต่อให้เองทุกครั้งที่เปิดหน้าขาย</div>
     <div class="row" style="gap:8px;margin-top:8px"><button class="btn green sm" id="usebtc">ใช้ Bluetooth ตรง</button></div></div>` : ''}
-  ${/Android/i.test(navigator.userAgent) ? `<details class="card" ${canBtc() ? '' : 'open'} style="border:2px solid #FFB300"><summary><b>${canBtc() ? 'ทางสำรอง: ' : ''}แท็บเล็ต Android + เครื่องพิมพ์ AIMO / QF300-UBT / Xprinter ผ่านแอป RawBT</b></summary>
+  ${isAndroidish() ? `<details class="card" ${canBtc() ? '' : 'open'} style="border:2px solid #FFB300"><summary><b>${canBtc() ? 'ทางสำรอง: ' : ''}แท็บเล็ต Android + เครื่องพิมพ์ AIMO / QF300-UBT / Xprinter ผ่านแอป RawBT</b></summary>
     <div class="small" style="line-height:1.7;margin-top:6px">${canBtc() ? 'ใช้เมื่อ Bluetooth ตรงใช้ไม่ได้กับเครื่องพิมพ์รุ่นนั้น — RawBT รุ่นฟรีจะมีหน้าต่างเด้งทุกครั้งที่พิมพ์/เปิดลิ้นชัก' : 'Chrome เครื่องนี้ยังต่อ Bluetooth แบบ Classic ตรงไม่ได้ — อัปเดต Chrome ใน Play Store (เวอร์ชัน 138 ขึ้นไป) แล้วเปิดหน้านี้ใหม่ จะมีปุ่ม “Bluetooth ตรง” ให้ใช้แทน RawBT · ระหว่างนี้ใช้แอปฟรี <b>RawBT</b> เป็นตัวกลาง'}<br>
     1) เปิดเครื่องพิมพ์ › แท็บเล็ต การตั้งค่า › การเชื่อมต่อ › Bluetooth › จับคู่เครื่องพิมพ์ (รหัส 0000 หรือ 1234)<br>
     2) ติดตั้งแอป RawBT › เปิดแอป › ตั้งค่า › วิธีเชื่อมต่อ: Bluetooth › เลือกเครื่องพิมพ์ · ไดรเวอร์ ESC/POS · กระดาษ 80 มม. (576 จุด) › กด Test print ในแอปให้ออกก่อน<br>
@@ -274,7 +277,7 @@ VIEWS.printer = el => {
     4) ติ๊ก “พิมพ์อัตโนมัติ” และ “เปิดลิ้นชัก” — ลิ้นชักเด้งพร้อมใบเสร็จ</div>
     <div class="row" style="gap:8px;margin-top:8px"><a class="btn sm" href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noopener">ติดตั้งแอป RawBT</a><button class="btn ghost sm" id="useraw">ใช้ RawBT กับเครื่องนี้</button></div></details>` : ''}
   <div class="card"><h3>การเชื่อมต่อ (เฉพาะเครื่องนี้)</h3>
-    <div class="seg wrap" id="ptype">${[...(canBtc() || pc.type === 'btc' ? [['btc', 'Bluetooth ตรง']] : []), ['bt', 'Bluetooth BLE'], ['usb', 'USB'], ['serial', 'USB-Serial'], ['rawbt', 'RawBT'], ['system', 'ผ่านระบบ']].map(([k, n]) => `<button data-t="${k}" class="${pc.type === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <div class="seg wrap" id="ptype">${[['btc', 'Bluetooth ตรง'], ['bt', 'Bluetooth BLE'], ['usb', 'USB'], ['serial', 'USB-Serial'], ['rawbt', 'RawBT'], ['system', 'ผ่านระบบ']].map(([k, n]) => `<button data-t="${k}" class="${pc.type === k ? 'on' : ''}">${n}</button>`).join('')}</div>
     <div class="small muted" id="phelp" style="margin:8px 2px"></div>
     <div class="row"><div class="grow small" id="pst"></div><button class="btn sm" id="pcon">เชื่อมต่อ</button><button class="btn ghost sm" id="ptest">ทดสอบพิมพ์</button></div>
     <label class="row small" style="margin-top:10px"><input type="checkbox" id="auto" ${pc.autoPrint ? 'checked' : ''}> พิมพ์ใบเสร็จอัตโนมัติหลังรับชำระ</label>

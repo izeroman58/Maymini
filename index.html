@@ -243,7 +243,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.53';
+const APP_VER = '2.6.54';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -837,7 +837,7 @@ function searchProducts(q, f = {}) {
     if (f.cat && (p.category || 'ไม่ระบุหมวด') !== f.cat) return false;
     if (f.flag === 'low' && !(p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0))) return false;
     if (f.flag === 'nobar' && p.barcode) return false;
-    if (f.flag === 'nocost' && num(p.cost) > 0) return false;
+    if (f.flag === 'nocost' && (num(p.cost) > 0 || num(p.costPct) > 0)) return false;
     if (f.flag === 'best' && p.bestseller !== 'Y') return false;
     if (f.flag === 'fresh' && !/ของสด/.test(p.category || '') && p.byWeight !== 'Y') return false;
     if (f.flag === 'vatex' && !(VATX.conf().exemptCats || []).includes(p.category || '')) return false;
@@ -1650,7 +1650,7 @@ VIEWS.products = async (el, flag) => {
 };
 function productCard(p, embeddedPrice) {
   if (!p) return;
-  const margin = num(p.price) && num(p.cost) ? ((num(p.price) - num(p.cost)) / num(p.price) * 100).toFixed(1) + '%' : '-';
+  const margin = num(p.costPct) > 0 ? (100 - num(p.costPct)) + '%' : num(p.price) && num(p.cost) ? ((num(p.price) - num(p.cost)) / num(p.price) * 100).toFixed(1) + '%' : '-';
   const im = window.Img && Img.get(p.sku);
   const ov = sheet(esc(p.name), `
     <div class="pcimg${im ? '' : ' no'}">${im ? `<img src="${im}" alt="">` : `<div class="center muted">${I(IC.image, 48)}<div class="small">ยังไม่มีรูป — กดแก้ไขเพื่อเพิ่มรูป</div></div>`}</div>
@@ -1660,7 +1660,7 @@ function productCard(p, embeddedPrice) {
       <div class="kv"><span class="muted">รหัส SKU</span><b>${esc(p.sku)}</b></div>
       <div class="kv"><span class="muted">บาร์โค้ด</span><b>${esc(p.barcode || '—')}</b></div>
       ${window.VATX ? (() => { const t = VATX.tag(p); return `<div class="kv"><span class="muted">VAT</span><b style="text-align:right">${t ? `<span class="tag ${t.c}">${t.t}</span>` : '<span class="tag gray">เสีย VAT ปกติ</span>'}${t && t.c !== 'green' && isOwner() ? `<div class="tiny muted" style="font-weight:400">${esc(t.why)}</div>` : ''}</b></div>`; })() : ''}
-      ${can('viewCost') ? `<div class="kv"><span class="muted">ต้นทุน</span><b>${money(p.cost)}</b></div><div class="kv"><span class="muted">กำไรขั้นต้น</span><b>${margin}</b></div>` : ''}
+      ${can('viewCost') ? `<div class="kv"><span class="muted">ต้นทุน</span><b>${num(p.costPct) > 0 ? num(p.costPct) + '% ของราคาขาย' + (num(p.price) > 0 ? ' (' + money(num(p.price) * num(p.costPct) / 100) + ')' : '') : money(p.cost)}</b></div><div class="kv"><span class="muted">กำไรขั้นต้น</span><b>${margin}</b></div>` : ''}
       <div class="kv"><span class="muted">สต็อก</span><b>${p.trackStock === 'Y' ? num(p.stock) + (p.lowStock ? ` (เตือนที่ ${p.lowStock})` : '') : 'ไม่ได้นับสต็อก'}</b></div>
       <div class="kv"><span class="muted">แก้ไขล่าสุด</span><span class="small">${esc(p.updatedAt ? String(p.updatedAt).replace('T', ' ').slice(0, 16) : '-')} ${esc(p.updatedBy || '')}</span></div>
     </div>`,
@@ -1704,7 +1704,10 @@ async function editProduct(p0) {
     <div class="f" style="margin-bottom:10px"><div class="row" style="margin-bottom:4px;gap:6px"><span class="grow" style="font-size:13px;color:var(--ink2);font-weight:500">ชื่อสินค้า *</span><button type="button" class="nsbtn" id="nsgo">✨ แนะนำชื่อ</button></div><input class="in" id="f_name" value="${esc(p.name)}" autocomplete="off"><div id="nsug"></div></div>
     <div class="f" style="margin-bottom:10px"><span style="display:block;font-size:13px;color:var(--ink2);margin-bottom:4px;font-weight:500">บาร์โค้ด <span class="tiny muted">· ยิงด้วยเครื่อง / แตะ 📷 ถ่ายรูป / แตะสแกนสด</span></span><div class="row">${barcodeFieldHTML('f_barcode', p.barcode)}<button class="btn sm" id="bscan" title="สแกนด้วยกล้องแบบสด">${I(IC.scan, 18)}</button><button class="btn ghost sm" id="bgen" title="สร้างบาร์โค้ดภายในร้าน">สร้าง</button></div><div class="tiny muted" id="bmsg"></div></div>
     <div class="grid2"><label class="f"><span>ราคาขาย *</span><input class="in" id="f_price" type="number" inputmode="decimal" step="any" value="${esc(p.price)}"></label>
-    <label class="f ${can('viewCost') ? '' : 'hidden'}"><span>ต้นทุน</span><input class="in" id="f_cost" type="number" inputmode="decimal" step="any" value="${esc(p.cost)}"></label></div>
+    <div class="f ${can('viewCost') ? '' : 'hidden'}"><div class="row" style="margin-bottom:4px;gap:6px"><span class="grow" style="font-size:13px;color:var(--ink2);font-weight:500">ต้นทุน</span><div class="seg" id="cmode" style="padding:2px;min-height:0"><button type="button" data-m="b" class="${num(p.costPct) > 0 ? '' : 'on'}" style="min-height:26px;padding:0 12px">฿</button><button type="button" data-m="p" class="${num(p.costPct) > 0 ? 'on' : ''}" style="min-height:26px;padding:0 12px">%</button></div></div>
+      <input class="in ${num(p.costPct) > 0 ? 'hidden' : ''}" id="f_cost" type="number" inputmode="decimal" step="any" value="${esc(p.cost)}">
+      <div class="row ${num(p.costPct) > 0 ? '' : 'hidden'}" id="cpw" style="gap:6px"><input class="in grow" id="f_costPct" type="number" inputmode="decimal" step="any" min="0" max="100" placeholder="เช่น 70" value="${num(p.costPct) > 0 ? esc(p.costPct) : ''}"><b>%</b></div>
+      <div class="tiny muted" id="cph" style="margin-top:4px"></div></div></div>
     <label class="f"><span>หมวดหมู่</span><input class="in" id="f_category" list="catl" value="${esc(p.category)}"><datalist id="catl">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
     <div class="grid2"><label class="f"><span>รหัส SKU</span><input class="in" id="f_sku" value="${esc(p.sku)}" ${isNew ? '' : 'readonly'}></label>
     <label class="f"><span>หน่วย</span><input class="in" id="f_unit" placeholder="ชิ้น/แพ็ค/กก." value="${esc(p.unit)}"></label></div>
@@ -1730,6 +1733,10 @@ async function editProduct(p0) {
   $('#webimg', ov).onclick = () => webImagePicker({ name: $('#f_name', ov).value.trim() || p.name, barcode: ($('#f_barcode', ov) || {}).value || p.barcode }, d => { newImg = d; rmImg = false; $('#pimg', ov).innerHTML = `<img src="${d}" style="width:100%;height:100%;object-fit:cover">`; });
   // แนะนำชื่อสินค้าจากบาร์โค้ด (สินค้าใหม่ = ค้นให้เอง · สินค้าเดิม = กด ✨ แนะนำชื่อ)
   const NS = nameSuggest(ov, { name: $('#f_name', ov), barcode: () => $('#f_barcode', ov).value.trim(), self: p.sku, box: $('#nsug', ov) });
+  { const cm = $('#cmode', ov); if (cm) { const ph = () => { const pm = $('#cmode .on', ov).dataset.m === 'p', pr = num($('#f_price', ov).value), pct = num($('#f_costPct', ov).value);
+      $('#cph', ov).innerHTML = pm ? (pct > 0 ? (pr > 0 ? `= ต้นทุน ${money(pr * pct / 100)} · กำไร ${100 - pct}%` : `คิดจากราคาที่ขายจริงทุกครั้ง · เช่น ขาย 100 → ต้นทุน ${money(pct)}`) : 'สำหรับสินค้าราคาไม่แน่นอน/ระบุราคาตอนขาย') : ''; };
+    $$('#cmode button', ov).forEach(b => b.onclick = () => { $$('#cmode button', ov).forEach(x => x.classList.toggle('on', x === b)); const pm = b.dataset.m === 'p'; $('#f_cost', ov).classList.toggle('hidden', pm); $('#cpw', ov).classList.toggle('hidden', !pm); if (pm && !num($('#f_costPct', ov).value) && num($('#f_cost', ov).value) > 0 && num($('#f_price', ov).value) > 0) $('#f_costPct', ov).value = Math.round(num($('#f_cost', ov).value) / num($('#f_price', ov).value) * 100); ph(); });
+    ['#f_costPct', '#f_price'].forEach(q => $(q, ov).addEventListener('input', ph)); ph(); } }
   $('#nsgo', ov).onclick = () => NS.run(true);
   if (isNew && p.barcode) NS.run();
   $('#f_barcode', ov).addEventListener('input', () => { if (isNew || NS.shown) NS.soon(); });
@@ -1740,6 +1747,12 @@ async function editProduct(p0) {
   $('#f_trackStock', ov).onchange = stkVis; stkVis();
   const collect = () => {
     const o = { ...p }; ['name', 'barcode', 'price', 'cost', 'category', 'sku', 'unit', 'stock', 'lowStock', 'shelfLifeDays', 'note'].forEach(k => { const e = $('#f_' + k, ov); if (e) o[k] = e.value.trim(); });
+    if (can('viewCost') && $('#cmode .on', ov)) {
+      const pm = $('#cmode .on', ov).dataset.m === 'p', pct = num($('#f_costPct', ov).value);
+      if (pm && (pct <= 0 || pct >= 100)) return toast('ใส่ต้นทุนเป็นร้อยละ 1–99 ของราคาขาย', 1);
+      o.costPct = pm ? String(pct) : '';
+      if (pm) o.cost = num(o.price) > 0 ? String(Math.round(num(o.price) * pct) / 100) : '';
+    }
     ['trackStock', 'byWeight', 'bestseller', 'available'].forEach(k => o[k] = $('#f_' + k, ov).checked ? 'Y' : 'N');
     if (!o.name) throw new Error('กรุณาใส่ชื่อสินค้า'); if (!o.sku) throw new Error('กรุณาใส่รหัส SKU');
     if (isNew && IDX.bySku[o.sku]) throw new Error('รหัส SKU นี้มีอยู่แล้ว');
@@ -2930,23 +2943,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.53"></script>
-<script src="logic.js?v=2.6.53"></script>
-<script src="cache.js?v=2.6.53"></script>
-<script src="offline.js?v=2.6.53"></script>
-<script src="scanner.js?v=2.6.53"></script>
-<script src="printer.js?v=2.6.53"></script>
-<script src="pos.js?v=2.6.53"></script>
-<script src="idle.js?v=2.6.53"></script>
-<script src="display.js?v=2.6.53"></script>
-<script src="reports.js?v=2.6.53"></script>
-<script src="inventory.js?v=2.6.53"></script>
-<script src="people.js?v=2.6.53"></script>
-<script src="quality.js?v=2.6.53"></script>
-<script src="services.js?v=2.6.53"></script>
-<script src="owner.js?v=2.6.53"></script>
-<script src="books.js?v=2.6.53"></script>
-<script src="restock.js?v=2.6.53"></script>
+<script src="qr.js?v=2.6.54"></script>
+<script src="logic.js?v=2.6.54"></script>
+<script src="cache.js?v=2.6.54"></script>
+<script src="offline.js?v=2.6.54"></script>
+<script src="scanner.js?v=2.6.54"></script>
+<script src="printer.js?v=2.6.54"></script>
+<script src="pos.js?v=2.6.54"></script>
+<script src="idle.js?v=2.6.54"></script>
+<script src="display.js?v=2.6.54"></script>
+<script src="reports.js?v=2.6.54"></script>
+<script src="inventory.js?v=2.6.54"></script>
+<script src="people.js?v=2.6.54"></script>
+<script src="quality.js?v=2.6.54"></script>
+<script src="services.js?v=2.6.54"></script>
+<script src="owner.js?v=2.6.54"></script>
+<script src="books.js?v=2.6.54"></script>
+<script src="restock.js?v=2.6.54"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

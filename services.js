@@ -193,10 +193,11 @@ function svcDialog2(kind) {
     const principal = kind === 'out' && mode === 'deduct' ? k.a - k.fee : k.a;
     const bank = BANKS.find(x => x.code === f.bank), car = CARRIERS.find(x => x.code === f.carrier);
     // รูปบิล: อัปโหลดเก็บใน Google Drive (ต้องต่อเน็ต) — ถ้าไม่ได้ ส่งงานไปโดยไม่มีรูป
-    if (f.photo && S.apiUrl) { try { busy(1, 'กำลังส่งรูปบิล...'); const up = await api('upload', { kind: 'bill', name: `bill_${f.billRef}_${todayISO()}.jpg`, mime: 'image/jpeg', base64: f.photo }); f.fileUrl = up.fileUrl; } catch (e) { toast('ส่งรูปบิลไม่ได้ (' + e.message + ') — บันทึกต่อโดยไม่มีรูป', 1); } busy(0); }
+    // รูปบิล: เก็บไว้ในเครื่องก่อน ไม่ต้องรอเน็ต → ส่งขึ้น Google Drive เบื้องหลังตอนส่งบิล (Sync.flush)
+    let photoKey = ''; if (f.photo) { photoKey = 'BP' + Date.now().toString(36); const bp = LS.get('billPhotos', {}); bp[photoKey] = { b64: f.photo, name: `bill_${f.billRef}_${todayISO()}.jpg` }; if (!LS.set('billPhotos', bp)) photoKey = ''; }
     const job = kind === 'out' ? { type: 'transfer', bank: f.bank, bankName: bank ? bank.name : '', acc: f.acc, accName: f.accName.trim(), amount: principal }
       : kind === 'topup' ? { type: f.carrier === 'TMN' ? 'wallet' : 'topup', carrier: f.carrier, carrierName: car ? car.name : '', phone: f.phone, amount: principal }
-      : { type: 'bill', billType: f.billType, ref: f.billRef, contact: f.contact.trim(), amount: principal, fileUrl: f.fileUrl };
+      : { type: 'bill', billType: f.billType, ref: f.billRef, contact: f.contact.trim(), amount: principal, fileUrl: '', ...(photoKey ? { photoKey } : {}) };
     job.notify = JOB_NEEDS_OWNER(kind, f) ? 1 : 0; job.fee = k.fee || 0;
     const label = kind === 'out' ? `โอนออก ${bank ? bank.name : ''} ${fmtNum(f.acc, 'account')}` : kind === 'topup' ? `เติมเงิน ${car ? car.name : ''} ${fmtNum(f.phone, 'phone')}` : `ชำระ${f.billType} ${f.billRef}`;
     const T = POS.t;
@@ -373,11 +374,11 @@ const Inst = {
     return Object.values(m);
   },
   applyLocal() { /* บิลใหม่อยู่ใน outbox แล้ว view() คิดให้เอง */ },
+  refresh() { return this._p || (this._p = api('list', { table: 'Installments' }).then(r => { this.rows = r.rows; this.at = Date.now(); this.save(); }).catch(() => { this.cache(); }).finally(() => { this._p = null; })); },
+  // ไม่บังคับ → ใช้ข้อมูลในเครื่องทันที (มีแล้ว) แล้วอัปเดตเบื้องหลัง · บังคับ → รอข้อมูลล่าสุด
   async list(force) {
-    if (force || !this.at || Date.now() - this.at > 30e3) {
-      try { this.rows = (await api('list', { table: 'Installments' })).rows; this.at = Date.now(); this.save(); }
-      catch (e) { this.cache(); }
-    }
+    const stale = !this.at || Date.now() - this.at > 30e3, has = this.cache().length || this.at;
+    if (force || (stale && !has)) await this.refresh(); else if (stale) this.refresh();
     return this.view(this.cache());
   },
   // ตารางงวด: [{no, due, amt, paid, left, st}] — ตัดยอดที่ชำระแล้วจากงวดแรกไปงวดหลัง
@@ -414,36 +415,56 @@ function instCalc(f) {
 }
 
 /* ---------- 💰 ใช้หนี้ ---------- */
+// ยอดค้างที่ยังรอส่งเข้าระบบ (บิลในเครื่อง): ขายเชื่อ = เพิ่ม · ใช้หนี้ = ลด
+function custPending(cid) {
+  return r2c((Sync.box || []).filter(o => o.customerId === cid).reduce((a, o) =>
+    a + Logic.J(o.payments, []).filter(p => p.type === 'credit').reduce((s, p) => s + num(p.amount), 0)
+      - Logic.J(o.items, []).filter(it => it && it.debt).reduce((s, it) => s + num(it.qty) * num(it.price), 0), 0));
+}
 function svcDebt() {
-  withCustomer(async c => {
-    const ov0 = sheet(`💰 ใช้หนี้ · ${esc(c.name)}`, '<div class="center" style="padding:20px"><span class="spin dark"></span></div>');
-    await loadCustomers(true).catch(() => { });
-    const cu = (S.customers || []).find(x => x.id === c.id) || c;
-    const inTk = POS.t.customer && POS.t.customer.id === cu.id ? POS.t.items.filter(it => it.debt).reduce((a, it) => a + num(it.qty) * num(it.price), 0) : 0;
-    const owe = r2c(Math.max(0, num(cu.credit) - inTk));
-    const plans = (await Inst.list(true)).filter(p => p.customerId === cu.id && p.status === 'active');
-    ov0.remove();
-    let amt = owe;
-    const ov = sheet(`💰 ใช้หนี้ · ${esc(cu.name)}`, `<div class="small muted" style="margin:-4px 0 10px">${esc(cu.phone || '')} · ระบบตัดยอดค้างให้อัตโนมัติเมื่อรับเงินแล้ว</div>
-      <div class="card" style="padding:12px"><div class="kv"><span>ยอดเงินเชื่อค้างชำระ</span><b style="font-size:20px;color:${owe ? 'var(--red)' : 'var(--green)'}">${bahtL(owe)}</b></div>
+  withCustomer(c => {
+    // เปิดทันทีจากข้อมูลในเครื่อง แล้วอัปเดตยอดจาก Google เบื้องหลัง
+    let ov = null, amt = null, touched = false, sig = '', live = false;
+    const open = () => {
+      const cu = (S.customers || []).find(x => x.id === c.id) || c;
+      const inTk = POS.t.customer && POS.t.customer.id === cu.id ? POS.t.items.filter(it => it.debt).reduce((a, it) => a + num(it.qty) * num(it.price), 0) : 0;
+      const owe = r2c(Math.max(0, num(cu.credit) + custPending(cu.id) - inTk));
+      const plans = Inst.view(Inst.cache()).filter(p => p.customerId === cu.id && p.status === 'active');
+      sig = owe + '|' + plans.map(p => p.id + ':' + p.paid).join(',');
+      amt = touched && amt != null ? Math.min(amt, owe) : owe;
+      const old = ov;
+      ov = sheet(`💰 ใช้หนี้ · ${esc(cu.name)}`, `<div class="small muted" style="margin:-4px 0 10px">${esc(cu.phone || '')} · ระบบตัดยอดค้างให้เองเมื่อรับเงินแล้ว <span id="dsy" class="tiny" style="color:${live ? 'var(--green)' : 'var(--ink3)'}">${live ? '✓ ยอดล่าสุด' : '⟳ กำลังอัปเดตยอด…'}</span></div>
+      <div class="card" style="padding:12px"><div class="kv"><span>ยอดเงินเชื่อค้างชำระ</span><b style="font-size:20px;color:${owe ? 'var(--red)' : 'var(--green)'}">${money(owe)}</b></div>
        ${inTk ? `<div class="tiny muted">หักรายการใช้หนี้ที่อยู่ในบิลนี้แล้ว ${money(inTk)}</div>` : ''}
        ${owe ? `<div class="small" style="margin-top:8px">จำนวนที่ชำระ</div><button class="kpv" id="da" style="width:100%;text-align:right;border:0;cursor:pointer">${money(amt)}</button>
-        <div class="row wrap" style="gap:6px;margin-top:8px"><button class="btn ghost sm" data-q="all">ทั้งหมด</button>${[100, 200, 500, 1000].filter(v => v < owe).map(v => `<button class="btn ghost sm" data-q="${v}">${v}</button>`).join('')}<button class="btn ghost sm" data-q="half">ครึ่งหนึ่ง</button></div>
+        <div class="row wrap" style="gap:6px;margin-top:8px"><button class="btn ghost sm" data-q="all">ทั้งหมด</button>${owe >= 2 ? '<button class="btn ghost sm" data-q="half">ครึ่งหนึ่ง</button>' : ''}${[100, 200, 500, 1000].filter(v => v < owe).map(v => `<button class="btn ghost sm" data-q="${v}">${v}</button>`).join('')}</div>
         <div class="kv" style="margin-top:8px"><span>คงค้างหลังชำระ</span><b id="dl"></b></div>
-        <button class="btn block green" id="dok" style="min-height:56px;font-size:18px;margin-top:10px">เพิ่มลงบิล</button>` : '<div class="alert green small" style="margin-top:8px">ไม่มียอดเงินเชื่อค้าง</div>'}</div>
+        <button class="btn block green" id="dok" style="min-height:56px;font-size:18px;margin-top:10px">เพิ่มลงบิล</button>` : '<div class="alert green small" style="margin-top:8px">ไม่มียอดเงินเชื่อค้างชำระ</div>'}</div>
       ${plans.length ? `<h3 style="margin:14px 0 6px">📆 สัญญาผ่อนที่ยังไม่ปิด</h3>${plans.map(p => instRow(p)).join('')}` : ''}`);
-    const draw = () => { const a = $('#da', ov); if (!a) return; a.textContent = money(amt); $('#dl', ov).innerHTML = money(r2c(owe - amt)); };
-    const da = $('#da', ov); if (da) da.onclick = () => keypad('ยอดชำระหนี้', amt, v => { amt = Math.min(owe, Math.max(0, num(v))); draw(); });
-    $$('[data-q]', ov).forEach(b => b.onclick = () => { const q = b.dataset.q; amt = q === 'all' ? owe : q === 'half' ? Math.ceil(owe / 2) : +q; draw(); });
-    const ok = $('#dok', ov); if (ok) ok.onclick = async () => {
-      if (amt <= 0) return toast('ใส่จำนวนเงิน', 1);
-      if (!(await gate('credit'))) return;
-      if (!(await bindCustomer(cu))) return;
-      POS.t.items.push({ sku: 'SVC-DEBT', name: `ใช้หนี้ ${cu.name} (คงค้าง ${money(r2c(owe - amt), 0)})`, price: amt, qty: 1, cost: amt, cat: 'รับชำระหนี้', pass: 1, debt: 1, svc: 'debt' });
-      ov.remove(); POS.save(); beep(); toast('เพิ่มรายการใช้หนี้แล้ว — รับเงินตามปกติ ระบบตัดยอดค้างให้เอง');
+      if (old) old.remove();
+      const draw = () => { const a = $('#da', ov); if (!a) return; a.textContent = money(amt); $('#dl', ov).innerHTML = money(r2c(owe - amt)); };
+      const da = $('#da', ov); if (da) da.onclick = () => keypad('ยอดชำระหนี้', amt, v => { amt = Math.min(owe, Math.max(0, num(v))); touched = true; draw(); });
+      $$('[data-q]', ov).forEach(b => b.onclick = () => { const q = b.dataset.q; amt = q === 'all' ? owe : q === 'half' ? Math.ceil(owe / 2) : +q; touched = q !== 'all'; draw(); });
+      const ok = $('#dok', ov); if (ok) ok.onclick = async () => {
+        if (amt <= 0) return toast('ใส่จำนวนเงิน', 1);
+        if (!(await gate('credit'))) return;
+        if (!(await bindCustomer(cu))) return;
+        POS.t.items.push({ sku: 'SVC-DEBT', name: `ใช้หนี้ ${cu.name} (คงค้าง ${money(r2c(owe - amt), 0)})`, price: amt, qty: 1, cost: amt, cat: 'รับชำระหนี้', pass: 1, debt: 1, svc: 'debt' });
+        ov.remove(); POS.save(); beep(); toast('เพิ่มรายการใช้หนี้แล้ว — รับเงินตามปกติ ระบบตัดยอดค้างให้เอง');
+      };
+      $$('[data-ip]', ov).forEach(b => b.onclick = () => { const p = plans.find(x => x.id === b.dataset.ip); ov.remove(); instPay(p); });
+      draw();
     };
-    $$('[data-ip]', ov).forEach(b => b.onclick = () => { const p = plans.find(x => x.id === b.dataset.ip); ov.remove(); instPay(p); });
-    draw();
+    open();
+    Promise.all([refreshCustomers(), Inst.list(true).catch(() => [])]).then(() => {
+      if (!ov || !ov.isConnected) return;
+      live = true; const before = sig, a0 = amt;
+      const cu = (S.customers || []).find(x => x.id === c.id) || c, plans = Inst.view(Inst.cache()).filter(p => p.customerId === cu.id && p.status === 'active');
+      const inTk = POS.t.customer && POS.t.customer.id === cu.id ? POS.t.items.filter(it => it.debt).reduce((a, it) => a + num(it.qty) * num(it.price), 0) : 0;
+      const now = r2c(Math.max(0, num(cu.credit) + custPending(cu.id) - inTk)) + '|' + plans.map(p => p.id + ':' + p.paid).join(',');
+      if (now !== before) { open(); if (touched && amt !== a0) toast('ยอดค้างอัปเดตแล้ว — ตรวจจำนวนที่ชำระอีกครั้ง'); }
+      else { const d = $('#dsy', ov); if (d) { d.textContent = '✓ ยอดล่าสุด'; d.style.color = 'var(--green)'; } }
+    });
   });
 }
 function instRow(p, btn = true) {
