@@ -103,6 +103,8 @@ function canvasToEscPos(cv, o = {}) {
 
 /* ---------- การเชื่อมต่อ ---------- */
 const BLE_SVCS = ['000018f0-0000-1000-8000-00805f9b34fb', '0000ff00-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '0000ae30-0000-1000-8000-00805f9b34fb', '0000fee7-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '0000ae00-0000-1000-8000-00805f9b34fb', '0000ff12-0000-1000-8000-00805f9b34fb'];
+const SPP = '00001101-0000-1000-8000-00805f9b34fb';
+const canBtc = () => !!(navigator.serial && /Android/i.test(navigator.userAgent));
 const RP = {
   t: null, dev: null, ch: null, usb: null, ep: null, port: null, writer: null,
   get ok() {
@@ -110,10 +112,10 @@ const RP = {
     if (c.type === 'system' || c.type === 'rawbt') return true;
     if (c.type === 'bt') return !!(this.dev && this.dev.gatt.connected && this.ch);
     if (c.type === 'usb') return !!(this.usb && this.usb.opened);
-    if (c.type === 'serial') return !!this.writer;
+    if (c.type === 'serial' || c.type === 'btc') return !!this.writer;
     return false;
   },
-  label() { const c = pconn(); return ({ bt: 'Bluetooth', usb: 'USB', serial: 'USB-Serial', rawbt: 'RawBT (Android)', system: 'พิมพ์ผ่านระบบ' })[c.type] + (c.name ? ' · ' + c.name : ''); },
+  label() { const c = pconn(); return ({ bt: 'Bluetooth', usb: 'USB', serial: 'USB-Serial', btc: 'Bluetooth ตรง', rawbt: 'RawBT (Android)', system: 'พิมพ์ผ่านระบบ' })[c.type] + (c.name ? ' · ' + c.name : ''); },
   async connect(type, silent) {
     const c = pconn(); type = type || c.type;
     if (type === 'bt') {
@@ -153,11 +155,27 @@ const RP = {
       await port.open({ baudRate: c.baud || 9600 });
       this.port = port; this.writer = port.writable.getWriter();
       LS.set('printerConn', { ...c, type, name: 'USB-Serial' });
+    } else if (type === 'btc') {
+      // Bluetooth แบบ Classic (SPP) ตรงจาก Chrome Android 138+ — ไม่ต้องใช้แอป RawBT
+      if (!navigator.serial) throw new Error('Chrome เครื่องนี้ยังเชื่อม Bluetooth ตรงไม่ได้ — อัปเดต Chrome ใน Play Store (ต้องเวอร์ชัน 138 ขึ้นไป) หรือใช้ RawBT ไปก่อน');
+      let port = null;
+      if (silent) {
+        const ps = await navigator.serial.getPorts();
+        port = ps.find(p => { try { return !!p.getInfo().bluetoothServiceClassId; } catch (e) { return false; } }) || ps[0] || null;
+        if (!port) return false;
+      }
+      if (!port) port = await navigator.serial.requestPort({ allowedBluetoothServiceClassIds: [SPP] });
+      await this._close();
+      try { await port.open({ baudRate: c.baud || 9600 }); } catch (e) { if (!/already open/i.test(e.message)) throw new Error('ต่อเครื่องพิมพ์ไม่ได้ — เปิดเครื่องพิมพ์ ให้อยู่ใกล้แท็บเล็ต และปิดแอป RawBT ก่อน (' + e.message + ')'); }
+      this.port = port; this.writer = port.writable.getWriter();
+      if (!port._mmw) { port._mmw = 1; port.addEventListener('disconnect', () => { if (this.port === port) { this.writer = null; this.port = null; document.dispatchEvent(new Event('mm:printer')); } }); }
+      LS.set('printerConn', { ...c, type, name: 'เครื่องพิมพ์ Bluetooth' });
     } else LS.set('printerConn', { ...c, type, name: '' });
     document.dispatchEvent(new Event('mm:printer'));
     return true;
   },
-  async autoConnect() { const c = pconn(); if (['bt', 'usb', 'serial'].includes(c.type) && !this.ok) { try { await this.connect(c.type, true); } catch (e) { } } },
+  async _close() { try { if (this.writer) { this.writer.releaseLock(); } } catch (e) { } try { if (this.port) await this.port.close(); } catch (e) { } this.writer = null; this.port = null; },
+  async autoConnect() { const c = pconn(); if (['bt', 'usb', 'serial', 'btc'].includes(c.type) && !this.ok) { try { await this.connect(c.type, true); } catch (e) { } } },
   // ส่งทีละงาน (ลิ้นชัก + ใบเสร็จ ไม่ชนกัน)
   send(bytes) { const p = (this._q || Promise.resolve()).then(() => this._send(bytes)); this._q = p.catch(() => { }); return p; },
   // เปิดลิ้นชัก: ส่งคำสั่งสั้น ๆ ทันที (ไม่ต้องรอวาดใบเสร็จ ไม่ใช้เน็ต)
@@ -180,6 +198,15 @@ const RP = {
       for (let i = 0; i < bytes.length; i += 4096) await this.usb.transferOut(this.ep.endpointNumber, bytes.slice(i, i + 4096));
     } else if (c.type === 'serial') {
       for (let i = 0; i < bytes.length; i += 1024) await this.writer.write(bytes.slice(i, i + 1024));
+    } else if (c.type === 'btc') {
+      // หลุดระหว่างทาง (เครื่องพิมพ์ปิด/หลับ) → ต่อใหม่เงียบ ๆ 1 ครั้งแล้วส่งซ้ำ
+      for (let t = 0; t < 2; t++) {
+        try {
+          if (!this.writer && !(await this.connect('btc', true))) throw new Error('เครื่องพิมพ์ยังไม่ได้เชื่อมต่อ (เพิ่มเติม › เครื่องพิมพ์ใบเสร็จ › เชื่อมต่อ)');
+          for (let i = 0; i < bytes.length; i += 512) await this.writer.write(bytes.slice(i, i + 512));
+          return;
+        } catch (e) { await this._close(); if (t) throw e; await sleep(300); }
+      }
     } else if (c.type === 'rawbt') {
       let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b));
       location.href = 'intent:base64,' + btoa(bin) + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
@@ -232,15 +259,22 @@ VIEWS.printer = el => {
   const c = rcfg(); let logo = S.settings.receiptLogo || '';
   const pc = pconn();
   el.innerHTML = vhead('เครื่องพิมพ์ใบเสร็จ', '', 'more') + `
-  ${/Android/i.test(navigator.userAgent) ? `<div class="card" style="border:2px solid #FFB300"><h3>แท็บเล็ต Android + เครื่องพิมพ์ AIMO / QF300-UBT / Xprinter (Bluetooth)</h3>
-    <div class="small" style="line-height:1.7">เครื่องพิมพ์ใบเสร็จ Bluetooth เกือบทุกรุ่นเป็นแบบ Classic ซึ่งเว็บเชื่อมตรงไม่ได้ (Chrome ต่อได้เฉพาะ BLE) → ใช้แอปฟรี <b>RawBT</b> เป็นตัวกลาง (ทำงานในเครื่อง ไม่ต้องใช้เน็ต)<br>
+  ${canBtc() ? `<div class="card" style="border:2px solid #2E7D32"><h3>✨ ต่อเครื่องพิมพ์ Bluetooth ตรง — ไม่ต้องใช้ RawBT</h3>
+    <div class="small" style="line-height:1.7">เร็วกว่า ไม่มีหน้าต่าง RawBT เด้ง ลิ้นชักเด้งทันที ใช้ได้แม้ไม่มีเน็ต<br>
+    1) เปิดเครื่องพิมพ์ › แท็บเล็ต การตั้งค่า › การเชื่อมต่อ › Bluetooth › จับคู่เครื่องพิมพ์ไว้ (ถ้าเคยจับคู่กับ RawBT แล้ว ข้ามได้)<br>
+    2) <b>ปิดแอป RawBT</b> (ปัดทิ้งจากแอปล่าสุด) — เครื่องพิมพ์ Bluetooth ต่อได้ทีละแอป<br>
+    3) กด <b>ใช้ Bluetooth ตรง</b> › เลือกชื่อเครื่องพิมพ์ในรายการ › อนุญาต<br>
+    4) กด “ทดสอบพิมพ์” และ “ทดสอบเปิดลิ้นชัก” — ครั้งต่อไประบบต่อให้เองทุกครั้งที่เปิดหน้าขาย</div>
+    <div class="row" style="gap:8px;margin-top:8px"><button class="btn green sm" id="usebtc">ใช้ Bluetooth ตรง</button></div></div>` : ''}
+  ${/Android/i.test(navigator.userAgent) ? `<details class="card" ${canBtc() ? '' : 'open'} style="border:2px solid #FFB300"><summary><b>${canBtc() ? 'ทางสำรอง: ' : ''}แท็บเล็ต Android + เครื่องพิมพ์ AIMO / QF300-UBT / Xprinter ผ่านแอป RawBT</b></summary>
+    <div class="small" style="line-height:1.7;margin-top:6px">${canBtc() ? 'ใช้เมื่อ Bluetooth ตรงใช้ไม่ได้กับเครื่องพิมพ์รุ่นนั้น — RawBT รุ่นฟรีจะมีหน้าต่างเด้งทุกครั้งที่พิมพ์/เปิดลิ้นชัก' : 'Chrome เครื่องนี้ยังต่อ Bluetooth แบบ Classic ตรงไม่ได้ — อัปเดต Chrome ใน Play Store (เวอร์ชัน 138 ขึ้นไป) แล้วเปิดหน้านี้ใหม่ จะมีปุ่ม “Bluetooth ตรง” ให้ใช้แทน RawBT · ระหว่างนี้ใช้แอปฟรี <b>RawBT</b> เป็นตัวกลาง'}<br>
     1) เปิดเครื่องพิมพ์ › แท็บเล็ต การตั้งค่า › การเชื่อมต่อ › Bluetooth › จับคู่เครื่องพิมพ์ (รหัส 0000 หรือ 1234)<br>
     2) ติดตั้งแอป RawBT › เปิดแอป › ตั้งค่า › วิธีเชื่อมต่อ: Bluetooth › เลือกเครื่องพิมพ์ · ไดรเวอร์ ESC/POS · กระดาษ 80 มม. (576 จุด) › กด Test print ในแอปให้ออกก่อน<br>
     3) กลับมาหน้านี้ › เลือก <b>RawBT</b> › กด “ทดสอบพิมพ์” (ครั้งแรก Chrome ถามว่าจะเปิด RawBT ให้ติ๊ก “จำไว้/ทุกครั้ง”)<br>
     4) ติ๊ก “พิมพ์อัตโนมัติ” และ “เปิดลิ้นชัก” — ลิ้นชักเด้งพร้อมใบเสร็จ</div>
-    <div class="row" style="gap:8px;margin-top:8px"><a class="btn sm" href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noopener">ติดตั้งแอป RawBT</a><button class="btn ghost sm" id="useraw">ใช้ RawBT กับเครื่องนี้</button></div></div>` : ''}
+    <div class="row" style="gap:8px;margin-top:8px"><a class="btn sm" href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noopener">ติดตั้งแอป RawBT</a><button class="btn ghost sm" id="useraw">ใช้ RawBT กับเครื่องนี้</button></div></details>` : ''}
   <div class="card"><h3>การเชื่อมต่อ (เฉพาะเครื่องนี้)</h3>
-    <div class="seg wrap" id="ptype">${[['bt', 'Bluetooth'], ['usb', 'USB'], ['serial', 'USB-Serial'], ['rawbt', 'RawBT'], ['system', 'ผ่านระบบ']].map(([k, n]) => `<button data-t="${k}" class="${pc.type === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <div class="seg wrap" id="ptype">${[...(canBtc() || pc.type === 'btc' ? [['btc', 'Bluetooth ตรง']] : []), ['bt', 'Bluetooth BLE'], ['usb', 'USB'], ['serial', 'USB-Serial'], ['rawbt', 'RawBT'], ['system', 'ผ่านระบบ']].map(([k, n]) => `<button data-t="${k}" class="${pc.type === k ? 'on' : ''}">${n}</button>`).join('')}</div>
     <div class="small muted" id="phelp" style="margin:8px 2px"></div>
     <div class="row"><div class="grow small" id="pst"></div><button class="btn sm" id="pcon">เชื่อมต่อ</button><button class="btn ghost sm" id="ptest">ทดสอบพิมพ์</button></div>
     <label class="row small" style="margin-top:10px"><input type="checkbox" id="auto" ${pc.autoPrint ? 'checked' : ''}> พิมพ์ใบเสร็จอัตโนมัติหลังรับชำระ</label>
@@ -266,14 +300,15 @@ VIEWS.printer = el => {
   </div>
   <div class="card center"><div class="small muted" style="margin-bottom:8px">ตัวอย่างใบเสร็จ</div><canvas id="pv" style="max-width:100%;width:290px;box-shadow:0 4px 16px rgba(0,0,0,.12);background:#fff"></canvas></div>`;
   $('#dpin', el).value = pc.drawerPin || '2';
-  const HELP = { bt: 'เครื่องพิมพ์ Bluetooth Low Energy (BLE) — ใช้ Chrome บน Android/Windows/Mac หรือแอป Bluefy บน iPhone/iPad', usb: 'ต่อสาย USB Type-C/Type-A กับมือถือ Android (ผ่าน OTG) หรือคอมพิวเตอร์ — ใช้ Chrome', serial: 'เครื่องพิมพ์ที่ต่อ USB แล้วขึ้นเป็นพอร์ต COM (คอมพิวเตอร์)', rawbt: 'เครื่องพิมพ์ Bluetooth แบบ Classic บน Android (เช่น QF300-UBT, AIMO, Xprinter) — ติดตั้งแอป RawBT จาก Play Store › จับคู่เครื่องพิมพ์ในแอป RawBT › ตั้ง Default printer แล้วกลับมากดทดสอบพิมพ์ · ใช้ได้แม้ไม่มีเน็ต', system: 'ใช้หน้าต่างพิมพ์ของระบบ (เครื่องพิมพ์ที่ติดตั้งไว้ในคอม/AirPrint) — ต้องกดยืนยันทุกครั้ง' };
+  const HELP = { btc: 'เครื่องพิมพ์ Bluetooth แบบ Classic (AIMO, QF300-UBT, Xprinter) ต่อตรงจาก Chrome บน Android — จับคู่ในการตั้งค่า Bluetooth ของแท็บเล็ตก่อน แล้วกด “เชื่อมต่อ” เลือกเครื่องพิมพ์ · ปิดแอป RawBT ระหว่างใช้', bt: 'เครื่องพิมพ์ Bluetooth Low Energy (BLE) — ใช้ Chrome บน Android/Windows/Mac หรือแอป Bluefy บน iPhone/iPad', usb: 'ต่อสาย USB Type-C/Type-A กับมือถือ Android (ผ่าน OTG) หรือคอมพิวเตอร์ — ใช้ Chrome', serial: 'เครื่องพิมพ์ที่ต่อ USB แล้วขึ้นเป็นพอร์ต COM (คอมพิวเตอร์)', rawbt: 'เครื่องพิมพ์ Bluetooth แบบ Classic บน Android (เช่น QF300-UBT, AIMO, Xprinter) — ติดตั้งแอป RawBT จาก Play Store › จับคู่เครื่องพิมพ์ในแอป RawBT › ตั้ง Default printer แล้วกลับมากดทดสอบพิมพ์ · ใช้ได้แม้ไม่มีเน็ต', system: 'ใช้หน้าต่างพิมพ์ของระบบ (เครื่องพิมพ์ที่ติดตั้งไว้ในคอม/AirPrint) — ต้องกดยืนยันทุกครั้ง' };
   const getC = () => { const o = { ...c, header: $('#hd', el).value, footer: $('#ft', el).value, fontScale: +$('#fsz', el).value, shopName: $('#sn', el).value.trim(), title: $('#ttl', el).value.trim() || 'ใบเสร็จรับเงิน', taxId: $('#tax', el).value.trim(), qrText: $('#qrt', el).value.trim(), qrLabel: $('#qrl', el).value.trim(), feed: Math.max(0, Math.min(10, +$('#feed', el).value || 0)) }; $$('[data-k]', el).forEach(k => o[k.dataset.k] = k.checked); o.paper = +$('#paper .on', el).dataset.p; return o; };
   const pv = async () => { const saved = S.settings.receiptLogo; S.settings.receiptLogo = logo; const cv = await renderReceipt(SAMPLE_ORDER(), getC()); S.settings.receiptLogo = saved; const t = $('#pv', el); t.width = cv.width; t.height = cv.height; t.getContext('2d').drawImage(cv, 0, 0); };
-  const st = () => { const p = pconn(); $('#pst', el).innerHTML = (RP.ok ? '<span class="tag green">พร้อม</span> ' : '<span class="tag gray">ยังไม่เชื่อมต่อ</span> ') + esc(RP.label()); $('#phelp', el).textContent = HELP[p.type]; $('#pcon', el).style.display = ['bt', 'usb', 'serial'].includes(p.type) ? '' : 'none'; };
+  const st = () => { const p = pconn(); $('#pst', el).innerHTML = (RP.ok ? '<span class="tag green">พร้อม</span> ' : '<span class="tag gray">ยังไม่เชื่อมต่อ</span> ') + esc(RP.label()); $('#phelp', el).textContent = HELP[p.type]; $('#pcon', el).style.display = ['bt', 'usb', 'serial', 'btc'].includes(p.type) ? '' : 'none'; };
   const ur = $('#useraw', el); if (ur) ur.onclick = () => { LS.set('printerConn', { ...pconn(), type: 'rawbt', name: '' }); $$('#ptype button', el).forEach(x => x.classList.toggle('on', x.dataset.t === 'rawbt')); st(); toast('ตั้งเป็น RawBT แล้ว — กด “ทดสอบพิมพ์”'); };
+  const ub = $('#usebtc', el); if (ub) ub.onclick = async () => { LS.set('printerConn', { ...pconn(), type: 'btc', name: '' }); $$('#ptype button', el).forEach(x => x.classList.toggle('on', x.dataset.t === 'btc')); st(); $('#pcon', el).click(); };
   $$('#ptype button', el).forEach(b => b.onclick = () => { LS.set('printerConn', { ...pconn(), type: b.dataset.t, name: '' }); $$('#ptype button', el).forEach(x => x.classList.toggle('on', x === b)); st(); });
   $$('#paper button', el).forEach(b => b.onclick = () => { $$('#paper button', el).forEach(x => x.classList.toggle('on', x === b)); pv(); });
-  $('#pcon', el).onclick = async () => { try { busy(1, 'กำลังเชื่อมต่อ...'); await RP.connect(); busy(0); toast('เชื่อมต่อแล้ว'); } catch (e) { busy(0); if (e.name === 'NotFoundError') { const t = pconn().type; toast(t === 'usb' ? 'ไม่พบเครื่องพิมพ์ทางสาย USB — ต้องเสียบสาย USB จากเครื่องพิมพ์เข้าแท็บเล็ต (ผ่านหัวแปลง OTG) ถ้าใช้ Bluetooth ให้เลือก RawBT' : t === 'bt' ? 'ไม่พบเครื่องพิมพ์ Bluetooth แบบ BLE — เครื่องพิมพ์ใบเสร็จส่วนใหญ่ (AIMO, QF300, Xprinter) เป็น Bluetooth Classic ให้เลือก “RawBT”' : 'ไม่พบอุปกรณ์', 1); } else toast(e.message, 1); } st(); };
+  $('#pcon', el).onclick = async () => { try { busy(1, 'กำลังเชื่อมต่อ...'); await RP.connect(); busy(0); toast('เชื่อมต่อแล้ว'); } catch (e) { busy(0); if (e.name === 'NotFoundError') { const t = pconn().type; toast(t === 'btc' ? 'ยังไม่ได้เลือกเครื่องพิมพ์ — ถ้าไม่เห็นชื่อเครื่องพิมพ์ในรายการ ให้จับคู่ใน การตั้งค่า › Bluetooth ของแท็บเล็ตก่อน แล้วกดเชื่อมต่ออีกครั้ง' : t === 'usb' ? 'ไม่พบเครื่องพิมพ์ทางสาย USB — ต้องเสียบสาย USB จากเครื่องพิมพ์เข้าแท็บเล็ต (ผ่านหัวแปลง OTG) ถ้าใช้ Bluetooth ให้เลือก RawBT' : t === 'bt' ? 'ไม่พบเครื่องพิมพ์ Bluetooth แบบ BLE — เครื่องพิมพ์ใบเสร็จส่วนใหญ่ (AIMO, QF300, Xprinter) เป็น Bluetooth Classic ให้เลือก “RawBT”' : 'ไม่พบอุปกรณ์', 1); } else toast(e.message, 1); } st(); };
   $('#ptest', el).onclick = async () => { try { busy(1, 'กำลังพิมพ์...'); await RP.printOrder({ ...SAMPLE_ORDER(), title: 'ทดสอบเครื่องพิมพ์' }); busy(0); } catch (e) { busy(0); toast(e.message, 1); } st(); };
   ['auto', 'drw', 'drwa', 'dpin'].forEach(id => $('#' + id, el).onchange = () => LS.set('printerConn', { ...pconn(), autoPrint: $('#auto', el).checked, drawer: $('#drw', el).checked, drawerAll: $('#drwa', el).checked, drawerPin: $('#dpin', el).value }));
   $('#dtest', el).onclick = async () => { try { await RP.kick(); toast('ส่งคำสั่งเปิดลิ้นชักแล้ว'); } catch (e) { toast(e.message, 1); } st(); };

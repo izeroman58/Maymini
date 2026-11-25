@@ -683,10 +683,18 @@ const POS = {
     const MIN = 15, MAX = Math.max(MIN, Math.min(30, Math.round(innerHeight / 26)));
     const fits = m => { L.style.setProperty('--tf', m + 'px'); return L.scrollHeight <= L.clientHeight + 1; };
     // เริ่มจากขนาดเดิม — กรณีปกติ (1–4 ชิ้น) วัดแค่ครั้งเดียว ไม่หน่วงการสแกน
-    let cur = Math.min(MAX, Math.max(MIN, parseInt(L.style.getPropertyValue('--tf')) || MAX)), lo = 1, hi = 0, best = cur;
-    if (fits(cur)) { if (cur < MAX) { lo = cur + 1; hi = MAX; } }
-    else { best = MIN; lo = MIN; hi = cur - 1; }
-    while (lo <= hi) { const m = (lo + hi) >> 1; if (fits(m)) { best = m; lo = m + 1; } else hi = m - 1; }
+    let cur = Math.min(MAX, Math.max(MIN, parseInt(L.style.getPropertyValue('--tf')) || MAX)), best = cur;
+    const n = this.t.items.length, grew = n >= (this._fitN || 0); this._fitN = n;
+    if (fits(cur)) {
+      // เพิ่มรายการแล้วยังพอดี → จบเลย (วัด 1 ครั้ง) · ลบรายการ → ลองขยายกลับทีละขั้น
+      if (!grew) while (best < MAX && fits(best + 1)) best++;
+    } else if (cur > MIN) {
+      // ล้น → ประมาณขนาดใหม่จากสัดส่วนความสูงครั้งเดียว แล้วปรับละเอียด ±1 (แทนการไล่หาหลายรอบ)
+      const r = L.clientHeight / Math.max(1, L.scrollHeight);
+      let m = Math.max(MIN, Math.min(cur - 1, Math.floor(cur * r)));
+      if (fits(m)) { while (m + 1 < cur && fits(m + 1)) m++; best = m; }
+      else { while (m > MIN && !fits(m - 1)) m--; best = Math.max(MIN, m - 1); }
+    } else best = MIN;
     L.style.setProperty('--tf', best + 'px');
     // ชื่อยาว → ย่อเฉพาะรายการนั้นให้อยู่ใน 1 บรรทัด (เล็กสุด 70% แล้วตัด …)
     const nms = L.querySelectorAll('.nm'), over = [];
