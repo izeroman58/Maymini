@@ -590,11 +590,24 @@ function expCatsDlg(done) {
 .ecpin{all:unset;cursor:pointer;font-size:17px;padding:4px 6px;border-radius:8px;opacity:.25;filter:grayscale(1)}.ecpin.on{opacity:1;filter:none;background:#FFF3DC}
 .ecgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:4px;padding:6px 10px 10px}.ecgrid button{all:unset;cursor:pointer;text-align:center;font-size:22px;height:40px;line-height:40px;border-radius:9px}.ecgrid button:hover,.ecgrid button.on{background:#FFF3DC}.ecgrid .in{grid-column:span 3;min-height:38px;padding:4px 8px;text-align:center}
 .lg-cats .chip .e{font-size:16px;margin-right:4px;vertical-align:-1px}.lg-cats .chip.more{border-style:dashed;color:var(--ink2)}.lg-cats .chip.mng{color:var(--ink2)}`; document.head.appendChild(st); })();
+// รายจ่าย/ใบเสร็จร้านส่ง: เก็บสำเนาในเครื่อง → เปิดบัญชีได้ทันที · ดึงจาก Google เบื้องหลัง (ไม่วนโหลดซ้ำ)
+function rcLocalSave() { try { LS.set('rcCache', (S.receipts || []).map(r => /^data:/.test(r.fileUrl || '') ? { ...r, fileUrl: '', _img: 1 } : r)); } catch (e) { } }
+function rcLoad(force) {
+  const loc = S.receipts && S.receipts.length ? S.receipts : LS.get('rcCache', []);
+  if (!force && S.rcAt && Date.now() - S.rcAt < 60000) return Promise.resolve(loc);
+  const p = loadTable('Receipts').then(r => {
+    // รายการที่เพิ่งบันทึก/แก้ในเครื่อง (5 นาที) ชนะข้อมูลที่ดึงมาก่อนบันทึกเสร็จ
+    const fresh = {}; (S.receipts || []).forEach(x => { if (x._new && Date.now() - x._new < 300000) fresh[x.id] = x; });
+    const ids = new Set(r.map(x => x.id));
+    S.rcAt = Date.now(); S.receipts = r.map(x => fresh[x.id] || x).concat(Object.values(fresh).filter(x => !ids.has(x.id))); rcLocalSave(); return S.receipts;
+  });
+  return loc && loc.length ? quick(p, 2500, loc) : p.catch(() => loc || []);
+}
 const expCat = r => r.cat || (r.type === 'ค่าใช้จ่าย' ? 'อื่น ๆ' : 'ซื้อสินค้ามาขาย');
 const lastDay = ym => addDays(addDays(ym + '-01', 32).slice(0, 8) + '01', -1);
 async function ledgerData(y) {
   const from = y + '-01-01', to = y + '-12-31';
-  const [days, rc, im] = await Promise.all([quick(dailySummary(from, to), 2500, {}), quick(loadTable('Receipts'), 2500, S.receipts || []), window.importedSales ? importedSales(from, to).catch(() => null) : null]);
+  const [days, rc, im] = await Promise.all([quick(dailySummary(from, to), 2500, {}), rcLoad(), window.importedSales ? importedSales(from, to).catch(() => null) : null]);
   S.receipts = rc || [];
   const inc = [];
   Object.entries(days || {}).forEach(([d, x]) => { const a = num(x.net) - num(x.pass); if (Math.abs(a) >= .005) inc.push({ d, item: 'รายได้จากการขายสินค้า/ค่าบริการ', amt: a, note: [x.pass ? `ไม่รวมเงินรับแทน ${money(x.pass)}` : '', x.src && x.src !== 'POS' ? 'ยอดจาก ' + x.src : ''].filter(Boolean).join(' · ') }); });
@@ -808,13 +821,13 @@ function expenseForm(r0, done) {
       if (!rc.createdAt) { rc.createdAt = new Date().toISOString(); rc.createdBy = S.user.username || S.user.name || ''; }
       await api('upsert', { table: 'Receipts', rows: [rc] });
       LS.set('lastExpCat', cat);
-      const i = (S.receipts || []).findIndex(x => x.id === rc.id); if (i >= 0) S.receipts[i] = rc; else (S.receipts = S.receipts || []).push(rc);
+      const i = (S.receipts || []).findIndex(x => x.id === rc.id); if (i >= 0) S.receipts[i] = { ...rc, _new: Date.now() }; else (S.receipts = S.receipts || []).push({ ...rc, _new: Date.now() }); rcLocalSave();
       busy(0); ov.remove(); toast(`บันทึกรายจ่าย ${baht(rc.total)} แล้ว`);
       if (isNew && rc.type === 'สินค้า' && (rc.fileUrl || rc.fileId) && await confirmDlg('เพิ่มสต๊อก/อัปเดตต้นทุนจากรายการในบิลนี้เลยไหม?', 'เพิ่มสต๊อกเลย')) return stockFromBill(rc, done);
       done && done();
     } catch (e) { busy(0); toast(e.message, 1); }
   };
-  const del = $('#del', ov); if (del) del.onclick = async () => { if (!(await confirmDlg('ลบรายจ่ายนี้?' + (r.stockApplied === 'Y' ? ' (สต๊อก/ต้นทุนที่อัปเดตไปแล้วจะไม่ย้อนกลับ)' : ''), 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Receipts', ids: [r.id] }); S.receipts = (S.receipts || []).filter(x => x.id !== r.id); busy(0); ov.remove(); done && done(); } catch (e) { busy(0); toast(e.message, 1); } };
+  const del = $('#del', ov); if (del) del.onclick = async () => { if (!(await confirmDlg('ลบรายจ่ายนี้?' + (r.stockApplied === 'Y' ? ' (สต๊อก/ต้นทุนที่อัปเดตไปแล้วจะไม่ย้อนกลับ)' : ''), 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Receipts', ids: [r.id] }); S.receipts = (S.receipts || []).filter(x => x.id !== r.id); rcLocalSave(); busy(0); ov.remove(); done && done(); } catch (e) { busy(0); toast(e.message, 1); } };
 }
 // เพิ่มสต๊อกจากบิลที่แนบไว้ในบัญชีรายจ่าย: อ่านรายการสินค้า (OCR) → จับคู่สินค้า → ใช้ฟอร์มตรวจใบเสร็จเดิม (บันทึกทับบิลเดิม ไม่สร้างซ้ำ)
 async function stockFromBill(r, done) {

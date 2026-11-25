@@ -49,6 +49,7 @@ function cacheAfterWrite(action, payload) {
   if (!WRITE_ACTIONS.test(action)) return;
   Cache.staleBefore = Date.now();
   if (payload && payload.table) Cache.del(Cache.key('t:' + payload.table));
+  if (payload && payload.table && S._ql && S._ql[payload.table]) S._ql[payload.table].at = 0;
   if (/^(syncOrders|refund|instCancel)$/.test(action)) Cache.del(Cache.key('t:Installments'));
   if (action === 'syncOrders' || action === 'refund') Object.keys(Cache.mem).forEach(k => { if (/\|(o|d):/.test(k)) Cache.mem[k].at = 0; });
 }
@@ -69,6 +70,13 @@ function quick(p, ms, fb) {
   let late = false; const v = S.view, a = S.viewArg;
   p.then(() => { if (late && S.view === v && S.viewArg === a) { clearTimeout(quick.t); quick.t = setTimeout(() => { if (S.view === v && !$('.ov')) { const y = scrollY; go(v, a); setTimeout(() => scrollTo(0, y), 60); } }, 200); } }, () => { });
   return Promise.race([p.catch(() => fb), new Promise(r => setTimeout(() => { late = true; r(fb); }, ms))]);
+}
+/* qload: โหลดตาราง แบบ quick แต่จำผลที่มาช้าไว้ใช้รอบถัดไป (ภายใน maxAge ไม่ดึงซ้ำ → ไม่วนวาดหน้าใหม่ไม่รู้จบ) */
+function qload(t, ms, fb, maxAge = 60000) {
+  const Q = S._ql || (S._ql = {}), c = Q[t];
+  if (c && Date.now() - c.at < maxAge) return Promise.resolve(c.v);
+  const p = c && c.p ? c.p : (Q[t] = { ...(c || {}), p: loadTable(t).then(v => { Q[t] = { v, at: Date.now() }; return v; }, e => { Q[t] = c && c.v ? { v: c.v, at: c.at } : undefined; throw e; }) }).p;
+  return quick(p, ms, c && c.v ? c.v : fb);
 }
 /* ---------- ตัวโหลดข้อมูลที่ใช้แคช ---------- */
 loadTable = t => swr('t:' + t, () => api('list', { table: t }).then(r => r.rows), 20000);

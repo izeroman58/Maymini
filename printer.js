@@ -3,7 +3,7 @@
    ใบเสร็จวาดเป็นภาพ (raster) จึงพิมพ์ภาษาไทยได้ทุกเครื่อง ไม่ต้องพึ่งฟอนต์ในเครื่องพิมพ์
    ========================================================= */
 'use strict';
-const RCFG_DEF = { paper: 80, header: '', footer: 'ขอบคุณที่อุดหนุนค่ะ', showCustomer: true, showCashier: true, showDevice: false, showPoints: true, showBarcode: true, showAddress: true, cut: true, fontScale: 1, showLogo: true, shopName: '', title: 'ใบเสร็จรับเงิน', taxId: '', qtyLine: false, bigTotal: true, qrText: '', qrLabel: '', feed: 4 };
+const RCFG_DEF = { paper: 80, header: '', footer: 'ขอบคุณที่อุดหนุนค่ะ', showCustomer: true, showCashier: true, showDevice: false, showPoints: true, showBarcode: true, showAddress: true, cut: true, fontScale: 1, showLogo: true, shopName: '', title: 'ใบเสร็จรับเงิน', taxId: '', qtyLine: false, bigTotal: true, qrText: '', qrLabel: '', feed: 4, showItemCount: true, showCashLine: true };
 const rcfg = () => cfg('receiptCfg', RCFG_DEF);
 const PCONN_DEF = { type: 'system', chunk: 120, delay: 15, baud: 9600, autoPrint: true, drawer: false, drawerAll: false, drawerPin: '2', name: '' };
 // เดิมค่าเริ่มต้นส่งคำสั่งลิ้นชักทั้ง 2 ขา — เครื่องพิมพ์ที่ไม่รองรับขา 5 จะเลื่อนกระดาษ → เปลี่ยนเป็นขา 2 (มาตรฐาน) ครั้งเดียว
@@ -20,7 +20,7 @@ async function renderReceipt(order, opt = {}) {
   const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, cv.height); x.fillStyle = '#000'; x.textBaseline = 'top';
   const fs = Math.round((W === 576 ? 26 : 22) * (c.fontScale || 1));
   const F = (w, s) => `${w} ${s}px "Noto Sans Thai",Prompt,sans-serif`;
-  let y = 4;
+  let y = 0;   // เริ่มพิมพ์ชิดขอบบนสุด (ไม่เว้นกระดาษ)
   const text = (t, o = {}) => {
     const s = o.size || fs; x.font = F(o.bold ? 700 : 500, s); const lh = Math.round(s * 1.32);
     const lines = o.nowrap ? [String(t)] : wrapText(x, String(t), W - pad * 2, o.max || 6);
@@ -34,7 +34,7 @@ async function renderReceipt(order, opt = {}) {
   const dash = () => { y += 4; for (let i = pad; i < W - pad; i += 10) x.fillRect(i, y, 6, 2); y += 10; };
   // โลโก้
   const logo = S.settings.receiptLogo;
-  if (logo && opt.logo !== false && c.showLogo !== false) { try { const im = await loadImg(logo); const w = Math.min(im.width, W * .7), h = im.height * w / im.width; x.drawImage(im, (W - w) / 2, y, w, h); y += h + 6; } catch (e) { } }
+  if (logo && opt.logo !== false && c.showLogo !== false) { try { const im = await trimLogo(logo); const w = Math.min(im.width, W * .7), h = im.height * w / im.width; x.drawImage(im, (W - w) / 2, y, w, h); y += h + 6; } catch (e) { } }
   text(c.shopName || S.settings.shopName || 'ร้านเมย์ มินิมาร์ท', { bold: 1, size: Math.round(fs * 1.3), align: 'center' });
   if (c.taxId) text('เลขประจำตัวผู้เสียภาษี ' + c.taxId, { align: 'center', size: Math.round(fs * .85) });
   if (c.showAddress && S.settings.address) text(S.settings.address, { align: 'center', size: Math.round(fs * .85) });
@@ -62,11 +62,14 @@ async function renderReceipt(order, opt = {}) {
   });
   dash();
   const sub = num(order.subtotal), disc = num(order.discount), tot = num(order.total);
-  lr('รวม ' + items.reduce((s, it) => s + (it.byWeight === 'Y' ? 1 : num(it.qty)), 0) + ' ชิ้น', money(sub));
+  // แถว "รวม N ชิ้น" ปิดได้ (ถ้ามีส่วนลดยังแสดงยอดก่อนลดเป็น "รวม")
+  if (c.showItemCount !== false) lr('รวม ' + items.reduce((s, it) => s + (it.byWeight === 'Y' ? 1 : num(it.qty)), 0) + ' ชิ้น', money(sub));
+  else if (disc) lr('รวม', money(sub));
   if (disc) lr('ส่วนลด' + (order.pointsUsed && num(order.pointsUsed) ? ` (ใช้ ${order.pointsUsed} แต้ม)` : ''), '-' + money(Math.abs(disc)));
   lr('ยอดสุทธิ', money(tot), { bold: 1, size: Math.round(fs * (c.bigTotal === false ? 1.05 : 1.35)) });
   const pays = typeof order.payments === 'string' ? JSON.parse(order.payments || '[]') : (order.payments || []);
-  pays.forEach(p => lr(PAYNAME[p.type] || p.type, money(p.amount)));
+  // บรรทัด "เงินสด" ซ้ำกับยอดสุทธิ → ปิดได้ (วิธีชำระอื่น เช่น โอน/เงินเชื่อ ยังแสดง)
+  pays.filter(p => !(c.showCashLine === false && p.type === 'cash')).forEach(p => lr(PAYNAME[p.type] || p.type, money(p.amount)));
   if (num(order.cash) > 0) { lr('รับเงินสด', money(order.cash)); lr('เงินทอน', money(order.change), { bold: 1 }); }
   if (c.showPoints && order.customerId && (num(order.pointsEarned) || order.pointsBalance != null)) { dash(); if (num(order.pointsEarned)) lr('แต้มที่ได้รับ', '+' + order.pointsEarned); if (order.pointsBalance != null) lr('แต้มสะสมคงเหลือ', String(order.pointsBalance)); }
   if (order.creditBalance != null && num(order.creditBalance)) lr('ยอดค้างชำระ (เงินเชื่อ)', money(order.creditBalance), { bold: 1 });
@@ -86,6 +89,8 @@ function canvasToEscPos(cv, o = {}) {
   const d = cv.getContext('2d').getImageData(0, 0, W, H).data;
   const out = [0x1B, 0x40];
   if (o.drawer) out.push(...drawerBytes());
+  // ดึงกระดาษถอยหลังก่อนพิมพ์ (ESC e n) — ลดกระดาษว่างหัวใบที่เกิดจากระยะหัวพิมพ์ถึงที่ตัด · เครื่องที่ไม่รองรับจะไม่สนคำสั่งนี้
+  if (o.back > 0) out.push(0x1B, 0x65, Math.min(8, o.back | 0));
   const BAND = 48;
   for (let y0 = 0; y0 < H; y0 += BAND) {
     const h = Math.min(BAND, H - y0);
@@ -224,7 +229,7 @@ const RP = {
       return;
     }
     if (!this.ok) await this.connect(c.type);
-    const bytes = canvasToEscPos(cv, { cut: rcfg().cut, feed: num(rcfg().feed != null ? rcfg().feed : 4), drawer: o.drawer });
+    const bytes = canvasToEscPos(cv, { cut: rcfg().cut, feed: num(rcfg().feed != null ? rcfg().feed : 4), back: num(rcfg().backFeed), drawer: o.drawer });
     for (let i = 0; i < (o.copies || 1); i++) await this.send(bytes);
   },
   async printOrder(order, o = {}) {
@@ -236,6 +241,20 @@ const RP = {
 };
 
 /* ประมวลผลรูปโลโก้: ย่อ + แปลงขาวดำแบบ dithering */
+// ตัดขอบขาว/โปร่งใสรอบโลโก้ออกก่อนพิมพ์ (โลโก้ที่มีพื้นว่างด้านบน = เปลืองกระดาษ) · จำผลไว้
+const _trimC = {};
+async function trimLogo(src) {
+  if (_trimC[src]) return _trimC[src];
+  const im = await loadImg(src), w = im.width, h = im.height;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, w, h).data; let t = h, b = -1, l = w, r = -1;
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) { const i = (yy * w + xx) * 4; if (d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114 < 200) { if (yy < t) t = yy; if (yy > b) b = yy; if (xx < l) l = xx; if (xx > r) r = xx; } }
+  if (b < 0) return (_trimC[src] = cv);
+  const m = 2; t = Math.max(0, t - m); l = Math.max(0, l - m); b = Math.min(h - 1, b + m); r = Math.min(w - 1, r + m);
+  const o = document.createElement('canvas'); o.width = r - l + 1; o.height = b - t + 1; o.getContext('2d').drawImage(cv, l, t, o.width, o.height, 0, 0, o.width, o.height);
+  return (_trimC[src] = o);
+}
 async function processLogo(file, maxW) {
   const im = await loadImg(URL.createObjectURL(file));
   const w = Math.min(maxW, im.width), h = Math.round(im.height * w / im.width);
@@ -297,14 +316,16 @@ VIEWS.printer = el => {
     <label class="f"><span>เลขประจำตัวผู้เสียภาษี (ถ้ามี)</span><input class="in" id="tax" value="${esc(c.taxId || '')}" inputmode="numeric"></label>
     <div class="grid2"><label class="f"><span>QR ท้ายใบเสร็จ (ลิงก์ LINE / เพจ / เว็บ)</span><input class="in" id="qrt" value="${esc(c.qrText || '')}" placeholder="https://lin.ee/..."></label><label class="f"><span>ข้อความใต้ QR</span><input class="in" id="qrl" value="${esc(c.qrLabel || '')}" placeholder="แอดไลน์รับโปรโมชั่น"></label></div>
     <label class="f"><span>ขนาดตัวอักษร: <b id="fszv">${Math.round((c.fontScale || 1) * 100)}%</b></span><input type="range" id="fsz" min="0.8" max="1.4" step="0.05" value="${c.fontScale || 1}" style="width:100%"></label>
-    <label class="f"><span>เว้นกระดาษท้ายใบ (บรรทัด) ก่อนตัด</span><input class="in" type="number" id="feed" min="0" max="10" value="${c.feed != null ? c.feed : 4}"></label>
-    <div class="grid2 small">${[['showLogo', 'แสดงโลโก้'], ['showAddress', 'แสดงที่อยู่/โทร'], ['showCashier', 'แสดงชื่อพนักงาน'], ['showCustomer', 'แสดงข้อมูลลูกค้า'], ['showPoints', 'แสดงแต้มสะสม'], ['showDevice', 'แสดงชื่อเครื่อง'], ['qtyLine', 'แสดงจำนวน × ราคา ทุกรายการ'], ['bigTotal', 'ยอดสุทธิตัวใหญ่'], ['showBarcode', 'บาร์โค้ดเลขที่ใบเสร็จ'], ['cut', 'ตัดกระดาษอัตโนมัติ']].map(([k, n]) => `<label class="row"><input type="checkbox" data-k="${k}" ${c[k] ? 'checked' : ''}> ${n}</label>`).join('')}</div>
+    <div class="grid2"><label class="f"><span>เว้นกระดาษท้ายใบ (บรรทัด) ก่อนตัด/ฉีก</span><input class="in" type="number" id="feed" min="0" max="10" value="${c.feed != null ? c.feed : 4}"><span class="tiny muted">ท้ายใบมีกระดาษเปล่าเหลือ → ลดลง 1 · บรรทัดสุดท้ายถูกฉีกขาด → เพิ่ม</span></label>
+    <label class="f"><span>ลดขอบบน: ดึงกระดาษถอยหลัง (บรรทัด)</span><input class="in" type="number" id="bfeed" min="0" max="8" value="${num(c.backFeed)}"><span class="tiny muted">ทดลอง — บางรุ่นรองรับ · ใส่ 2–4 แล้วกดทดสอบพิมพ์ ถ้าหัวใบไม่ชิดขึ้นให้ใส่ 0</span></label></div>
+    <div class="tiny muted" style="margin:-4px 0 8px">หัวใบเสร็จเว้นว่างประมาณ 1–1.5 ซม. เป็นระยะจากหัวพิมพ์ถึงที่ตัด/ฉีกกระดาษของเครื่องพิมพ์ (ระบบเริ่มพิมพ์ชิดขอบบนแล้ว และตัดขอบขาวรอบโลโก้ให้อัตโนมัติ)</div>
+    <div class="grid2 small">${[['showLogo', 'แสดงโลโก้'], ['showAddress', 'แสดงที่อยู่/โทร'], ['showCashier', 'แสดงชื่อพนักงาน'], ['showCustomer', 'แสดงข้อมูลลูกค้า'], ['showPoints', 'แสดงแต้มสะสม'], ['showDevice', 'แสดงชื่อเครื่อง'], ['qtyLine', 'แสดงจำนวน × ราคา ทุกรายการ'], ['bigTotal', 'ยอดสุทธิตัวใหญ่'], ['showItemCount', 'แถวรวมจำนวนชิ้น'], ['showCashLine', 'บรรทัดเงินสด (ซ้ำยอดสุทธิ)'], ['showBarcode', 'บาร์โค้ดเลขที่ใบเสร็จ'], ['cut', 'ตัดกระดาษอัตโนมัติ']].map(([k, n]) => `<label class="row"><input type="checkbox" data-k="${k}" ${c[k] ? 'checked' : ''}> ${n}</label>`).join('')}</div>
     ${isOwner() ? '<button class="btn block green" id="sv">บันทึกรูปแบบใบเสร็จ</button>' : ''}
   </div>
   <div class="card center"><div class="small muted" style="margin-bottom:8px">ตัวอย่างใบเสร็จ</div><canvas id="pv" style="max-width:100%;width:290px;box-shadow:0 4px 16px rgba(0,0,0,.12);background:#fff"></canvas></div>`;
   $('#dpin', el).value = pc.drawerPin || '2';
   const HELP = { btc: 'เครื่องพิมพ์ Bluetooth แบบ Classic (AIMO, QF300-UBT, Xprinter) ต่อตรงจาก Chrome บน Android — จับคู่ในการตั้งค่า Bluetooth ของแท็บเล็ตก่อน แล้วกด “เชื่อมต่อ” เลือกเครื่องพิมพ์ · ปิดแอป RawBT ระหว่างใช้', bt: 'เครื่องพิมพ์ Bluetooth Low Energy (BLE) — ใช้ Chrome บน Android/Windows/Mac หรือแอป Bluefy บน iPhone/iPad', usb: 'ต่อสาย USB Type-C/Type-A กับมือถือ Android (ผ่าน OTG) หรือคอมพิวเตอร์ — ใช้ Chrome', serial: 'เครื่องพิมพ์ที่ต่อ USB แล้วขึ้นเป็นพอร์ต COM (คอมพิวเตอร์)', rawbt: 'เครื่องพิมพ์ Bluetooth แบบ Classic บน Android (เช่น QF300-UBT, AIMO, Xprinter) — ติดตั้งแอป RawBT จาก Play Store › จับคู่เครื่องพิมพ์ในแอป RawBT › ตั้ง Default printer แล้วกลับมากดทดสอบพิมพ์ · ใช้ได้แม้ไม่มีเน็ต', system: 'ใช้หน้าต่างพิมพ์ของระบบ (เครื่องพิมพ์ที่ติดตั้งไว้ในคอม/AirPrint) — ต้องกดยืนยันทุกครั้ง' };
-  const getC = () => { const o = { ...c, header: $('#hd', el).value, footer: $('#ft', el).value, fontScale: +$('#fsz', el).value, shopName: $('#sn', el).value.trim(), title: $('#ttl', el).value.trim() || 'ใบเสร็จรับเงิน', taxId: $('#tax', el).value.trim(), qrText: $('#qrt', el).value.trim(), qrLabel: $('#qrl', el).value.trim(), feed: Math.max(0, Math.min(10, +$('#feed', el).value || 0)) }; $$('[data-k]', el).forEach(k => o[k.dataset.k] = k.checked); o.paper = +$('#paper .on', el).dataset.p; return o; };
+  const getC = () => { const o = { ...c, header: $('#hd', el).value, footer: $('#ft', el).value, fontScale: +$('#fsz', el).value, shopName: $('#sn', el).value.trim(), title: $('#ttl', el).value.trim() || 'ใบเสร็จรับเงิน', taxId: $('#tax', el).value.trim(), qrText: $('#qrt', el).value.trim(), qrLabel: $('#qrl', el).value.trim(), feed: Math.max(0, Math.min(10, +$('#feed', el).value || 0)), backFeed: Math.max(0, Math.min(8, +$('#bfeed', el).value || 0)) }; $$('[data-k]', el).forEach(k => o[k.dataset.k] = k.checked); o.paper = +$('#paper .on', el).dataset.p; return o; };
   const pv = async () => { const saved = S.settings.receiptLogo; S.settings.receiptLogo = logo; const cv = await renderReceipt(SAMPLE_ORDER(), getC()); S.settings.receiptLogo = saved; const t = $('#pv', el); t.width = cv.width; t.height = cv.height; t.getContext('2d').drawImage(cv, 0, 0); };
   const st = () => { const p = pconn(); $('#pst', el).innerHTML = (RP.ok ? '<span class="tag green">พร้อม</span> ' : '<span class="tag gray">ยังไม่เชื่อมต่อ</span> ') + esc(RP.label()); $('#phelp', el).textContent = HELP[p.type]; $('#pcon', el).style.display = ['bt', 'usb', 'serial', 'btc'].includes(p.type) ? '' : 'none'; };
   const ur = $('#useraw', el); if (ur) ur.onclick = () => { LS.set('printerConn', { ...pconn(), type: 'rawbt', name: '' }); $$('#ptype button', el).forEach(x => x.classList.toggle('on', x.dataset.t === 'rawbt')); st(); toast('ตั้งเป็น RawBT แล้ว — กด “ทดสอบพิมพ์”'); };
@@ -317,7 +338,7 @@ VIEWS.printer = el => {
   $('#dtest', el).onclick = async () => { try { await RP.kick(); toast('ส่งคำสั่งเปิดลิ้นชักแล้ว'); } catch (e) { toast(e.message, 1); } st(); };
   ['chunk', 'delay', 'baud'].forEach(id => $('#' + id, el).onchange = e => LS.set('printerConn', { ...pconn(), [id]: +e.target.value }));
   let pvT; const pvd = () => { clearTimeout(pvT); pvT = setTimeout(pv, 250); };
-  $$('textarea,input[data-k],#sn,#ttl,#tax,#qrt,#qrl,#feed', el).forEach(i => { i.addEventListener('input', pvd); i.addEventListener('change', pvd); });
+  $$('textarea,input[data-k],#sn,#ttl,#tax,#qrt,#qrl,#feed,#bfeed', el).forEach(i => { i.addEventListener('input', pvd); i.addEventListener('change', pvd); });
   $('#fsz', el).oninput = e => { $('#fszv', el).textContent = Math.round(e.target.value * 100) + '%'; pvd(); };
   $('#lgf', el).onchange = async e => { const f = e.target.files[0]; if (!f) return; logo = await processLogo(f, getC().paper == 80 ? 400 : 280); $('#lg', el).innerHTML = `<img src="${logo}" style="max-width:100%;max-height:100%">`; pv(); };
   $('#lgx', el).onclick = () => { logo = ''; $('#lg', el).innerHTML = '<span class="tiny muted">ไม่มีโลโก้</span>'; pv(); };

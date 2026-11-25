@@ -232,7 +232,49 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
   #printArea th,#printArea td{border:1px solid #999;padding:3px 5px}
   #printArea h2{font-size:16px;margin:8px 0}
 }
+
+/* ---------- ฐานลูกค้า: ตัวหนังสือใหญ่ อ่านง่าย ---------- */
+.cdx .stat .k{font-size:15px}.cdx .stat .v{font-size:28px;font-weight:700}.cdx .stat .tiny{font-size:13px}
+.cdx h3{font-size:19px}.cdx .ctx{font-size:17px;padding:10px 4px;border-bottom:1px solid var(--line);align-items:center}.cdx .ctx .tiny{font-size:13.5px;margin-top:2px}.cdx .ctx b{font-size:18px;white-space:nowrap}
+.cdx .ctx.go{cursor:pointer;border-radius:10px}.cdx .ctx.go:hover,.cdx .ctx.go:active{background:var(--red-l)}
+/* ---------- โหมดมืด (ทั้งระบบ · เลือกต่อเครื่อง) — เปลี่ยนแค่สี ไม่กระทบความเร็ว ---------- */
+html.dark{color-scheme:dark;--ink:#ECE9EA;--ink2:#B8B2B4;--ink3:#8D888A;--line:#35373C;--bg:#15161A;--card:#202226;--red-l:#3D1A20;--red-d:#FF8A97;--green:#38C172;--green-l:#173525;--amber:#F2B04B;--amber-l:#3A2D13;--blue:#7DB0FF;--blue-l:#1A2944;--sh:0 1px 2px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.25)}
+html.dark body{background:var(--bg);color:var(--ink)}
+html.dark .btn.ghost,html.dark .in,html.dark select,html.dark textarea,html.dark .chip,html.dark .list,html.dark .stat,html.dark .qa button,html.dark .nav,html.dark .sheet .sf,html.dark .drw,html.dark .drw.inl,html.dark .nschip,html.dark .thcalbg .thcal,html.dark .scanlast,html.dark .pinpad button,html.dark .seg button.on,html.dark .drw .drag{background:var(--card)!important;color:var(--ink)}
+html.dark .chip.on{background:var(--ink)!important;border-color:var(--ink);color:#15161A}
+html.dark .seg{background:#2A2C31}html.dark .toast{background:#ECE9EA;color:#15161A}
+html.dark .tag.gray{background:#2E3035;color:var(--ink2)}html.dark .thcal .thmon button{background:#2A2C31}
+html.dark [style*="background:#fff"]:not(:has(img,canvas)),html.dark [style*="background: #fff"]:not(:has(img,canvas)),html.dark [style*="background:#FFF"]:not(:has(img,canvas)),html.dark [style*="background:#FAFAFA"],html.dark [style*="background:#F5F5F5"],html.dark [style*="background:#f4f4f4"],html.dark [style*="background:#F6F6F4"],html.dark [style*="background:#FFF8E1"]{background:var(--card)!important;color:var(--ink)}
+html.dark [style*="color:#333"],html.dark [style*="color:#555"],html.dark [style*="color:#222"]{color:var(--ink)!important}
+html.dark .item:active,html.dark .item:hover{background:#26282D}
+html.dark table th{background:#26282D;color:var(--ink)}html.dark table td{border-color:var(--line)}
+html.dark .ov{background:rgba(0,0,0,.6)}
+html.dark .pcimg,html.dark .pcard .pimg{background:#fff}
+
+/* v2.6.55 หน้าต่างกรอกตัวเลขบริการ: แป้นตัวเลขอยู่ติดล่างเสมอ (มือถือ) · แนวนอนแป้นขวา (แท็บเล็ต) */
+.sheet.svs{height:min(94dvh,900px);max-height:94dvh}
+.sheet.svs .sb{display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;padding-bottom:8px}
+.svs .svl{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:2px 2px 6px}
+.svs .svr{flex:none;display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line)}
+.svs .svh{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;color:var(--ink2);min-height:30px}
+.svs .svh b{color:var(--red);font-weight:700}
+.svs .svr .npad,.svs .svr .kp{--kh:clamp(46px,7.4dvh,78px);display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:var(--kh);gap:8px;margin:0;justify-content:stretch}
+.svs .svr .npad button,.svs .svr .kp button{aspect-ratio:auto;height:auto;min-height:0;font-size:clamp(28px,4.6dvh,42px);font-weight:800;border-radius:14px;touch-action:manipulation}
+.svs .svr .npad [data-pk=clr],.svs .svr .npad [data-pk=del],.svs .svr .kp [data-k=del]{font-size:clamp(20px,3.4dvh,30px)}
+.svs .sf .btn{min-height:54px}
+@media (min-width:880px) and (orientation:landscape){
+ .sheet.svs{max-width:min(1200px,97vw);height:min(94dvh,920px)}
+ .sheet.svs .sb{flex-direction:row;gap:18px}
+ .svs .svl{flex:1 1 56%}
+ .svs .svr{flex:0 0 min(42%,470px);border-top:0;border-left:1px solid var(--line);padding:0 0 0 18px}
+ .svs .svr .npad,.svs .svr .kp{flex:1;min-height:0;grid-auto-rows:1fr;gap:10px}
+ .svs .svr .npad button,.svs .svr .kp button{font-size:clamp(32px,6vh,52px)}
+}
+html.dark .sfield{background:#24272C;box-shadow:inset 0 0 0 1.5px #3A3D42}html.dark .sfield b{color:#F5F5F5}html.dark .sfield.on{background:#3A2228;box-shadow:inset 0 0 0 3px #ff5a6e}
+html.dark .svs .svr .npad button,html.dark .svs .svr .kp button{background:#2E3136;color:#F0F0F0;box-shadow:none}
+html.dark .svs .svr .npad [data-pk=clr],html.dark .svs .svr .npad [data-pk=del],html.dark .svs .svr .kp [data-k=del]{background:#4a2a30;color:#ff9aa8}
 </style>
+<script>try{var _t=localStorage.getItem('mm_theme'),_pd=localStorage.getItem('mm_posDark');_t=_t?JSON.parse(_t):(_pd==null||JSON.parse(_pd)?'dark':'light');if(_t==='dark')document.documentElement.classList.add('dark');document.documentElement.dataset.theme=_t;}catch(e){}</script>
 </head>
 <body>
 <div id="app"></div>
@@ -243,7 +285,7 @@ canvas.lbl{background:#fff;border-radius:6px;box-shadow:0 0 0 1px var(--line),0 
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.54';
+const APP_VER = '2.6.55';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -265,6 +307,21 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem('mm_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('mm_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem('mm_' + k); } catch (e) { } }
+};
+// โหมดสว่าง/มืด: ใช้ทั้งระบบ (หน้าจัดการ + หน้าขาย) จำต่อเครื่อง · เปลี่ยนแค่ class บน <html> ไม่ต้องวาดหน้าใหม่
+const Theme = {
+  get() { return document.documentElement.dataset.theme || LS.get('theme', LS.get('posDark', true) ? 'dark' : 'light'); },
+  dark() { return this.get() === 'dark'; },
+  set(t) {
+    LS.set('theme', t); LS.set('posDark', t === 'dark'); const h = document.documentElement; h.dataset.theme = t; h.classList.toggle('dark', t === 'dark');
+    document.querySelectorAll('#pos,.kpov').forEach(e => e.classList.toggle('dk', t === 'dark'));
+    document.querySelectorAll('.thm').forEach(b => { b.innerHTML = this.icon(); b.title = this.label(); });
+    try { const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'dark' ? '#15161A' : '#D6001C'; } catch (e) { }
+  },
+  toggle() { this.set(this.dark() ? 'light' : 'dark'); toast(this.dark() ? 'โหมดมืด' : 'โหมดสว่าง'); },
+  icon() { return this.dark() ? I('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>', 22) : I('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', 22); },
+  label() { return this.dark() ? 'เปลี่ยนเป็นโหมดสว่าง' : 'เปลี่ยนเป็นโหมดมืด'; },
+  btn(cls = 'iconbtn tb') { return `<button class="${cls} thm" onclick="Theme.toggle()" title="${this.label()}">${this.icon()}</button>`; }
 };
 const S = {
   // เว็บของร้าน (github.io) เชื่อมฐานข้อมูลร้านให้อัตโนมัติ — เครื่องใหม่ไม่ต้องตั้งค่า และไม่หลุดไปโหมดทดลอง
@@ -507,9 +564,9 @@ function popMenu(anchor, items, side = 'right', orderKey) {
 }
 function sheet(title, body, foot, opts = {}) {
   const ov = document.createElement('div'); ov.className = 'ov';
-  ov.innerHTML = `<div class="sheet" role="dialog"><div class="sh"><h3>${title}</h3><button class="iconbtn" data-x>${I(IC.x)}</button></div><div class="sb">${body}</div>${foot ? `<div class="sf">${foot}</div>` : ''}</div>`;
+  ov.innerHTML = `<div class="sheet${opts.cls ? ' ' + opts.cls : ''}" role="dialog"><div class="sh"><h3>${title}</h3><button class="iconbtn" data-x>${I(IC.x)}</button></div><div class="sb">${body}</div>${foot ? `<div class="sf">${foot}</div>` : ''}</div>`;
   const close = () => { ov.remove(); opts.onClose && opts.onClose(); };
-  ov.addEventListener('click', e => { if (e.target === ov && !opts.sticky) close(); });
+  ov.addEventListener('click', e => { if (e.target === ov && !opts.sticky && !ov.sticky) close(); });
   $('[data-x]', ov).onclick = close; ov.close = close;
   document.body.appendChild(ov); return ov;
 }
@@ -813,7 +870,7 @@ let IDX = { byBarcode: {}, bySku: {} };
 const norm = s => String(s || '').toLowerCase().normalize('NFC').replace(/\u0E4D\u0E32/g, '\u0E33').replace(/[\u0E47-\u0E4E\u200B-\u200D]/g, '').replace(/[\s\-_.,/()"'’]+/g, '');
 function buildIndex() {
   IDX = { byBarcode: {}, bySku: {} };
-  S.products.forEach(p => { p._n = norm(p.name + ' ' + p.sku + ' ' + p.barcode + ' ' + p.category); if (p.barcode) String(p.barcode).split(/[,; ]+/).forEach(b => b && (IDX.byBarcode[b] = p)); IDX.bySku[p.sku] = p; });
+  S.products.forEach(p => { p._n = norm(p.name + ' ' + p.sku + ' ' + p.barcode + ' ' + p.category); p._nn = norm(p.name); p._nc = norm(p.sku + ' ' + p.barcode); if (p.barcode) String(p.barcode).split(/[,; ]+/).forEach(b => b && (IDX.byBarcode[b] = p)); IDX.bySku[p.sku] = p; });
 }
 function findByCode(code) {
   code = String(code).trim();
@@ -833,7 +890,7 @@ function pthumb(p, sz = 44) {
 }
 function searchProducts(q, f = {}) {
   const toks = String(q || '').toLowerCase().split(/\s+/).map(norm).filter(Boolean);
-  return S.products.filter(p => {
+  const res = S.products.filter(p => {
     if (f.cat && (p.category || 'ไม่ระบุหมวด') !== f.cat) return false;
     if (f.flag === 'low' && !(p.trackStock === 'Y' && num(p.stock) <= num(p.lowStock || 0))) return false;
     if (f.flag === 'nobar' && p.barcode) return false;
@@ -844,6 +901,20 @@ function searchProducts(q, f = {}) {
     if (f.flag === 'vatchk') { const t = VATX.tag(p); if (!t || t.c === 'green') return false; }
     return toks.every(t => p._n.includes(t));
   });
+  // เรียงตามความตรง: ชื่อขึ้นต้นด้วยคำค้น → ชื่อมีคำค้น → รหัส/บาร์โค้ด → ตรงแค่ชื่อหมวด
+  // ถ้ามีสินค้าที่ชื่อ/รหัสตรง จะไม่แสดงสินค้าที่ตรงแค่ชื่อหมวด (เช่น ค้น "ขนม" ไม่ได้ขึ้นทั้งหมวดขนม 300+ รายการ)
+  if (!toks.length) return res;
+  const whole = toks.join('');
+  const sc = p => {
+    const nn = p._nn != null ? p._nn : norm(p.name), nc = p._nc != null ? p._nc : norm(p.sku + ' ' + p.barcode);
+    if (nn.startsWith(toks[0]) && toks.every(t => nn.includes(t))) return nn.startsWith(whole) ? 0 : 1;
+    if (toks.every(t => nn.includes(t))) return 2;
+    if (toks.every(t => nn.includes(t) || nc.includes(t))) return 3;
+    return 4;
+  };
+  const r2 = res.map((p, i) => [p, sc(p), i]);
+  const best = r2.some(x => x[1] < 4);
+  return r2.filter(x => !best || x[1] < 4).sort((a, b) => a[1] - b[1] || a[2] - b[2]).map(x => x[0]);
 }
 
 /* =========================================================
@@ -1350,7 +1421,7 @@ function shell() {
     <div class="logo"><img src="${Brand.white()}" alt="ร้านเมย์ Mini Mart" style="height:40px;width:auto;display:block"></div>
     <div class="sp"></div>
     <div class="who"><div><span class="net ${S.online ? '' : 'off'}"></span>${esc(u.name)}</div><span class="chip-role">${u.role === 'owner' ? 'เจ้าของกิจการ' : 'พนักงาน'}${S.apiUrl ? '' : ' · โหมดทดลอง'}</span></div>
-    ${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button>
+    ${Theme.btn()}${FS.btn()}<button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button>
   </header>
   <main id="view"></main>
   <nav class="nav">
@@ -1371,6 +1442,8 @@ function go(v, arg) {
   if (!isKiosk() && v === 'reports' && !seesSales() && S.user && S.user.role !== 'owner') v = 'home';
   if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
+  // ออกจากหน้า → ล้างคำค้นหาเดิม (กลับมาใหม่เริ่มจากช่องค้นหาว่าง)
+  if (S.view && S.view !== v) { PF.q = ''; if (typeof POS !== 'undefined') { POS.aq = ''; POS.aqHl = 0; } if (typeof RR !== 'undefined') RR.q = ''; if (S.rsF) S.rsF.q = ''; if (typeof IV !== 'undefined') IV.q = ''; }
   S.view = v; S.viewArg = arg; S.deps = new Set(); $$('.nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v || (b.dataset.v === 'more' && !['home', 'products', 'pos', 'reports'].includes(v))));
   document.body.classList.toggle('full', v === 'pos');
   document.body.classList.toggle('kiosk', isKiosk());
@@ -1631,7 +1704,9 @@ VIEWS.products = async (el, flag) => {
     $$('#pl [data-sku]', el).forEach(r => r.onclick = () => productCard(IDX.bySku[r.dataset.sku]));
     const m = $('#more', el); if (m) m.onclick = () => { PF.limit += 100; draw(); };
   };
-  let t; $('#q', el).oninput = e => { clearTimeout(t); t = setTimeout(() => { PF.q = e.target.value; PF.limit = 60; draw(); }, 150); };
+  let t; const qi = $('#q', el), qrun = () => { clearTimeout(t); t = setTimeout(() => { if (!qi.isConnected || qi.value === PF.q) return; PF.q = qi.value; PF.limit = 60; draw(); }, 120); };
+  // คีย์บอร์ดไทยบางรุ่น (Samsung/Gboard) ส่งตัวอักษรแบบ composition → ฟังหลายเหตุการณ์ ค้นทันทีเมื่อข้อความเปลี่ยน
+  ['input', 'keyup', 'compositionend', 'change', 'search'].forEach(ev => qi.addEventListener(ev, qrun));
   // สแกนด้วยกล้อง: กล้องแทรกอยู่เหนือช่องค้นหา สแกนแล้วรายการด้านล่างค้นให้ทันที (สแกนต่อได้เรื่อย ๆ)
   const camw = document.createElement('div'); $('.search', el).before(camw);
   let camClose = null;
@@ -2112,11 +2187,11 @@ function receiptForm(r, isNew) {
       if (applied) { rc.stockApplied = 'Y'; await api('upsert', { table: 'Receipts', rows: [rc] }); }
       else { const res = await api('applyReceipt', { receipt: rc }); toast(`บันทึกแล้ว · อัปเดตสินค้า ${res.updated} รายการ${res.created ? ` · สร้างใหม่ ${res.created}` : ''}`); await loadProducts(true); }
       if (rc.type === 'สินค้า' && (!rc.cat || rc.cat === 'อื่น ๆ')) rc.cat = 'ซื้อสินค้ามาขาย';
-      if (S.receipts) { const k = S.receipts.findIndex(x => x.id === rc.id); if (k >= 0) S.receipts[k] = { ...S.receipts[k], ...rc, stockApplied: 'Y' }; }
+      { S.receipts = S.receipts || []; const k = S.receipts.findIndex(x => x.id === rc.id); if (k >= 0) S.receipts[k] = { ...S.receipts[k], ...rc, stockApplied: 'Y', _new: Date.now() }; else S.receipts.push({ ...rc, stockApplied: 'Y', _new: Date.now() }); window.rcLocalSave && rcLocalSave(); }
       busy(0); ov.remove(); if (r._done) r._done(); else if (S.view === 'receipts' || S.view === 'ledger') go(S.view);
     } catch (e) { busy(0); toast(e.message, 1); }
   };
-  const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg('ลบใบเสร็จนี้? (สต็อก/ต้นทุนที่อัปเดตไปแล้วจะไม่ย้อนกลับ)', 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Receipts', ids: [r.id] }); busy(0); ov.remove(); go('receipts'); } catch (e) { busy(0); toast(e.message, 1); } };
+  const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg('ลบใบเสร็จนี้? (สต็อก/ต้นทุนที่อัปเดตไปแล้วจะไม่ย้อนกลับ)', 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Receipts', ids: [r.id] }); if (S.receipts) { S.receipts = S.receipts.filter(x => x.id !== r.id); window.rcLocalSave && rcLocalSave(); } busy(0); ov.remove(); go('receipts'); } catch (e) { busy(0); toast(e.message, 1); } };
 }
 function matchDlg(it, done) {
   let q = it.name || '';
@@ -2943,23 +3018,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.54"></script>
-<script src="logic.js?v=2.6.54"></script>
-<script src="cache.js?v=2.6.54"></script>
-<script src="offline.js?v=2.6.54"></script>
-<script src="scanner.js?v=2.6.54"></script>
-<script src="printer.js?v=2.6.54"></script>
-<script src="pos.js?v=2.6.54"></script>
-<script src="idle.js?v=2.6.54"></script>
-<script src="display.js?v=2.6.54"></script>
-<script src="reports.js?v=2.6.54"></script>
-<script src="inventory.js?v=2.6.54"></script>
-<script src="people.js?v=2.6.54"></script>
-<script src="quality.js?v=2.6.54"></script>
-<script src="services.js?v=2.6.54"></script>
-<script src="owner.js?v=2.6.54"></script>
-<script src="books.js?v=2.6.54"></script>
-<script src="restock.js?v=2.6.54"></script>
+<script src="qr.js?v=2.6.55"></script>
+<script src="logic.js?v=2.6.55"></script>
+<script src="cache.js?v=2.6.55"></script>
+<script src="offline.js?v=2.6.55"></script>
+<script src="scanner.js?v=2.6.55"></script>
+<script src="printer.js?v=2.6.55"></script>
+<script src="pos.js?v=2.6.55"></script>
+<script src="idle.js?v=2.6.55"></script>
+<script src="display.js?v=2.6.55"></script>
+<script src="reports.js?v=2.6.55"></script>
+<script src="inventory.js?v=2.6.55"></script>
+<script src="people.js?v=2.6.55"></script>
+<script src="quality.js?v=2.6.55"></script>
+<script src="services.js?v=2.6.55"></script>
+<script src="owner.js?v=2.6.55"></script>
+<script src="books.js?v=2.6.55"></script>
+<script src="restock.js?v=2.6.55"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

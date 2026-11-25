@@ -147,7 +147,7 @@ const prevRange = (from, to) => { const n = spanDays(from, to); return n >= 300 
    + ยอดรายเดือนที่นำเข้า/กรอกเอง (Sales) สำหรับเดือนที่ไม่มีทั้งบิลและยอดรายวัน — นับเฉพาะเดือนที่อยู่ในช่วงทั้งเดือน */
 async function importedSales(from, to) {
   if (!isOwner() && !canStrict('reports')) return { days: {}, months: [] };
-  const [days, man] = await Promise.all([dailySummary(from, to).catch(() => ({})), quick(loadTable('Sales'), 1500, S.sales || []).catch(() => S.sales || [])]);
+  const [days, man] = await Promise.all([dailySummary(from, to).catch(() => ({})), qload('Sales', 1500, S.sales || []).catch(() => S.sales || [])]);
   if (man && man.length) S.sales = man;
   const dd = {}; Object.entries(days || {}).forEach(([d, x]) => { if (x.src !== 'POS' && (num(x.net) || num(x.gross))) dd[d] = x; });
   const has = ym => Object.keys(days || {}).some(d => d.startsWith(ym) && (num(days[d].net) || num(days[d].gross)));
@@ -331,13 +331,37 @@ VIEWS.salesreceipts = el => {
     $('#ls', el).innerHTML = res.length ? res.slice(0, 300).map(o => `<div class="item" data-id="${esc(o.id)}"><div class="grow"><div class="t">${esc(o.id)} ${o._pending ? '<span class="tag amber">รอส่ง</span>' : ''}${o.status === 'refunded' ? '<span class="tag gray">คืนเงินแล้ว</span>' : ''}</div><div class="m">${esc(String(o.date).replace('T', ' ').slice(0, 16))} · ${esc(o.cashierName || o.cashier)}${o.customerName ? ' · ' + esc(o.customerName) : ''} · ${esc(o._pays.map(p => PAYNAME[p.type] || p.type).join('+'))}</div></div><div class="price" style="font-size:16px;color:${o.status === 'refund' ? 'var(--red)' : 'var(--ink)'}">${o.status === 'refund' ? 'คืน ' : ''}${baht(Math.abs(num(o.total)))}</div></div>`).join('') : '<div class="empty">ไม่มีใบเสร็จ</div>';
     $$('#ls [data-id]', el).forEach(x => x.onclick = () => orderDetail(rows.find(o => o.id === x.dataset.id), () => load(true)));
   };
-  const load = async force => { $('#ls', el).innerHTML = '<div class="empty"><span class="spin dark"></span></div>'; try { rows = await fetchOrders(RR.from, RR.to, force); } catch (e) { rows = LS.get('recentOrders', []).map(o => ({ ...o, _items: Logic.J(o.items, []), _pays: Logic.J(o.payments, []) })); toast(e.message + ' — แสดงบิลล่าสุดในเครื่อง', 1); } draw(); };
+  // บิลที่ขายจากเครื่องนี้ (วันนี้) + บิลรอส่ง → แสดงทันที ไม่ต้องรอเน็ต
+  const localRows = () => {
+    const m = new Map(), inR = o => { const d = String(o.date).slice(0, 10); return d >= RR.from && d <= RR.to; }, mine = o => !limited || !S.user || o.cashier === S.user.username;
+    [...LS.get('dayOrders', []), ...LS.get('recentOrders', [])].forEach(o => { if (o && o.id && !m.has(o.id)) m.set(o.id, o); });
+    (Sync.box || []).forEach(o => m.set(o.id, { ...(m.get(o.id) || {}), ...o, _pending: 1 }));
+    return [...m.values()].filter(o => inR(o) && mine(o)).map(o => ({ ...o, _items: o._items || Logic.J(o.items, []), _pays: o._pays || Logic.J(o.payments, []) }));
+  };
+  const merge = (a, b) => { const ids = new Set(a.map(o => o.id)); return a.concat(b.filter(o => !ids.has(o.id))).sort((x, y) => String(y.date).localeCompare(x.date)); };
+  let seq = 0;
+  const load = async force => {
+    const my = ++seq, fast = !(window.OStore && OStore.allowed());
+    if (fast) { rows = merge([], localRows()); if (rows.length) draw(); }
+    if (!fast || !rows.length) $('#ls', el).innerHTML = '<div class="empty"><span class="spin dark"></span></div>';
+    try { const r = await fetchOrders(RR.from, RR.to, force); if (my !== seq || !el.isConnected) return; rows = merge(r, localRows()); }
+    catch (e) { if (my !== seq) return; rows = merge([], localRows()); if (!fast || !rows.length) toast(e.offline ? 'ไม่มีเน็ต — แสดงบิลในเครื่องนี้' : e.message + ' — แสดงบิลในเครื่องนี้', 1); }
+    draw();
+  };
   $('#q', el).oninput = e => { RR.q = e.target.value; draw(); };
   $('#sc', el).onclick = () => openScanner(code => { $('#q', el).value = RR.q = code; draw(); const o = rows.find(x => x.id === code); if (o) orderDetail(o, () => load(true)); return 'close'; });
   if (!limited) rangePicker($('#rp', el), RR, () => load());
   const rx = $('#rx', el); if (rx) rx.onclick = () => receiptsIO(rows.filter(o => !o._pending), () => load(true));
   load();
 };
+// เปิดใบเสร็จจากเลขที่: บิลที่รอส่ง → บิลในเครื่อง (13 เดือน) → ถาม Google
+async function openOrderById(id, date) {
+  const day = String(date || '').slice(0, 10);
+  let o = (Sync.box || []).find(x => x.id === id);
+  if (!o && window.OStore && OStore.allowed() && day) { try { const r = await OStore.query(day, day); o = r && r.find(x => x.id === id); } catch (e) { } }
+  if (!o) { try { busy(1, 'กำลังเปิดใบเสร็จ...'); o = (await api('getOrder', { id })).order; } catch (e) { busy(0); return toast(e.offline ? 'ไม่มีเน็ต — เปิดใบเสร็จนี้ไม่ได้' : e.message, 1); } busy(0); }
+  orderDetail({ ...o, _items: Logic.J(o.items, []), _pays: Logic.J(o.payments, []) });
+}
 function orderDetail(o, onChange) {
   const isR = o.status === 'refund';
   const ov = sheet(`${isR ? 'ใบคืนเงิน' : 'ใบเสร็จ'} ${esc(o.id)}`, `

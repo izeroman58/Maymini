@@ -15,8 +15,8 @@ VIEWS.customers = async el => {
     let res = all.filter(c => !t || norm(c.name + c.phone).includes(t));
     if (sort === 'credit') res = res.filter(c => cr(c) > 0);
     res.sort((a, b) => sort === 'spent' ? num(b.totalSpent) - num(a.totalSpent) : sort === 'points' ? num(b.points) - num(a.points) : sort === 'credit' ? cr(b) - cr(a) : String(b.lastVisit || b.createdAt).localeCompare(a.lastVisit || a.createdAt));
-    $('#sm', el).innerHTML = `<div class="stat center"><div class="k">ลูกค้า</div><div class="v">${all.length}</div></div><div class="stat center"><div class="k">ยอดค้างเชื่อรวม</div><div class="v" style="color:var(--amber)">${money(all.reduce((s, c) => s + Math.max(0, num(c.credit)), 0), 0)}</div></div><div class="stat center"><div class="k">แต้มคงค้าง</div><div class="v">${all.reduce((s, c) => s + num(c.points), 0).toLocaleString()}</div></div>`;
-    $('#cl', el).innerHTML = res.slice(0, 200).map(c => `<div class="item" data-id="${esc(c.id)}"><div class="av">${esc(Array.from(c.name || '?')[0])}</div><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${esc(c.phone || '-')} · ${num(c.visits)} ครั้ง · ${num(c.points)} แต้ม${c.lastVisit ? ' · ล่าสุด ' + thDate(String(c.lastVisit).slice(0, 10)) : ''}</div></div><div class="right"><div class="num" style="font-weight:600">${baht(c.totalSpent)}</div>${num(c.credit) ? `<div class="tag amber">ค้าง ${money(c.credit)}</div>` : ''}</div></div>`).join('') || '<div class="empty">ไม่พบลูกค้า</div>';
+    $('#sm', el).innerHTML = `<div class="stat center"><div class="k">ลูกค้า</div><div class="v">${all.length}</div></div><div class="stat center"><div class="k">ยอดค้างเชื่อรวม</div><div class="v" style="color:var(--red)">${money(all.reduce((s, c) => s + Math.max(0, num(c.credit)), 0), 0)}</div></div><div class="stat center"><div class="k">แต้มคงค้าง</div><div class="v">${all.reduce((s, c) => s + num(c.points), 0).toLocaleString()}</div></div>`;
+    $('#cl', el).innerHTML = res.slice(0, 200).map(c => `<div class="item" data-id="${esc(c.id)}"><div class="av">${esc(Array.from(c.name || '?')[0])}</div><div class="grow"><div class="t">${esc(c.name)}</div><div class="m">${esc(c.phone || '-')} · ${num(c.visits)} ครั้ง · ${num(c.points)} แต้ม${c.lastVisit ? ' · ล่าสุด ' + thDate(String(c.lastVisit).slice(0, 10)) : ''}</div></div><div class="right"><div class="num" style="font-weight:600">${baht(c.totalSpent)}</div>${num(c.credit) ? `<div class="tag red" style="font-weight:700">ค้าง ${money(c.credit)}</div>` : ''}</div></div>`).join('') || '<div class="empty">ไม่พบลูกค้า</div>';
     $$('#cl [data-id]', el).forEach(x => x.onclick = () => customerDetail(all.find(c => c.id === x.dataset.id)));
     // หน้า ยอดซื้อสูงสุด / แต้มมากสุด → ปุ่มทำภาพอันดับ
     $('#rkb', el).innerHTML = sort === 'spent' || sort === 'points' ? `<button class="btn block rkbtn" onclick="go('rank','${sort}')">🏆 ทำภาพอันดับลูกค้า${sort === 'spent' ? 'ยอดซื้อสูงสุด' : 'แต้มสูงสุด'}</button>` : '';
@@ -36,12 +36,13 @@ function customerDetail(c0) {
   const cur = () => (S.customers || []).find(x => x.id === id) || c0;
   const ov = sheet(esc(c0.name), `<div id="cdb"></div><div id="cinst"></div><div class="card"><h3>ความเคลื่อนไหว <span id="txs" class="tiny muted" style="font-weight:400"></span></h3><div id="tx"></div></div>`,
     `<button class="btn ghost grow" id="ed">${I(IC.edit, 16)} แก้ไข</button><button class="btn ghost grow" id="pt">± แต้ม</button>${own ? '<button class="btn ghost grow" id="cr">± ยอดค้าง</button>' : ''}<span id="pyw" style="display:contents"></span>${own ? `<button class="btn ghost" id="rm" title="ลบลูกค้า" style="color:var(--red)">${I(IC.trash, 18)}</button>` : ''}`);
+  $('.sheet', ov).classList.add('cdx');
   const pend = () => typeof custPending === 'function' ? custPending(id) : 0;
   const paint = () => {
     if (!ov.isConnected) return document.removeEventListener('mm:customers', paint);
     const c = cur(), pd = pend(), credit = Math.round((num(c.credit) + pd) * 100) / 100;
     $('#cdb', ov).innerHTML = `<div class="grid2" style="margin-bottom:10px"><div class="stat"><div class="k">ยอดซื้อรวม</div><div class="v">${baht(c.totalSpent)}</div><div class="tiny muted">${num(c.visits)} ครั้ง</div></div><div class="stat"><div class="k">แต้มสะสม</div><div class="v">${num(c.points)}</div></div>
-     <div class="stat"><div class="k">ยอดค้างชำระ (เชื่อ)</div><div class="v" style="color:${credit > 0 ? 'var(--amber)' : 'inherit'}">${baht(credit)}</div>${pd ? `<div class="tiny muted">รวมบิลที่รอส่ง ${money(pd)}</div>` : ''}${num(c.creditLimit) ? `<div class="tiny muted">วงเงิน ${money(c.creditLimit)}</div>` : ''}</div><div class="stat"><div class="k">เบอร์โทร</div><div class="v" style="font-size:16px">${esc(c.phone || '-')}</div></div></div>
+     <div class="stat"><div class="k">ยอดค้างชำระ (เชื่อ)</div><div class="v" style="color:${credit > 0 ? 'var(--red)' : 'inherit'}">${baht(credit)}</div>${pd ? `<div class="tiny muted">รวมบิลที่รอส่ง ${money(pd)}</div>` : ''}${num(c.creditLimit) ? `<div class="tiny muted">วงเงิน ${money(c.creditLimit)}</div>` : ''}</div><div class="stat"><div class="k">เบอร์โทร</div><div class="v" style="font-size:16px">${esc(c.phone || '-')}</div></div></div>
      ${c.note ? `<div class="small muted" style="margin-bottom:8px">${esc(c.note)}</div>` : ''}`;
     $('#pyw', ov).innerHTML = can('credit') && credit > 0 ? '<button class="btn grow green" id="py">รับชำระหนี้</button>' : '';
     const py = $('#py', ov); if (py) py.onclick = () => keypad('รับชำระหนี้ — ค้าง ' + money(credit), credit, v => {
@@ -56,8 +57,11 @@ function customerDetail(c0) {
   const drawTx = () => {
     if (!ov.isConnected) return;
     const tx = (LS.get('custTx', {})[id] || []);
-    $('#tx', ov).innerHTML = tx.length ? tx.slice(0, 40).map(t => `<div class="kv small"><span>${CTX_T[t.type] || t.type}${t._local ? ' <span class="tag gray" style="font-size:10px">รอส่ง</span>' : ''}<div class="tiny muted">${esc(String(t.date).replace('T', ' ').slice(0, 16))} ${/^Q/.test(t.ref || '') ? '' : esc(t.ref || '')} ${esc(t.note || '')}</div></span><b>${t.amount ? money(t.amount) : (num(t.points) > 0 ? '+' : '') + t.points + ' แต้ม'}</b></div>`).join('') : '<div class="muted small">ยังไม่มีรายการเงินเชื่อ/แต้ม — ประวัติการซื้อดูได้ที่ใบเสร็จรับเงิน (ค้นหาชื่อลูกค้า)</div>';
+    const oref = t => t.ref && !/^Q/.test(t.ref) && !/^PAY-/.test(t.ref) ? t.ref : '';
+    $('#tx', ov).innerHTML = tx.length ? tx.slice(0, 40).map(t => `<div class="kv ctx${oref(t) ? ' go' : ''}" ${oref(t) ? `data-o="${esc(t.ref)}" data-d="${esc(t.date)}"` : ''}><span>${CTX_T[t.type] || t.type}${t._local ? ' <span class="tag gray" style="font-size:10px">รอส่ง</span>' : ''}<div class="tiny muted">${esc(String(t.date).replace('T', ' ').slice(0, 16))} ${/^Q/.test(t.ref || '') ? '' : esc(t.ref || '')} ${esc(t.note || '')}</div></span><b style="${num(t.amount) > 0 ? 'color:var(--red)' : num(t.amount) < 0 ? 'color:var(--green)' : ''}">${t.amount ? money(t.amount) : (num(t.points) > 0 ? '+' : '') + t.points + ' แต้ม'}${oref(t) ? ' <span class="muted" style="font-weight:400">›</span>' : ''}</b></div>`).join('') : '<div class="muted small">ยังไม่มีรายการเงินเชื่อ/แต้ม — ประวัติการซื้อดูได้ที่ใบเสร็จรับเงิน (ค้นหาชื่อลูกค้า)</div>';
   };
+  // แตะรายการที่มาจากบิล → เปิดใบเสร็จดูว่าซื้ออะไร
+  $('#tx', ov).onclick = e => { const r = e.target.closest('[data-o]'); if (r) openOrderById(r.dataset.o, r.dataset.d); };
   paint(); drawTx(); document.addEventListener('mm:customers', paint);
   // ประวัติ: แสดงที่เก็บไว้ในเครื่องก่อน แล้วดึงเฉพาะของลูกค้าคนนี้เบื้องหลัง
   $('#txs', ov).textContent = '⟳ กำลังอัปเดต';

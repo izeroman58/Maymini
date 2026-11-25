@@ -32,6 +32,15 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .tile.img .nm{width:100%;background:rgba(80,80,80,.78);padding:4px 4px 5px}
 .tile .pr{position:absolute;top:4px;right:6px;font-size:11px;background:rgba(0,0,0,.35);border-radius:6px;padding:0 5px}
 .tile .stack{position:absolute;top:6px;right:8px;opacity:.85}
+.agrid{display:grid;gap:6px;align-content:start;grid-auto-rows:auto}
+.agrid .tile{aspect-ratio:6/5;min-height:0;font-size:clamp(13px,1.45vw,17px)}
+.agrid .tile.img .nm{background:rgba(70,70,70,.72);padding:5px 4px 6px;line-height:1.2;max-height:3.6em;overflow:hidden}
+.agrid .tile.hl{box-shadow:0 0 0 4px #2E7D32,0 0 12px rgba(46,125,50,.6)!important}
+.agrid .tile .sk{position:absolute;left:6px;top:4px;font-size:11px;background:rgba(0,0,0,.35);border-radius:6px;padding:0 5px}
+.vtog{display:flex;gap:2px;background:var(--line,#e6e6e6);border-radius:10px;padding:2px;flex:none}
+.vtog button{border:0;background:transparent;border-radius:8px;width:42px;height:40px;display:flex;align-items:center;justify-content:center;color:inherit;cursor:pointer;opacity:.6}
+.vtog button.on{background:#fff;opacity:1;box-shadow:0 1px 3px rgba(0,0,0,.15);color:#222}
+.pos.dk .vtog{background:#2A2D31}.pos.dk .vtog button.on{background:#44484E;color:#fff}
 .tile.edit{outline:2px dashed #FFB300;outline-offset:-3px}
 .tile.drop{outline:4px dashed #111;outline-offset:-6px;filter:brightness(1.1)}
 .tile.mv{outline:4px solid #111;outline-offset:-4px;transform:scale(.94);box-shadow:0 0 0 4px #FFB300}
@@ -276,7 +285,7 @@ function pickCustomer(cb) {
   if (S.customers) draw();
   loadCustomers().then(() => { if (ov.isConnected) draw(); });
   const h = () => { if (!ov.isConnected) return document.removeEventListener('mm:customers', h); draw(); }; document.addEventListener('mm:customers', h);
-  setTimeout(() => $('#cq', ov).focus(), 150);
+  if (!touchUI()) setTimeout(() => $('#cq', ov).focus(), 150);
 }
 function customerForm(c0, done) {
   const isNew = !c0 || !c0.id; const c = { ...(c0 || {}) };
@@ -361,7 +370,7 @@ function keypad(title, init, cb, opt = {}) {
   if (!label && / — /.test(title)) { const i = title.indexOf(' — '); label = title.slice(0, i); head = title.slice(i + 3); }
   if (!label) { label = head; }
   const money = opt.money != null ? opt.money : /ราคา|ค่าบริการ|ชำระ|ยอด|เงิน/.test(label + ' ' + head);
-  const dark = LS.get('posDark', true);
+  const dark = Theme.dark();
   const ov = document.createElement('div'); ov.className = 'ov kpov' + (dark ? ' dk' : ''); if (opt.z) ov.style.zIndex = opt.z;
   const K = (k, t, cls = '') => `<button type="button" data-k="${k}" class="${cls}">${t}</button>`;
   ov.innerHTML = `<div class="kpbox" role="dialog"><div class="kph"><button type="button" class="kpx" data-k="x">✕</button><div class="kpt">${head}</div>${sndBtn()}</div>
@@ -379,7 +388,7 @@ function keypad(title, init, cb, opt = {}) {
     show();
   };
   // pointerdown = ตอบสนองเร็วที่สุด · กันคลิกซ้อน
-  ov.addEventListener('pointerdown', e => { const b = e.target.closest('[data-k]'); if (!b) { if (e.target === ov) close(); return; } e.preventDefault(); b.classList.add('dn'); setTimeout(() => b.classList.remove('dn'), 110); press(b.dataset.k); });
+  ov.addEventListener('pointerdown', e => { const b = e.target.closest('[data-k]'); if (!b) return; /* แตะพื้นที่ว่างรอบ ๆ ไม่ปิด — ปิดด้วย ✕ เท่านั้น */ e.preventDefault(); b.classList.add('dn'); setTimeout(() => b.classList.remove('dn'), 110); press(b.dataset.k); });
   ov.addEventListener('click', e => e.preventDefault());
   const kd = e => { if (!document.body.contains(ov) || e.defaultPrevented) return; if (/^[\d.]$/.test(e.key)) { e.preventDefault(); press(e.key); } else if (e.key === 'Backspace') { e.preventDefault(); press('del'); } else if (e.key === 'Enter') { e.preventDefault(); ok(); } else if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', kd, true);
@@ -495,12 +504,12 @@ const POS = {
   /* --- render --- */
   mount(el) {
     this.el = el;
-    el.innerHTML = `<div class="pos${LS.get('posDark', true) ? ' dk' : ''}" id="pos">
+    el.innerHTML = `<div class="pos${Theme.dark() ? ' dk' : ''}" id="pos">
       <div class="pos-l"><div class="pbar"><div class="pside l"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button>${isKiosk() ? '' : `<button class="iconbtn" onclick="go('home')" title="Back to management">${I(IC.home, 22)}</button>`}<div class="ttl" id="pt"></div><span class="netpill"></span></div>
         <div class="pclock" id="pclk" title="เวลา กรุงเทพฯ"></div>
         <div class="pside r"><div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 20)}</span><b>${esc(S.user.name)}</b></div>
         <button class="iconbtn" id="psvc" title="Services">${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
-        <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${FS.btn()}<button class="iconbtn pdrw" id="pdrw" title="เปิดลิ้นชักเก็บเงิน">${I('<rect x="2.5" y="10" width="19" height="10" rx="1.5"/><path d="M4.5 10l2-5.5h11l2 5.5"/><path d="M9.5 15h5"/>', 22)}</button><button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button></div></div>
+        <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${Theme.btn('iconbtn')}${FS.btn()}<button class="iconbtn pdrw" id="pdrw" title="เปิดลิ้นชักเก็บเงิน">${I('<rect x="2.5" y="10" width="19" height="10" rx="1.5"/><path d="M4.5 10l2-5.5h11l2 5.5"/><path d="M9.5 15h5"/>', 22)}</button><button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button></div></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
         <div class="cartbar" id="cbar"></div></div>
       <div class="pos-r" id="pr"></div></div>`;
@@ -533,6 +542,7 @@ const POS = {
     Scanner.on('pos', code => {
       if (this.pay && this.pay.done) this.newTicket();           // ยิงชิ้นถัดไปได้เลยหลังรับเงิน = เริ่มบิลใหม่
       else if (this.pay) { Scanner.err(); return toast('กำลังชำระเงิน — กด “กลับ” ก่อนเพิ่มสินค้า', 1); }
+      if (this.previewScan(code)) { this.codeMatches(code).length ? beep() : Scanner.err(); return; }
       if (!this.scan(code)) Scanner.err();
     });
     const ps = () => this.render();
@@ -567,13 +577,22 @@ const POS = {
       html = `<button class="tile" data-back style="background:#fff;color:#555">${I(IC.back, 28)}<br>กลับ</button>` + S.products.filter(p => (p.category || '') === this.cat && p.available !== 'N').sort((a, b) => a.name.localeCompare(b.name, 'th')).map(p => this.prodTile(p, color)).join('');
     }
     if (isAll) {
-      $('#pmain', this.el).innerHTML = `<div style="padding:8px"><input class="in" id="aq" placeholder="ค้นหาชื่อ / บาร์โค้ด" value="${esc(this.aq || '')}"></div><div class="list" id="al" style="margin:0 8px 8px;overflow:auto;flex:1"></div>` + this.tabsHTML(tabs);
+      $('#pmain', this.el).innerHTML = `<div class="row" style="padding:8px;gap:8px"><input class="in grow" id="aq" placeholder="ค้นหาชื่อ / บาร์โค้ด" value="${esc(this.aq || '')}">${this.vtogHTML()}</div><div id="asn" class="small" style="display:none;margin:0 8px 6px;padding:8px 10px;border-radius:10px;background:rgba(46,125,50,.15)"></div><div data-scroll style="overflow:auto;flex:1;min-height:0;padding:0 8px 8px"><div id="al"></div></div>` + this.tabsHTML(tabs);
       const drawAll = () => {
-        const res = searchProducts(this.aq || '').filter(p => p.available !== 'N').slice(0, 150);
-        $('#al', this.el).innerHTML = res.map(p => `<div class="item" data-sku="${esc(p.sku)}" style="padding:10px 12px">${pthumb(p, 40)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}${p.trackStock === 'Y' ? ' · คงเหลือ ' + num(p.stock) : ''}</div></div><div class="price" style="font-size:16px">${num(p.price) ? baht(p.price) : 'ตัวแปร'}</div></div>`).join('') || '<div class="empty">ไม่พบสินค้า</div>';
-        $$('#al [data-sku]', this.el).forEach(r => r.onclick = () => this.add(IDX.bySku[r.dataset.sku]));
+        const q = (this.aq || '').trim();
+        let res = (q ? searchProducts(q) : S.products.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'th'))).filter(p => p.available !== 'N');
+        const m = q && this.aqHl ? this.codeMatches(q) : [];
+        if (m.length) res = m.concat(res.filter(p => !m.includes(p)));
+        const note = $('#asn', this.el); if (note) note.innerHTML = this.aqHl && q ? (m.length ? `<b>${m.length > 1 ? `พบ ${m.length} รายการที่บาร์โค้ด ${esc(q)} ซ้ำกัน` : 'พบสินค้าบาร์โค้ด ' + esc(q)}</b> — แตะรูปเพื่อเพิ่มลงตั๋ว` : `ไม่พบบาร์โค้ด ${esc(q)}`) : '';
+        if (note) note.style.display = note.innerHTML ? '' : 'none';
+        this.itemsInto($('#al', this.el), res, { hl: m.map(p => p.sku), onPick: p => { this.add(p); beep(); } });
+        if (m.length) { const sc = $('[data-scroll]', this.el); if (sc) sc.scrollTop = 0; }
       };
-      $('#aq', this.el).oninput = e => { this.aq = e.target.value; drawAll(); };
+      this._drawAll = drawAll;
+      $('#aq', this.el).oninput = e => { this.aq = e.target.value; this.aqHl = 0; drawAll(); };
+      // สแกนเข้าช่องค้นหาโดยตรง (Enter) → แสดงรายการที่ตรงให้เลือก
+      $('#aq', this.el).onkeydown = e => { if (e.key === 'Enter' && this.aq) { e.preventDefault(); this.aqHl = 1; drawAll(); this.codeMatches(this.aq).length ? beep() : Scanner.err(); } };
+      $$('.vtog [data-av]', this.el).forEach(b => b.onclick = () => { LS.set('posAllView', b.dataset.av); $$('.vtog [data-av]', this.el).forEach(x => x.classList.toggle('on', x === b)); drawAll(); });
       drawAll();
     } else {
       const catGrid = isCat && !this.cat, fill = (isPage || (catGrid && this.catSlots(L).length <= L.cols * L.rows)) && !narrow;
@@ -619,7 +638,7 @@ const POS = {
         if (isPage) $('#pgs', this.el).onclick = () => this.gridSizeDlg(L, save);
       }
     }
-    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { this.tab = +b.dataset.tab; this.cat = null; this.mv = null; LS.set('posTab', this.tab); this.render(); });
+    $$('.ptabs [data-tab]', this.el).forEach(b => b.onclick = () => { if (this.tab !== +b.dataset.tab) { this.aq = ''; this.aqHl = 0; } this.tab = +b.dataset.tab; this.cat = null; this.mv = null; LS.set('posTab', this.tab); this.render(); });
   },
   // ตำแหน่งหมวดหมู่ในแท็บ "หมวดหมู่" (จัดวางเองได้เหมือนหน้าขายบ่อย) — หมวดใหม่จะเติมช่องว่างแรกให้อัตโนมัติ
   // กดค้าง 3 วินาที = หยิบปุ่มขึ้นมาย้าย (พนักงานทำได้ ไม่ต้องใช้รหัส) แล้วแตะช่องปลายทางเพื่อย้าย/สลับ
@@ -687,6 +706,42 @@ const POS = {
     $('#ok', ov).onclick = () => { L.cols = Math.max(2, Math.min(8, +$('#c', ov).value)); L.rows = Math.max(2, Math.min(8, +$('#r', ov).value)); ov.remove(); save(); };
   },
   tabsHTML(tabs) { return `<div class="ptabs">${tabs.map((t, i) => `<button data-tab="${i}" class="${i === this.tab ? 'on' : ''}">${t === '☰' ? I(IC.grid, 22) : esc(t)}</button>`).join('')}</div>`; },
+  // รายการสินค้า: แบบตารางรูป (เหมือน Loyverse) หรือแบบรายการ · โหลดเพิ่มทีละชุดเมื่อเลื่อนลง (สินค้าหลายพันรายการไม่หน่วง)
+  get av() { return LS.get('posAllView', 'grid'); },
+  // สินค้าทุกตัวที่ตรงบาร์โค้ด/รหัสนี้ (รวมตัวที่บาร์โค้ดซ้ำกัน) — ใช้ตอนสแกนในหน้าสินค้าทั้งหมด/ค้นหา
+  codeMatches(code) {
+    code = String(code || '').trim(); if (!code) return [];
+    const alt = /^\d{12}$/.test(code) ? '0' + code : /^0\d{12}$/.test(code) ? code.slice(1) : '';
+    const L = S.products.filter(p => p.available !== 'N' && (p.barcode === code || (alt && p.barcode === alt) || p.sku === code));
+    if (!L.length) { const f = findByCode(code); if (f && f.p) L.push(f.p); }
+    return L;
+  },
+  // หน้าสินค้าทั้งหมด/ค้นหาเปิดอยู่ → สแกนแล้ว "แสดงให้เลือก" ไม่เข้าตั๋วทันที
+  previewScan(code) {
+    if (this._searchScan && this._searchScan(code) !== false) return true;
+    const L0 = this.layout();
+    if (this.tab === L0.pages.length + 1 && !this.cat && $('#aq', this.el)) { this.aq = String(code).trim(); this.aqHl = 1; const i = $('#aq', this.el); i.value = this.aq; this._drawAll && this._drawAll(); return true; }
+    return false;
+  },
+  vtogHTML() { const v = this.av; return `<div class="vtog"><button data-av="grid" class="${v === 'grid' ? 'on' : ''}" title="แบบตาราง">${I(IC.grid, 20)}</button><button data-av="list" class="${v === 'list' ? 'on' : ''}" title="แบบรายการ">${I('<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>', 20)}</button></div>`; },
+  itemCols() { const w = (this.el && $('#pmain', this.el) ? $('#pmain', this.el).clientWidth : innerWidth) || innerWidth; return Math.max(2, Math.min(7, Math.round(w / 175))); },
+  itemsInto(box, list, { hl, onPick, cols } = {}) {
+    const grid = this.av === 'grid', N = 60, hs = new Set([].concat(hl || [])); let shown = 0;
+    box.className = grid ? 'agrid' : 'list'; box.style.gridTemplateColumns = grid ? `repeat(${cols || this.itemCols()},1fr)` : '';
+    const row = p => `<div class="item" data-sku="${esc(p.sku)}" style="padding:10px 12px;${hs.has(p.sku) ? 'box-shadow:inset 0 0 0 3px var(--green)' : ''}">${pthumb(p, 44)}<div class="grow"><div class="t">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}${p.trackStock === 'Y' ? ' · คงเหลือ ' + num(p.stock) : ''}</div></div><div class="price" style="font-size:16px">${num(p.price) ? baht(p.price) : 'ระบุราคา'}</div></div>`;
+    const tile = p => this.prodTile(p, '#6B7078').replace('class="tile', `class="tile${hs.has(p.sku) ? ' hl' : ''}`);
+    const more = () => {
+      const part = list.slice(shown, shown + N); if (!part.length) return;
+      box.insertAdjacentHTML('beforeend', part.map(grid ? tile : row).join('')); shown += part.length;
+      $$('[data-sku]:not([data-b])', box).forEach(x => { x.dataset.b = 1; x.onclick = () => onPick(IDX.bySku[x.dataset.sku]); });
+    };
+    box.innerHTML = list.length ? '' : '<div class="empty small" style="grid-column:1/-1;padding:24px;text-align:center">ไม่พบสินค้า</div>';
+    more();
+    const sc = box.closest('[data-scroll]') || box;
+    sc.onscroll = () => { if (sc.scrollTop + sc.clientHeight > sc.scrollHeight - 400) more(); };
+    // จอสูงกว่ารายการชุดแรก → เติมจนเต็มจอ
+    requestAnimationFrame(() => { let k = 0; while (shown < list.length && sc.scrollHeight <= sc.clientHeight + 50 && k++ < 10) more(); });
+  },
   prodTile(p, color) {
     const img = Img.get(p.sku);
     return img ? `<button class="tile img" data-sku="${esc(p.sku)}" style="background-image:url(${img})"><span class="pr">${num(p.price) ? money(p.price, 0) : '?'}</span><span class="nm">${esc(p.name)}</span></button>`
@@ -823,26 +878,31 @@ const POS = {
     $$('[data-i]', ov).forEach(x => x.onclick = () => { const i = +x.dataset.i; if (this.t.items.length) { held.push({ ...this.t, at: LocalDB.now() }); } const h = held.splice(i, 1)[0]; LS.set('held', held); delete h.at; this.t = h; ov.remove(); this.save(); });
   },
   search() {
-    let q = '', pick = null;
-    const ov = sheet('ค้นหาสินค้า', `<input class="in" id="q" placeholder="ชื่อ / บาร์โค้ด / รหัส — สแกนแล้วแตะรูปเพื่อเพิ่มลงตั๋ว" inputmode="search"><div id="l" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px"></div>`);
-    // แสดงเป็นรูปให้เห็นก่อน แตะรูปเพื่อเพิ่มลงตั๋วออเดอร์
-    const card = (p, hl) => { const im = window.Img && Img.get(p.sku); return `<button data-s="${esc(p.sku)}" style="all:unset;cursor:pointer;display:flex;flex-direction:column;border-radius:14px;background:#fff;overflow:hidden;box-shadow:${hl ? 'inset 0 0 0 3px var(--green)' : 'var(--sh)'}">
-      <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:#f4f4f4;color:var(--ink3)">${im ? `<img src="${im}" alt="" style="width:100%;height:100%;object-fit:contain;background:#fff">` : `<span style="font-size:28px;font-weight:700;color:#bbb">${esc(Array.from(p.name || '?')[0])}</span>`}</div>
-      <div style="padding:6px 8px 8px"><div style="font-weight:600;font-size:14px;line-height:1.25;max-height:2.5em;overflow:hidden">${hl ? '<span class="tag green" style="margin-right:4px">ตรงบาร์โค้ด</span>' : ''}${esc(p.name)}</div><div class="row" style="margin-top:4px"><span class="price grow" style="font-size:17px">${num(p.price) ? baht(p.price) : 'ตัวแปร'}</span>${p.trackStock === 'Y' ? `<span class="tiny muted">เหลือ ${num(p.stock)}</span>` : ''}</div></div></button>`; };
+    let q = '', pick = [];
+    const ov = sheet('ค้นหาสินค้า', `<div class="row" style="gap:8px"><input class="in grow" id="q" placeholder="ชื่อ / บาร์โค้ด / รหัส — สแกนแล้วแตะรูปเพื่อเพิ่มลงตั๋ว" inputmode="search">${this.vtogHTML()}</div><div id="sn" class="small" style="display:none;margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(46,125,50,.12)"></div><div id="l" style="margin-top:10px"></div>`);
+    const sb = $('.sb', ov) || $('#l', ov).parentNode; sb.setAttribute('data-scroll', '');
+    const all = () => S.products.filter(p => p.available !== 'N').sort((a, b) => String(a.name).localeCompare(String(b.name), 'th'));
     const dr = () => {
-      let list = (q ? searchProducts(q) : []).filter(p => p.available !== 'N');
-      if (pick) list = [pick].concat(list.filter(p => p.sku !== pick.sku));
-      $('#l', ov).innerHTML = list.slice(0, 60).map(p => card(p, pick && p.sku === pick.sku)).join('') || (q ? '<div class="empty small" style="grid-column:1/-1">ไม่พบสินค้า</div>' : '');
-      $$('[data-s]', ov).forEach(x => x.onclick = () => { const p = IDX.bySku[x.dataset.s]; this.add(p); toast('เพิ่ม ' + p.name); });
+      let list = q ? searchProducts(q).filter(p => p.available !== 'N') : all();
+      if (pick.length) list = pick.concat(list.filter(p => !pick.includes(p)));
+      const n = $('#sn', ov); n.style.display = pick.length ? '' : 'none'; n.innerHTML = pick.length > 1 ? `<b>พบ ${pick.length} รายการที่บาร์โค้ดซ้ำกัน</b> — แตะรูปเพื่อเลือกเข้าตั๋ว` : 'แตะรูปเพื่อเพิ่มลงตั๋ว';
+      this.itemsInto($('#l', ov), list, { hl: pick.map(p => p.sku), cols: Math.max(2, Math.min(6, Math.round(($('#l', ov).clientWidth || 600) / 160))), onPick: p => { this.add(p); toast('เพิ่ม ' + p.name); } });
     };
-    $('#q', ov).oninput = e => { q = e.target.value; pick = null; dr(); };
+    $('#q', ov).oninput = e => { q = e.target.value; pick = []; dr(); };
     // สแกน/กด Enter: ยังไม่เข้าตั๋ว — แสดงรูปสินค้าที่ตรงบาร์โค้ดไว้บนสุดให้แตะเลือก
-    $('#q', ov).onkeydown = e => { if (e.key === 'Enter' && q) { const f = findByCode(q.trim()); if (f) { pick = f.p; beep(); } dr(); } };
+    const byCode = code => { q = String(code).trim(); $('#q', ov).value = q; pick = this.codeMatches(q); pick.length ? beep() : Scanner.err(); dr(); const sb2 = $('.sb', ov); if (sb2) sb2.scrollTop = 0; };
+    $('#q', ov).onkeydown = e => { if (e.key === 'Enter' && q) { e.preventDefault(); byCode(q); } };
+    // เครื่องยิงบาร์โค้ดขณะหน้านี้เปิด → แสดงให้เลือก ไม่เข้าตั๋วทันที
+    this._searchScan = code => { if (!ov.isConnected) { this._searchScan = null; Scanner.handlers._overlayOK = false; return false; } byCode(code); };
+    Scanner.handlers._overlayOK = true;   // ให้เครื่องยิงส่งรหัสเข้าหน้านี้ได้ แม้เป็นหน้าต่างซ้อน
+    new MutationObserver((_, o) => { if (!ov.isConnected) { this._searchScan = null; Scanner.handlers._overlayOK = false; o.disconnect(); } }).observe(document.body, { childList: true });
+    $$('.vtog [data-av]', ov).forEach(b => b.onclick = () => { LS.set('posAllView', b.dataset.av); $$('.vtog [data-av]', ov).forEach(x => x.classList.toggle('on', x === b)); dr(); });
+    requestAnimationFrame(dr);
     if (!touchUI()) setTimeout(() => $('#q', ov).focus(), 100);
   },
   async toggleEdit() { this.edit = !this.edit; this.mv = null; const L0 = this.layout(); if (this.tab > L0.pages.length || (this.tab === L0.pages.length && this.cat)) { this.tab = 0; this.cat = null; } this.render(); },
   async menu() {
-    const k = isKiosk(), dk = LS.get('posDark', true), sy = LS.get('tkSync', true);
+    const k = isKiosk(), dk = Theme.dark(), sy = LS.get('tkSync', true);
     const G = [
       !k && ['หน้าจัดการร้าน', IC.home, () => go('home')],
       { t: 'ขาย & บิล', ic: IC.receipt, items: [
@@ -863,7 +923,7 @@ const POS = {
         ['จอลูกค้า', IC.monitor, () => go('displayset')]] },
       { t: 'หน้าขาย', ic: IC.grid, items: [
         [this.edit ? 'ปิดโหมดแก้ไขปุ่ม' : 'แก้ไขปุ่มลัด', IC.edit, () => this.toggleEdit(), '', false, 'editlayout'],
-        [dk ? 'โทนสว่าง' : 'โทนมืด', dk ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>' : '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', () => { LS.set('posDark', !dk); $('#pos', this.el).classList.toggle('dk', !dk); }, '', false, 'tone'],
+        [dk ? 'โทนสว่าง' : 'โทนมืด', dk ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>' : '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', () => Theme.toggle(), '', false, 'tone'],
         [sy ? 'ปิดซิงค์ตั๋ว (ชื่อเดียวกัน)' : 'เปิดซิงค์ตั๋ว (ชื่อเดียวกัน)', IC.wifi, () => { LS.set('tkSync', !sy); toast(!sy ? 'เปิดซิงค์ตั๋วแล้ว — เครื่องที่ล็อกอินชื่อเดียวกันเห็นตั๋วเดียวกัน' : 'ปิดซิงค์ตั๋วแล้ว — เครื่องนี้ใช้ตั๋วแยก'); if (!sy) TSync.out(); TSync.badge(); }, '', false, 'tksync']] },
       Elev.ok && ['ล็อกสิทธิ์เจ้าของ', IC.shield, () => { Elev.clear(); toast('ล็อกแล้ว'); }]
     ];
@@ -964,7 +1024,7 @@ const POS = {
     if (c) { cust = (S.customers || []).find(x => x.id === c.id); if (cust) { cust.points = String(Math.max(0, num(cust.points) + earned - num(t.pointsUse))); const dbt = t.items.filter(it => it.debt).reduce((s2, it) => s2 + num(it.qty) * num(it.price), 0); cust.totalSpent = String(num(cust.totalSpent) + T.total - dbt); const cr = P.payments.filter(p => p.type === 'credit').reduce((s, p) => s + p.amount, 0); if (cr || dbt) cust.credit = String(Math.round((num(cust.credit) + cr - dbt) * 100) / 100); LS.set('customers', S.customers); } }
     const printable = { ...order, cashOut: t.cashOut || 0, customerPhone: c ? c.phone : '', pointsBalance: cust ? cust.points : null, creditBalance: cust && (P.payments.some(p => p.type === 'credit') || t.items.some(it => it.debt)) ? cust.credit : null };
     if (window.Inst) Inst.applyLocal(order);
-    const recent = LS.get('recentOrders', []); recent.unshift(printable); LS.set('recentOrders', recent.slice(0, 30));
+    const recent = LS.get('recentOrders', []); recent.unshift(printable); LS.set('recentOrders', recent.slice(0, 30)); { const td = String(order.date).slice(0, 10), dy = LS.get('dayOrders', []).filter(x => String(x.date).slice(0, 10) === td); dy.unshift(printable); LS.set('dayOrders', dy.slice(0, 600)); }
     Sync.add(order);
     // รายงานในเครื่องเห็นบิลนี้ทันที (ไม่ต้องรอส่งขึ้นออนไลน์)
     try { if (window.OStore && OStore.allowed()) { if (canStrict('viewCost')) OStore.put([order]); else setTimeout(() => OStore.sync(true), 5000); } } catch (e) { }

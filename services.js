@@ -58,16 +58,16 @@ function svcDialog(kind) {
 function svcDialogIn(kind) {
   const s = SVC[kind], c = svcCfg();
   let amt = '', feeOverride = null, mode = 'add', extra = kind === 'topup' ? (c.networks[0] || '') : kind === 'bill' ? (c.billTypes[0] || '') : '';
-  const ov = sheet(`${s.icon} ${s.name}`, `<div class="small muted" style="margin:-4px 0 8px">${s.desc}</div>
+  const ov = sheet(`${s.icon} ${s.name}`, `<div class="svl"><div class="small muted" style="margin:-4px 0 8px">${s.desc}</div>
     ${kind === 'topup' ? `<div class="chips" id="ex">${c.networks.map(n => `<button class="chip" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div><input class="in" id="ph" inputmode="tel" placeholder="เบอร์มือถือ (ถ้าต้องการบันทึก)" style="margin-bottom:8px">` : ''}
     ${kind === 'bill' ? `<div class="chips" id="ex">${c.billTypes.map(n => `<button class="chip" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div><input class="in" id="ph" placeholder="เลขที่บิล/เลขผู้ใช้ไฟ (ถ้าต้องการบันทึก)" style="margin-bottom:8px">` : ''}
     ${kind === 'out' || kind === 'in' ? `<input class="in" id="ph" placeholder="${kind === 'out' ? 'ชื่อ/ธนาคาร/เลขบัญชีปลายทาง' : 'ชื่อผู้โอน'} (ถ้าต้องการบันทึก)" style="margin-bottom:8px">` : ''}
     <div class="small">${kind === 'bill' ? 'ยอดตามบิล' : kind === 'topup' ? 'ยอดเติมเงิน' : 'ยอดโอน'}</div>
     <div class="kpv" id="kv" style="margin-bottom:4px">0</div>
-    <div class="kp">${[7, 8, 9, 4, 5, 6, 1, 2, 3].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button data-k="00">00</button><button data-k="0">0</button><button data-k="del">⌫</button></div>
     ${kind === 'topup' ? `<div class="row wrap" style="gap:6px;margin-top:8px">${[20, 50, 100, 200, 300, 500].map(v => `<button class="btn ghost sm" data-q="${v}">${v}</button>`).join('')}</div>` : ''}
-    <div class="card" style="margin-top:10px;padding:10px 12px" id="sum"></div>`,
-    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`);
+    <div class="card" style="margin-top:10px;padding:10px 12px" id="sum"></div></div>
+    <div class="svr"><div class="svh"><span>กำลังกรอก: <b>${kind === 'bill' ? 'ยอดตามบิล' : kind === 'topup' ? 'ยอดเติมเงิน' : 'ยอดโอน'}</b></span>${sndBtn()}</div><div class="kp">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button data-k="00">00</button><button data-k="0">0</button><button data-k="del">⌫</button></div></div>`,
+    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`, { cls: 'svs', sticky: true });
   const ex = $('#ex', ov); if (ex) { const f = () => $$('#ex .chip', ov).forEach(b => b.classList.toggle('on', b.dataset.v === extra)); $$('#ex .chip', ov).forEach(b => b.onclick = () => { extra = b.dataset.v; f(); }); f(); }
   const calc = () => {
     const a = num(amt), auto = a ? svcFee(kind, a) : 0, fee = feeOverride != null ? feeOverride : auto;
@@ -85,6 +85,7 @@ function svcDialogIn(kind) {
       ${kind === 'out' ? `<div class="kv"><span>ร้านโอนเข้าบัญชีปลายทาง</span><b class="num">${bahtL(mode === 'add' ? k.a : k.a - (k.fee || 0))}</b></div>` : ''}`;
     const md = $('#md', ov); if (md) { $$('#md button', ov).forEach(b => { b.classList.toggle('on', b.dataset.m === mode); b.onclick = () => { mode = b.dataset.m; draw(); }; }); }
     $('#ef', ov).onclick = async () => { if (!(await gate('priceEdit'))) return; keypad('ค่าบริการ', k.fee || '', v => { feeOverride = v; draw(); }); };
+    $('#ok', ov).textContent = k.pay ? `เพิ่มลงบิล · ${kind === 'in' ? 'ลูกค้าโอน' : 'ลูกค้าจ่าย'} ฿${money(k.pay, 0)}` : 'เพิ่มลงบิล';
   };
   $$('.kp [data-k]', ov).forEach(b => b.onclick = () => { const v = b.dataset.k; if (v === 'del') amt = amt.slice(0, -1); else if (amt.length < 7) amt = (amt === '0' ? '' : amt) + v; feeOverride = null; draw(); });
   $$('[data-q]', ov).forEach(b => b.onclick = () => { amt = b.dataset.q; feeOverride = null; draw(); });
@@ -119,8 +120,9 @@ function svcDialog2(kind) {
   const fieldBox = k => `<button type="button" class="sfield${active === k ? ' on' : ''}" data-f="${k}"><span>${FIELD[k].label}</span><b>${f[k] ? (k === 'amt' ? money(num(f[k]), 0) : esc(fmtNum(f[k], FIELD[k].kind))) : '<i>แตะแล้วกดตัวเลข</i>'}</b></button>`;
   const picks = kind === 'out' ? withLogos(BANKS) : kind === 'topup' ? withLogos(CARRIERS) : null, pickKey = kind === 'out' ? 'bank' : 'carrier';
   const ov = sheet(`${s.icon} ${s.name}`, `<style>.sfield{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;width:100%;padding:8px 12px;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--line);cursor:pointer;margin-bottom:8px}.sfield span{font-size:13px;color:var(--ink2)}.sfield b{font-size:24px;font-weight:800;letter-spacing:.5px;font-variant-numeric:tabular-nums;min-height:30px}.sfield b i{font-size:15px;font-weight:400;color:var(--ink3);font-style:normal}.sfield.on{box-shadow:inset 0 0 0 3px var(--red);background:#fff7f8}.spk{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px;margin-bottom:10px}.spk button{all:unset;cursor:pointer}.sask{width:100%;margin-bottom:10px}</style>
-    <div id="body"></div>`,
-    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`, { onClose: () => { if (asking) Display.cancelAsk(); Display.preview(null); } });
+    <div id="body" class="svl"></div><div class="svr"><div class="svh"><span>กำลังกรอก: <b id="svf"></b></span>${sndBtn()}</div>${padHTML('npad')}</div>`,
+    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`, { cls: 'svs', sticky: true, onClose: () => { if (asking) Display.cancelAsk(); Display.preview(null); } });
+  $$('.svr [data-pk]', ov).forEach(b => b.onclick = () => key(b.dataset.pk));
   const calc = () => { const a = num(f.amt), auto = a ? svcFee(kind, a) : 0, fee = feeOverride != null ? feeOverride : auto; return { a, fee, auto, pay: kind === 'out' && mode === 'deduct' ? a : a + (fee || 0), over: a && auto == null }; };
   const askCustomer = async () => {
     if (asking) { Display.cancelAsk(); return; }
@@ -156,7 +158,6 @@ function svcDialog2(kind) {
       ${kind === 'bill' ? `<div class="row" style="gap:8px;margin-bottom:8px"><input class="in grow" id="ct" placeholder="ชื่อ/เบอร์ติดต่อลูกค้า (ถ้ามี)" value="${esc(f.contact)}"><label class="btn ghost sm" style="flex:none">${f.photo ? '✓ รูปบิล' : '📷 ถ่ายรูปบิล'}<input type="file" accept="image/*" capture="environment" id="bp" hidden></label></div>` : ''}
       ${kind === 'topup' ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">${[10, 20, 30, 50, 100, 150, 200, 300, 500].map(v => `<button class="btn ${num(f.amt) === v ? '' : 'ghost'}" data-q="${v}" style="min-height:58px;font-size:22px;font-weight:700;width:100%">${v}</button>`).join('')}</div>` : ''}
       ${fieldBox('amt')}
-      <div style="display:flex;justify-content:flex-end;margin:-4px 0 2px">${sndBtn()}</div>${padHTML('npad')}
       <div class="card" style="margin-top:10px;padding:10px 12px">
         <div class="kv"><span>ค่าบริการ ${k.over ? '<span class="tag amber">เกินตาราง กำหนดเอง</span>' : ''}</span><span><b>${k.fee != null ? money(k.fee, 0) : '-'}</b> <a href="javascript:void 0" id="ef" class="small">แก้</a></span></div>
         ${kind === 'out' ? `<div class="seg" id="md" style="margin:6px 0"><button data-m="add">บวกค่าบริการเพิ่ม</button><button data-m="deduct">หักจากยอด</button></div>` : ''}
@@ -169,7 +170,9 @@ function svcDialog2(kind) {
     $$('[data-bt]', ov).forEach(b => b.onclick = () => { f.billType = b.dataset.bt; draw(); });
     $$('[data-f]', ov).forEach(b => b.onclick = () => { active = b.dataset.f; draw(); });
     $$('[data-q]', ov).forEach(b => b.onclick = () => { f.amt = b.dataset.q; feeOverride = null; active = 'amt'; draw(); });
-    $$('[data-pk]', ov).forEach(b => b.onclick = () => key(b.dataset.pk));
+    $('#svf', ov).textContent = FIELD[active].label.replace(/ \(.*\)$/, '');
+    $('#ok', ov).textContent = k.pay ? `เพิ่มลงบิล · ลูกค้าจ่าย ฿${money(k.pay, 0)}` : 'เพิ่มลงบิล';
+    if (draw.last !== active) { draw.last = active; const on = $('.sfield.on', ov); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' }); }
     const an = $('#an', ov); if (an) an.oninput = () => { f.accName = an.value; pvPush(); };
     const ct = $('#ct', ov); if (ct) ct.oninput = () => { f.contact = ct.value; pvPush(); };
     const bp = $('#bp', ov); if (bp) bp.onchange = async e => { const fl = e.target.files[0]; if (!fl) return; try { busy(1, 'กำลังย่อรูป...'); const im = await compressImage(fl, 1400, .72); f.photo = im.dataUrl; busy(0); toast('แนบรูปบิลแล้ว'); draw(); } catch (x) { busy(0); toast(x.message, 1); } };
@@ -440,7 +443,7 @@ function svcDebt() {
         <div class="row wrap" style="gap:6px;margin-top:8px"><button class="btn ghost sm" data-q="all">ทั้งหมด</button>${owe >= 2 ? '<button class="btn ghost sm" data-q="half">ครึ่งหนึ่ง</button>' : ''}${[100, 200, 500, 1000].filter(v => v < owe).map(v => `<button class="btn ghost sm" data-q="${v}">${v}</button>`).join('')}</div>
         <div class="kv" style="margin-top:8px"><span>คงค้างหลังชำระ</span><b id="dl"></b></div>
         <button class="btn block green" id="dok" style="min-height:56px;font-size:18px;margin-top:10px">เพิ่มลงบิล</button>` : '<div class="alert green small" style="margin-top:8px">ไม่มียอดเงินเชื่อค้างชำระ</div>'}</div>
-      ${plans.length ? `<h3 style="margin:14px 0 6px">📆 สัญญาผ่อนที่ยังไม่ปิด</h3>${plans.map(p => instRow(p)).join('')}` : ''}`);
+      ${plans.length ? `<h3 style="margin:14px 0 6px">📆 สัญญาผ่อนที่ยังไม่ปิด</h3>${plans.map(p => instRow(p)).join('')}` : ''}`); ov.sticky = true;
       if (old) old.remove();
       const draw = () => { const a = $('#da', ov); if (!a) return; a.textContent = money(amt); $('#dl', ov).innerHTML = money(r2c(owe - amt)); };
       const da = $('#da', ov); if (da) da.onclick = () => keypad('ยอดชำระหนี้', amt, v => { amt = Math.min(owe, Math.max(0, num(v))); touched = true; draw(); });
@@ -522,7 +525,7 @@ function svcInst() {
       <div class="grid2"><label class="f"><span>ชำระล่วงหน้า (บาท ไม่บังคับ)</span><input class="in" id="ipa" type="number" step="any" inputmode="decimal" placeholder="0"></label><label class="f"><span>ครบกำหนดงวดแรก</span><input class="in" id="ipf" type="date" data-nokp></label></div>
       <label class="f"><span>หมายเหตุ (เช่น เลขเครื่อง/สี/ผู้ค้ำ)</span><input class="in" id="ipo"></label>
       <div class="card" id="ips" style="padding:10px 12px"></div>`,
-      `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เปิดสัญญา · เพิ่มลงบิล</button>`);
+      `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เปิดสัญญา · เพิ่มลงบิล</button>`); ov.sticky = true;
     const V = { ipn: 'product', ipr: 'price', ipd: 'down', ipc: 'count', ipp: 'period', ipi: 'rate', ipm: 'rateMode', ipa: 'adv', ipf: 'firstDue', ipo: 'note' };
     Object.entries(V).forEach(([id, k]) => { const i = $('#' + id, ov); i.value = f[k]; i.oninput = i.onchange = () => { f[k] = i.value; if (k === 'period') { f.firstDue = instNext(t0, f.period); $('#ipf', ov).value = f.firstDue; } if (k === 'product') pickProd(); draw(); }; });
     const pl = $('#ipl', ov); setTimeout(() => { pl.innerHTML = (S.products || []).filter(p => !String(p.sku).startsWith('SVC')).slice(0, 4000).map(p => `<option value="${esc(p.name)}">`).join(''); }, 50);
@@ -571,7 +574,7 @@ function instPay(p) {
       <div class="small" style="margin-top:8px">จำนวนที่ชำระ</div><button class="kpv" id="ia" style="width:100%;text-align:right;border:0;cursor:pointer"></button>
       <div class="row wrap" style="gap:6px;margin-top:8px">${[1, 2, 3].filter(n => n * num(p.per) < left).map(n => `<button class="btn ghost sm" data-q="${n * num(p.per)}">${n} งวด</button>`).join('')}${st.lateAmt > inTk ? `<button class="btn ghost sm" data-q="${r2c(st.lateAmt - inTk)}">ยอดค้าง</button>` : ''}<button class="btn ghost sm" data-q="${left}">ปิดยอดทั้งหมด</button></div>
       <div class="kv" style="margin-top:8px"><span>คงเหลือหลังชำระ</span><b id="il"></b></div></div>`,
-    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`);
+    `<button class="btn grow green" id="ok" style="min-height:56px;font-size:18px">เพิ่มลงบิล</button>`); ov.sticky = true;
   const draw = () => { $('#ia', ov).textContent = money(amt); $('#il', ov).textContent = money(r2c(left - amt)); };
   $('#ia', ov).onclick = () => keypad('ยอดชำระค่างวด', amt, v => { amt = Math.min(left, Math.max(0, num(v))); draw(); });
   $$('[data-q]', ov).forEach(b => b.onclick = () => { amt = Math.min(left, +b.dataset.q); draw(); });
