@@ -45,8 +45,12 @@ function svcFee(kind, amt) {
   return 0;
 }
 /* เมนูบริการ (เปิดจากปุ่มบนแถบหน้าขาย) */
+// v2.7.0: บริการที่เจ้าของร้านเปิดใช้ (เพิ่มเติม › ฟีเจอร์)
+const SVC_FEAT = { out: 'moneysvc', in: 'moneysvc', topup: 'moneysvc', bill: 'moneysvc', debt: 'debt', copy: 'copy', print: 'copy', inst: 'inst' };
+const svcList = () => Object.values(SVC).filter(s => feat(SVC_FEAT[s.key] || s.key));
 function svcMenu() {
-  const ov = sheet('บริการ', `<div class="svmg">${Object.values(SVC).map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color}"><span class="ic">${s.icon}</span><b>${s.name}</b><span class="ds">${s.desc}</span></button>`).join('')}</div>`, '', { cls: 'svmenu' });
+  if (!svcList().length) return toast('ปิดบริการทั้งหมดไว้ — เปิดได้ที่ เพิ่มเติม › ฟีเจอร์', 1);
+  const ov = sheet('บริการ', `<div class="svmg">${svcList().map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color}"><span class="ic">${s.icon}</span><b>${s.name}</b><span class="ds">${s.desc}</span></button>`).join('')}</div>`, '', { cls: 'svmenu' });
   $$('[data-k]', ov).forEach(b => b.onclick = () => { ov.remove(); svcDialog(b.dataset.k); });
 }
 function svcDialog(kind) {
@@ -245,6 +249,8 @@ VIEWS.svcset = el => {
   // แจ้งเตือนบนมือถือ/แท็บเล็ตเครื่องนี้ (แถบแจ้งเตือนเหมือนแอปทั่วไป)
   const pushc = $('#pushc', el);
   const drawPush = async () => {
+    if (!pushc) return;
+    if (!feat('push')) { pushc.innerHTML = '<b>📲 แจ้งเตือนบนมือถือ</b><div class="small muted">ปิดฟีเจอร์นี้ไว้ — เปิดได้ที่ เพิ่มเติม › ฟีเจอร์</div>'; return; }
     const st = await PushMe.state().catch(() => 'unsupported');
     const msg = { 'ios-home': '📱 iPhone/iPad: กดปุ่มแชร์ › <b>เพิ่มไปยังหน้าจอโฮม</b> แล้วเปิดแอปจากไอคอน MayMiniMart ก่อน จึงเปิดแจ้งเตือนได้', unsupported: 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน — ใช้ Chrome บนมือถือ Android หรือแอปที่เพิ่มไว้หน้าจอโฮม', denied: '⛔ การแจ้งเตือนถูกบล็อก — เปิดสิทธิ์ "การแจ้งเตือน" ของเว็บนี้ในตั้งค่าเบราว์เซอร์/แอป แล้วกลับมากดอีกครั้ง' }[st];
     pushc.innerHTML = `<b>📲 แจ้งเตือนบนมือถือเครื่องนี้</b><div class="small muted" style="margin:2px 0 8px">เด้งในแถบแจ้งเตือนมือถือทันทีที่มีงานโอน/เติม TrueMoney/ชำระบิล แม้ปิดแอปอยู่ · แตะแจ้งเตือนเพื่อเปิดงาน</div>

@@ -131,6 +131,7 @@ body.kiosk main{padding-bottom:calc(24px + var(--safe-b))}
 .sheet .sf{padding:10px 16px calc(12px + var(--safe-b));display:flex;gap:8px;border-top:1px solid var(--line);background:#fff;border-radius:0 0 22px 22px}
 .toast{position:fixed;left:50%;bottom:calc(92px + var(--safe-b));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;z-index:90;font-size:14px;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:su .2s}
 .toast.err{background:var(--red-d)}
+.toast.act{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px}.toast.act button{all:unset;cursor:pointer;background:#fff;color:var(--red-d);font-weight:700;border-radius:9px;padding:8px 14px;white-space:nowrap}
 /* scanner */
 .drw-sc{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:88;opacity:0;transition:opacity .22s}.drw-sc.on{opacity:1}
 .drw{position:fixed;top:0;bottom:0;left:0;width:min(330px,86vw);background:#fff;color:var(--ink);z-index:89;transform:translateX(-104%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:6px 0 30px rgba(0,0,0,.25);padding-top:var(--safe-t)}
@@ -147,7 +148,7 @@ body.navdock #app{padding-left:min(330px,86vw)}body.navdock .nav{left:min(330px,
 .drw .drag{background:#fff!important;box-shadow:0 6px 18px rgba(0,0,0,.22);border-radius:10px;position:relative;z-index:2;opacity:.95}.drw .dhint{font-size:11.5px;color:var(--ink3);padding:4px 18px 8px}
 .drw.inl{position:static;transform:none;width:auto;box-shadow:none;border-radius:18px;overflow:hidden;background:#fff;z-index:auto;padding:0}.drw.inl .db{overflow:visible}
 .drw .dg,.drw .di{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.drw .di.on,.drw .dg.one.on{color:var(--red);font-weight:700;background:#D6001C0d}
+.drw .di.on,.drw .dg.one.on{color:var(--red);font-weight:700;background:#D6001C0d;background:color-mix(in srgb,var(--red) 6%,transparent)}
 .drw .dbad{background:var(--red);color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:2px 8px;min-width:22px;text-align:center}
 .drw .df{border-top:1px solid var(--line);padding:6px 0 calc(8px + var(--safe-b))}.drw .df .ver{padding:4px 18px;color:var(--ink3);font-size:12.5px}
 .scan{position:fixed;inset:0;background:#000;z-index:80;display:flex;flex-direction:column}
@@ -274,9 +275,23 @@ html.dark .sfield{background:#24272C;box-shadow:inset 0 0 0 1.5px #3A3D42}html.d
 html.dark .svs .svr .npad button,html.dark .svs .svr .kp button{background:#2E3136;color:#F0F0F0;box-shadow:none}
 html.dark .svs .svr .npad [data-pk=clr],html.dark .svs .svr .npad [data-pk=del],html.dark .svs .svr .kp [data-k=del]{background:#4a2a30;color:#ff9aa8}
 
-/* v2.6.56 โหมดมืด: พื้นสว่างทุกจุด → เทาเข้ม · ตัวอักษรสว่างบนพื้นมืด */
+/* v2.7.0 โหมดมืด: พื้นสว่างทุกจุด → เทาเข้ม · ตัวอักษรสว่างบนพื้นมืด */
 html.dark{--red:#E8112D}
 html.dark .top{background:#C8102E}
+/* v2.7.0 ธีมสีหลักของร้าน (เจ้าของเลือกที่ เพิ่มเติม › ธีมสี · ฟอนต์) — เปลี่ยนสีแถบบน ปุ่มหลัก ไอคอน เมนูที่เลือก
+   ค่าเริ่มต้น = แดงเมย์ (ไม่ใส่ data-accent) · สีเขียวปุ่มชำระเงิน/สีเตือน คงเดิมเพื่อให้พนักงานจำได้ */
+html[data-accent=blue]{--red:#1F5FBF;--red-d:#164591;--red-l:#E8F0FC}
+html[data-accent=teal]{--red:#00796B;--red-d:#004D40;--red-l:#E0F2F1}
+html[data-accent=purple]{--red:#6A3BB0;--red-d:#4A2683;--red-l:#F1E8FA}
+html[data-accent=orange]{--red:#B85000;--red-d:#8A3B00;--red-l:#FFF1E3}
+html[data-accent=pink]{--red:#C2185B;--red-d:#8E0F42;--red-l:#FCE4EC}
+html[data-accent=slate]{--red:#37474F;--red-d:#263238;--red-l:#ECEFF1}
+html.dark[data-accent=blue]{--red:#4C8DF0;--red-d:#9CC1FF;--red-l:#1A2944}html.dark[data-accent=blue] .top{background:#1A4FA0}
+html.dark[data-accent=teal]{--red:#26A69A;--red-d:#80CBC4;--red-l:#12302D}html.dark[data-accent=teal] .top{background:#00695C}
+html.dark[data-accent=purple]{--red:#9C6ADE;--red-d:#C9A8F2;--red-l:#2A1E3D}html.dark[data-accent=purple] .top{background:#55308F}
+html.dark[data-accent=orange]{--red:#F08A24;--red-d:#FFC489;--red-l:#3A2612}html.dark[data-accent=orange] .top{background:#A04600}
+html.dark[data-accent=pink]{--red:#EC407A;--red-d:#F8A5C2;--red-l:#3A1626}html.dark[data-accent=pink] .top{background:#AD1457}
+html.dark[data-accent=slate]{--red:#78909C;--red-d:#B0BEC5;--red-l:#232A2E}html.dark[data-accent=slate] .top{background:#37474F}
 html.dark [style*="background:#FFF" i]:not(:has(img,canvas)):not(.dsp *):not(.paper *):not(.login *),
 html.dark [style*="background: #FFF" i]:not(:has(img,canvas)):not(.dsp *):not(.paper *):not(.login *),
 html.dark [style*="background:#EFE9E8" i]:not(:has(img,canvas)):not(.dsp *):not(.paper *):not(.login *),
@@ -358,7 +373,7 @@ html.dark .tag.amber{background:#3A2D13;color:#FFD58A}html.dark .tag.red{backgro
 html.dark .muted{color:var(--ink2)}
 .av[style*="color:#fff"]{text-shadow:0 1px 2px rgba(0,0,0,.45)}
 /* หน้าใส่ PIN: ใช้โทนแดง-ชมพูไล่สีแบบเดิมเสมอ ไม่ขึ้นกับโหมดมืด */
-html.dark .login{color-scheme:light;--ink:#1D1B1C;--ink2:#5E5759;--ink3:#9A9294;--line:#ECE6E7;--bg:#F7F4F2;--card:#fff;--red:#D6001C;--red-l:#FFE9EC;--sh:0 1px 2px rgba(60,20,25,.06),0 4px 16px rgba(60,20,25,.06);background:radial-gradient(120% 60% at 50% 0%,#FFE1E5 0%,#F7F4F2 60%);color:#1D1B1C}
+html.dark .login{color-scheme:light;--ink:#1D1B1C;--ink2:#5E5759;--ink3:#9A9294;--line:#ECE6E7;--bg:#F7F4F2;--card:#fff;--red-l:color-mix(in srgb,var(--red) 10%,#fff);--sh:0 1px 2px rgba(60,20,25,.06),0 4px 16px rgba(60,20,25,.06);background:radial-gradient(120% 60% at 50% 0%,#FFE1E5 0%,#F7F4F2 60%);background:radial-gradient(120% 60% at 50% 0%,color-mix(in srgb,var(--red) 12%,#fff) 0%,#F7F4F2 60%);color:#1D1B1C}
 html.dark .login .pinpad button,html.dark .login .btn.ghost,html.dark .login .in,html.dark .login .card{background:#fff!important;color:#1D1B1C}
 html:has(.login) body{background:#F7F4F2}
 
@@ -395,7 +410,7 @@ html.dark .sclr{background:#5A5D63}
 .svs .svl .btn.sm{min-height:44px;font-size:17px;padding:6px 14px}
 .svs .seg button{font-size:17px}
 </style>
-<script>try{var _t=localStorage.getItem('mm_theme'),_pd=localStorage.getItem('mm_posDark');_t=_t?JSON.parse(_t):(_pd==null||JSON.parse(_pd)?'dark':'light');if(_t==='dark')document.documentElement.classList.add('dark');document.documentElement.dataset.theme=_t;}catch(e){}</script>
+<script>try{var _t=localStorage.getItem('mm_theme'),_pd=localStorage.getItem('mm_posDark');_t=_t?JSON.parse(_t):(_pd==null||JSON.parse(_pd)?'dark':'light');if(JSON.parse(localStorage.getItem('mm_themeMode')||'""')==='auto')_t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';if(_t==='dark')document.documentElement.classList.add('dark');document.documentElement.dataset.theme=_t;var _a=JSON.parse(localStorage.getItem('mm_accent')||'""');if(_a)document.documentElement.dataset.accent=_a;}catch(e){}</script>
 </head>
 <body>
 <div id="app"></div>
@@ -406,7 +421,7 @@ html.dark .sclr{background:#5A5D63}
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.6.56';
+const APP_VER = '2.7.0';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -438,13 +453,26 @@ const Theme = {
     LS.set('theme', t); LS.set('posDark', t === 'dark'); const h = document.documentElement; h.dataset.theme = t; h.classList.toggle('dark', t === 'dark');
     document.querySelectorAll('#pos,.kpov').forEach(e => e.classList.toggle('dk', t === 'dark'));
     document.querySelectorAll('.thm').forEach(b => { b.innerHTML = this.icon(); b.title = this.label(); });
-    try { const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'dark' ? '#15161A' : '#D6001C'; } catch (e) { }
+    this.meta();
   },
-  toggle() { this.set(this.dark() ? 'light' : 'dark'); toast(this.dark() ? 'โหมดมืด' : 'โหมดสว่าง'); },
+  meta() { try { const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = this.dark() ? '#15161A' : (getComputedStyle(document.documentElement).getPropertyValue('--red').trim() || '#D6001C'); } catch (e) { } },
+  toggle() { LS.del('themeMode'); this.set(this.dark() ? 'light' : 'dark'); toast(this.dark() ? 'โหมดมืด' : 'โหมดสว่าง'); },
+  // v2.7.0: โหมด สว่าง / มืด / ตามเครื่อง (จำต่อเครื่อง)
+  mode() { return LS.get('themeMode', '') === 'auto' ? 'auto' : this.get(); },
+  setMode(m) {
+    if (m === 'auto') { LS.set('themeMode', 'auto'); this.set(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); LS.set('themeMode', 'auto'); }
+    else { LS.del('themeMode'); this.set(m); }
+  },
+  // ธีมสีหลักของร้าน (ทุกเครื่องในร้านใช้ร่วมกัน · เก็บสำเนาในเครื่องไว้ใช้ก่อนวาดหน้า กันกระพริบ)
+  ACCENTS: [['', 'แดงเมย์', '#D6001C'], ['blue', 'น้ำเงิน', '#1F5FBF'], ['teal', 'เขียวหัวเป็ด', '#00796B'], ['purple', 'ม่วง', '#6A3BB0'], ['orange', 'ส้ม', '#B85000'], ['pink', 'ชมพู', '#C2185B'], ['slate', 'เทาเข้ม', '#37474F']],
+  accent() { return document.documentElement.dataset.accent || ''; },
+  setAccent(k) { k = this.ACCENTS.some(a => a[0] === k) ? k : ''; const h = document.documentElement; if (k) h.dataset.accent = k; else delete h.dataset.accent; LS.set('accent', k); this.meta(); },
   icon() { return this.dark() ? I('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>', 22) : I('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', 22); },
   label() { return this.dark() ? 'เปลี่ยนเป็นโหมดสว่าง' : 'เปลี่ยนเป็นโหมดมืด'; },
   btn(cls = 'iconbtn tb') { return `<button class="${cls} thm" onclick="Theme.toggle()" title="${this.label()}">${this.icon()}</button>`; }
 };
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => { if (LS.get('themeMode', '') === 'auto') { Theme.set(e.matches ? 'dark' : 'light'); LS.set('themeMode', 'auto'); } }); } catch (e) { }
+document.addEventListener('mm:settings', () => { const a = (S.settings && S.settings.uiAccent) || ''; if (a !== Theme.accent()) Theme.setAccent(a); });
 /* โหมดมืดอัตโนมัติ: อ่านกฎ CSS ทุกชุด (รวมที่หน้าอื่นใส่เพิ่มภายหลัง) — พื้นขาว/สว่าง → เทาเข้ม · ตัวอักษรเข้ม → สว่าง
    ทำครั้งเดียวต่อกฎ (ไม่กี่มิลลิวินาที) ไม่ยุ่งกับหน้าขายตอนสแกน */
 const DarkFix = {
@@ -493,7 +521,9 @@ const SearchClr = {
   scan(root) { (root && root.querySelectorAll ? root : document).querySelectorAll(this.SEL).forEach(i => this.add(i)); },
   init() {
     if (this.on) return; this.on = 1; let q = false;
-    new MutationObserver(() => { if (q) return; q = true; requestAnimationFrame(() => { q = false; this.scan(); document.querySelectorAll('.sclr').forEach(b => { const i = b.previousElementSibling; if (i && i._clr === b) this.sync(i); }); }); }).observe(document.body, { childList: true, subtree: true });
+    // v2.7.0: ข้ามการเปลี่ยนแปลงในตั๋วออเดอร์/แถบแจ้งเตือน (เกิดทุกครั้งที่ยิงบาร์โค้ด และไม่มีช่องค้นหา) → ไม่ต้องวัดหน้าจอทั้งหน้าทุกการยิง
+    const skip = m => { const t = m.target; if (t.nodeType === 1 && t.closest && t.closest('#pr,#cbar,.tlist,.pclock')) return true; const n = [...m.addedNodes, ...m.removedNodes]; return n.length > 0 && n.every(x => x.nodeType !== 1 || (x.classList && x.classList.contains('toast'))); };
+    new MutationObserver(ms => { if (q || ms.every(skip)) return; q = true; requestAnimationFrame(() => { q = false; this.scan(); document.querySelectorAll('.sclr').forEach(b => { const i = b.previousElementSibling; if (i && i._clr === b) this.sync(i); }); }); }).observe(document.body, { childList: true, subtree: true });
     addEventListener('resize', () => document.querySelectorAll('.sclr:not([hidden])').forEach(b => { const i = b.previousElementSibling; i && i._clr && this.place(i, b); }));
   }
 };
@@ -569,6 +599,15 @@ const IC = {
 function toast(msg, err, ms) {
   const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
   document.body.appendChild(t); setTimeout(() => t.remove(), ms || (err ? 4200 : 2400));
+}
+// แถบแจ้งเตือนที่มีปุ่มกด (ไม่ใช่หน้าต่าง → ไม่ขวางการยิงบาร์โค้ดชิ้นถัดไป) · แสดงทีละอัน
+function actToast(msg, btn, fn, err, ms) {
+  $$('.toast.act').forEach(x => x.remove());
+  const t = document.createElement('div'); t.className = 'toast act' + (err ? ' err' : '');
+  const s = document.createElement('span'); s.textContent = msg; const b = document.createElement('button'); b.type = 'button'; b.textContent = btn;
+  b.onclick = () => { t.remove(); fn && fn(); };
+  t.append(s, b); document.body.appendChild(t); setTimeout(() => t.remove(), ms || 6000);
+  return t;
 }
 let busyEl = null;
 function busy(on, msg) {
@@ -753,15 +792,25 @@ function confirmDlg(msg, okText = 'ยืนยัน', danger) {
     $('[data-y]', ov).onclick = () => { ov.remove(); res(true); };
   });
 }
+// v2.7.0: เสียงเดียวกันทั้งแอป · Android พักเสียงเมื่อแอปไปอยู่เบื้องหลัง/สายเรียกเข้า → ปลุกกลับทุกครั้ง (เดิม "ยิงแล้วเงียบ" ทั้งที่สินค้าเข้า)
+function audioCtx() {
+  try {
+    let c = beep.c;
+    if (!c || c.state === 'closed') c = beep.c = new (window.AudioContext || window.webkitAudioContext)();
+    if (c.state === 'suspended' || c.state === 'interrupted') c.resume().catch(() => { });
+    return c;
+  } catch (e) { return null; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && beep.c && beep.c.state !== 'running') audioCtx(); });
 function beep() {
-  try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 1850; g.gain.value = .08; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .09); } catch (e) { }
+  try { const c = audioCtx(); if (c) { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 1850; g.gain.value = .08; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .09); } } catch (e) { }
   try { navigator.vibrate && navigator.vibrate(40); } catch (e) { }
 }
 // เสียงกดแป้นตัวเลข: ปิด/เปิดได้ที่ไอคอน 🔊 บนแป้น · จำไว้ในเครื่องนี้ (เข้าระบบครั้งหน้ายังเป็นค่าเดิม)
 const keySndOn = () => LS.get('keySnd', true) !== false;
 function tick() {
   if (!keySndOn()) return;
-  try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = 1150; g.gain.setValueAtTime(.32, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .06); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .065); } catch (e) { }
+  try { const c = audioCtx(); if (!c) return; const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = 1150; g.gain.setValueAtTime(.32, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .06); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .065); } catch (e) { }
   try { navigator.vibrate && navigator.vibrate(12); } catch (e) { }
 }
 const sndBtn = () => `<button type="button" class="sndt" title="เสียงกดแป้น (แตะเพื่อปิด/เปิด)" onclick="toggleKeySnd()">${keySndOn() ? '🔊' : '🔇'}</button>`;
@@ -875,7 +924,7 @@ window.ThaiDate = ThaiDate;
 document.addEventListener('DOMContentLoaded', () => ThaiDate.start());
 if (document.readyState !== 'loading') setTimeout(() => ThaiDate.start(), 0);
 // เตรียมระบบเสียงตั้งแต่แตะจอครั้งแรก → สแกนครั้งแรกมีเสียงทันที ไม่หน่วง
-addEventListener('pointerdown', () => { try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); if (c.state === 'suspended') c.resume(); } catch (e) { } }, { once: true, capture: true });
+addEventListener('pointerdown', () => { if (!beep.c || beep.c.state !== 'running') audioCtx(); }, { capture: true, passive: true });
 function loadScript(src, globalName) {
   if (globalName && window[globalName]) return Promise.resolve();
   return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('โหลดไลบรารีไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)')); document.head.appendChild(s); });
@@ -973,6 +1022,22 @@ async function apiRaw(action, payload, tokenOverride) {
   }
   return j;
 }
+// v2.7.0: คำขอเบื้องหลังที่ไม่สำคัญ (ส่งตั๋วไปจอลูกค้า/อีกเครื่อง) — ล้มเหลวได้โดยไม่สลับเป็น "ออฟไลน์"
+// เดิมใช้ api() → Google ตอบช้า 1 ครั้ง = ออฟไลน์ → พอกลับมาออนไลน์ระบบโหลดสินค้าทั้งร้านใหม่ + วาดหน้าขายใหม่ → เครื่องค้างระหว่างยิง
+async function apiQuiet(action, payload, ms) {
+  if (!S.apiUrl) return Local.handle(action, payload);
+  if (navigator.onLine === false) throw new Error('offline');
+  const ac = window.AbortController ? new AbortController() : null, tm = ac && setTimeout(() => ac.abort(), ms || 10000);
+  try {
+    const r = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, payload, token: S.token, deviceId: S.device.id }), signal: ac ? ac.signal : undefined });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error || 'error'); return j;
+  } finally { tm && clearTimeout(tm); }
+}
+// ทำงานหนักเมื่อหยุดยิงบาร์โค้ดแล้ว (ไม่แทรกกลางการขาย) · รวมหลายคำขอเป็นครั้งเดียว
+const whenQuiet = (() => { const q = new Map(); let t = null;
+  const run = () => { t = null; const since = Date.now() - ((window.Scanner && Scanner.lastAt) || 0); if (since < 2500) { t = setTimeout(run, 2600 - since); return; } const fns = [...q.values()]; q.clear(); fns.forEach(f => { try { f(); } catch (e) { console.error(e); } }); };
+  return (key, fn) => { q.set(key, fn); if (!t) t = setTimeout(run, 300); };
+})();
 
 /* โหมดทดลอง: ใช้ Logic ชุดเดียวกับเซิร์ฟเวอร์ แต่เก็บข้อมูลในเบราว์เซอร์ */
 const LocalDB = {
@@ -1036,6 +1101,33 @@ async function loadSettings() {
   } catch (e) { if (!e.offline) toast(e.message, 1); }
 }
 const cfg = (k, d) => { try { const v = S.settings[k]; return v ? (typeof d === 'object' ? { ...d, ...JSON.parse(v) } : v) : d; } catch (e) { return d; } };
+/* v2.7.0: เปิด/ปิดโมดูลเสริม (เจ้าของร้านตั้งที่ เพิ่มเติม › ตั้งค่า › ฟีเจอร์) — ค่าเริ่มต้น = เปิดทั้งหมด (เหมือนเดิม)
+   ปิดแล้ว: ซ่อนเมนู/ปุ่ม และไม่ทำงานเบื้องหลัง (ไม่ถามเซิร์ฟเวอร์) → เครื่องเบาลง */
+const FEATURES = [
+  { g: 'หน้าขาย', items: [
+    ['moneysvc', '💸', 'บริการโอน · เติมเงิน · จ่ายบิล', 'ปุ่ม $ บนหน้าขาย: โอนออก/โอนเข้า/เติมเงินมือถือ/ชำระบิล'],
+    ['copy', '📠', 'ถ่ายเอกสาร · พิมพ์เอกสาร', 'คิดเงินตามจำนวนหน้า ขาวดำ/สี'],
+    ['debt', '💰', 'รับชำระหนี้ (ใช้หนี้)', 'รับชำระเงินเชื่อ/ค่างวด ตัดยอดอัตโนมัติ'],
+    ['inst', '📆', 'ผ่อนสินค้า', 'เปิดสัญญาผ่อน รับค่างวด และหน้า "สัญญาผ่อนสินค้า"'],
+    ['display', '🖥️', 'จอลูกค้า', 'ส่งรายการไปจอฝั่งลูกค้า (ปิดถ้าไม่มีจอลูกค้า = ลดงานเบื้องหลัง)'],
+    ['tksync', '🔗', 'ซิงก์ตั๋วข้ามเครื่อง', 'เครื่องที่ล็อกอินชื่อเดียวกันเห็นตั๋วเดียวกัน (ปิดถ้าร้านใช้เครื่องขายเครื่องเดียว = เร็วขึ้น)']] },
+  { g: 'สินค้า & ลูกค้า', items: [
+    ['restock', '📦', 'วางแผนสั่งของ', 'แนะนำจำนวนสั่งของจากยอดขายจริง (รวมนำเข้าประวัติ Loyverse)'],
+    ['quality', '✅', 'ตรวจข้อมูลสินค้า', 'หาสินค้าที่ข้อมูลไม่ครบ/ซ้ำ'],
+    ['rank', '🏆', 'อันดับลูกค้า (ภาพ)', 'ภาพจัดอันดับลูกค้าสำหรับโพสต์']] },
+  { g: 'บัญชี & เอกสาร', items: [
+    ['ledger', '📒', 'บัญชีรายรับ-รายจ่าย', 'บันทึกรายรับ-รายจ่ายของร้าน'],
+    ['tax', '🧾', 'ภาษี · VAT', 'หน้าภาษี รายงานเงินสดรับ-จ่าย และตรวจสินค้ายกเว้น VAT'],
+    ['licenses', '🛡️', 'ใบอนุญาต', 'เก็บใบอนุญาตและเตือนวันหมดอายุ'],
+    ['push', '🔔', 'แจ้งเตือนบนมือถือเจ้าของ', 'แจ้งงานโอน/ชำระบิลที่รอดำเนินการ']] }
+];
+function feat(k) {
+  const raw = S.settings && S.settings.features;
+  if (!feat._f || raw !== feat._r) { feat._r = raw; try { feat._f = raw ? JSON.parse(raw) : {}; } catch (e) { feat._f = {}; } }
+  return feat._f[k] !== false;
+}
+window.feat = feat;
+const VIEW_FEAT = { inst: 'inst', rank: 'rank', restock: 'restock', dataquality: 'quality', ledger: 'ledger', tax: 'tax', vatcheck: 'tax', licenses: 'licenses', displayset: 'display' };
 async function saveSetting(k, v) { const value = typeof v === 'object' ? JSON.stringify(v) : String(v); await api('upsert', { table: 'Settings', rows: [{ key: k, value }] }); S.settings[k] = value; LS.set('settings', S.settings); }
 const catColor = name => (S.categories.find(c => c.name === name) || {}).color || '#9E9E9E';
 async function loadTable(t) { const r = await api('list', { table: t }); return r.rows; }
@@ -1637,6 +1729,7 @@ function go(v, arg) {
   if (isKiosk() && !KIOSK_OK.includes(v)) v = 'pos';
   if (Elev.scope && !(ELEV_AREAS[Elev.scope] || []).includes(v)) Elev.clear();
   if (v === 'sales') { v = 'reports'; if (typeof RS !== 'undefined') RS.top = 'month'; }
+  { const fk = VIEW_FEAT[v]; if (fk && !feat(fk)) { toast('ฟีเจอร์นี้ถูกปิดไว้ — เจ้าของร้านเปิดได้ที่ เพิ่มเติม › ฟีเจอร์', 1); v = isKiosk() ? 'pos' : 'home'; } }
   if (!isKiosk() && v === 'reports' && !seesSales() && S.user && S.user.role !== 'owner') v = 'home';
   if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   if (S.cleanup) { try { S.cleanup(); } catch (e) { } S.cleanup = null; }
@@ -2412,11 +2505,11 @@ function moreGroups() {
   const jn = S.jobsN || 0;
   return [
     it('jobs', IC.alert, own ? 'งานรอดำเนินการ' : 'งานโอน/ชำระบิล', 1, jn ? jn : ''),
-    { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), (seesSales() || own) && ['รายงาน/ยอดขาย', IC.chart, () => go('reports'), '', S.view === 'reports', 'ยอดขายรายเดือน'], it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers')), it('rank', IC.trophy, 'อันดับลูกค้า (ภาพ)', can('customers')), it('inst', IC.receipt, 'สัญญาผ่อนสินค้า', can('customers') || can('credit'))] },
-    { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('restock', IC.box, 'วางแผนสั่งของ', own && window.Restock && Restock.on()), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own)] },
-    { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own), it('ledger', IC.file, 'บัญชีรายรับ-รายจ่าย', own), it('vatcheck', IC.tag, 'ตรวจสินค้ายกเว้น VAT', own), it('licenses', IC.shield, 'ใบอนุญาต', 1)] },
-    { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', 1), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
-    { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ', 1), it('pins', IC.shield, 'รหัสเจ้าของ · รหัสอนุญาต', own), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ · ถ่ายเอกสาร · ผ่อน', own), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
+    { t: 'ขาย & ลูกค้า', ic: IC.receipt, items: [it('salesreceipts', IC.receipt, 'ใบเสร็จรับเงิน', 1), (seesSales() || own) && ['รายงาน/ยอดขาย', IC.chart, () => go('reports'), '', S.view === 'reports', 'ยอดขายรายเดือน'], it('customers', IC.user, 'ลูกค้า · แต้ม · เงินเชื่อ', can('customers')), it('rank', IC.trophy, 'อันดับลูกค้า (ภาพ)', can('customers') && feat('rank')), it('inst', IC.receipt, 'สัญญาผ่อนสินค้า', (can('customers') || can('credit')) && feat('inst'))] },
+    { t: 'สินค้า & สต็อก', ic: IC.box, items: [it('inventory', IC.count, 'นับสต็อก · สั่งซื้อ', can('stockCount') || can('receiveGoods') || canStrict('viewCost')), it('receipts', IC.cam, 'ใบเสร็จร้านส่ง', can('receiveGoods')), it('labels', IC.tag, 'พิมพ์ฉลาก', 1), it('restock', IC.box, 'วางแผนสั่งของ', own && feat('restock') && window.Restock && Restock.on()), it('categories', IC.grid, 'หมวดหมู่', can('editProducts')), it('dataquality', IC.check, 'ตรวจข้อมูลสินค้า', own && feat('quality'))] },
+    { t: 'พนักงาน & ภาษี', ic: IC.users, items: [it('staff', IC.users, 'พนักงาน · สิทธิ์ · ลงเวลา', 1), it('tax', IC.tax, 'ภาษี', own && feat('tax')), it('ledger', IC.file, 'บัญชีรายรับ-รายจ่าย', own && feat('ledger')), it('vatcheck', IC.tag, 'ตรวจสินค้ายกเว้น VAT', own && feat('tax')), it('licenses', IC.shield, 'ใบอนุญาต', feat('licenses'))] },
+    { t: 'อุปกรณ์', ic: IC.print, items: [it('printer', IC.print, 'เครื่องพิมพ์ใบเสร็จ', 1), it('scannerset', IC.scan, 'เครื่องยิงบาร์โค้ด', 1), it('displayset', IC.monitor, 'จอลูกค้า', feat('display')), it('devices', IC.wifi, 'อุปกรณ์ที่ใช้ระบบ', own)] },
+    { t: 'ตั้งค่า', ic: IC.gear, items: [it('settings', IC.gear, 'ร้าน · การเชื่อมต่อ', 1), it('features', IC.grid, 'ฟีเจอร์ · เปิด/ปิดโมดูล', own), it('appearance', IC.image, 'ธีมสี · ฟอนต์', 1), it('pins', IC.shield, 'รหัสเจ้าของ · รหัสอนุญาต', own), it('payset', IC.sale, 'ชำระเงิน & แต้ม', own), it('svcset', IC.sale, 'ค่าบริการ · ถ่ายเอกสาร · ผ่อน', own && (feat('moneysvc') || feat('copy') || feat('inst'))), it('io', IC.io, 'นำเข้า · ส่งออก · สำรอง', own)] }
   ];
 }
 function drawerHead() { return `<div style="display:flex;align-items:center;gap:10px"><img src="${Brand.white ? Brand.white() : 'logo-white.png'}" alt="" style="height:34px;width:auto" onerror="this.remove()"><div style="min-width:0"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(S.user ? S.user.name : '')}</div><div style="font-size:12px;opacity:.85">${S.user && S.user.role === 'owner' ? 'เจ้าของร้าน' : 'พนักงาน'}</div></div></div>`; }
@@ -3216,23 +3309,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.6.55"></script>
-<script src="logic.js?v=2.6.55"></script>
-<script src="cache.js?v=2.6.55"></script>
-<script src="offline.js?v=2.6.55"></script>
-<script src="scanner.js?v=2.6.55"></script>
-<script src="printer.js?v=2.6.55"></script>
-<script src="pos.js?v=2.6.55"></script>
-<script src="idle.js?v=2.6.55"></script>
-<script src="display.js?v=2.6.55"></script>
-<script src="reports.js?v=2.6.55"></script>
-<script src="inventory.js?v=2.6.55"></script>
-<script src="people.js?v=2.6.55"></script>
-<script src="quality.js?v=2.6.55"></script>
-<script src="services.js?v=2.6.55"></script>
-<script src="owner.js?v=2.6.55"></script>
-<script src="books.js?v=2.6.55"></script>
-<script src="restock.js?v=2.6.55"></script>
+<script src="qr.js?v=2.7.0"></script>
+<script src="logic.js?v=2.7.0"></script>
+<script src="cache.js?v=2.7.0"></script>
+<script src="offline.js?v=2.7.0"></script>
+<script src="scanner.js?v=2.7.0"></script>
+<script src="printer.js?v=2.7.0"></script>
+<script src="pos.js?v=2.7.0"></script>
+<script src="idle.js?v=2.7.0"></script>
+<script src="display.js?v=2.7.0"></script>
+<script src="reports.js?v=2.7.0"></script>
+<script src="inventory.js?v=2.7.0"></script>
+<script src="people.js?v=2.7.0"></script>
+<script src="quality.js?v=2.7.0"></script>
+<script src="services.js?v=2.7.0"></script>
+<script src="owner.js?v=2.7.0"></script>
+<script src="books.js?v=2.7.0"></script>
+<script src="restock.js?v=2.7.0"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

@@ -54,7 +54,7 @@ const ptsCfg = () => cfg('pointsCfg', PTSCFG_DEF);
 .titem .q{color:#888}
 .ttot{padding:10px 14px;border-top:1px solid #E0E0E0}
 .ttot .kv{border:0;padding:3px 0}
-.pos.dk{background:#232529;color:#E8E8E8}.pos.dk .pbar{background:#9E1420}.pos.dk .pos-r{background:#1B1C1F;border-left-color:#33363B}
+.pos.dk{background:#232529;color:#E8E8E8}.pos.dk .pbar{background:#9E1420;background:color-mix(in srgb,var(--red) 70%,#000)}.pos.dk .pos-r{background:#1B1C1F;border-left-color:#33363B}
 .pos.dk .thead{border-bottom-color:#33363B}.pos.dk .thead .iconbtn,.pos.dk .iconbtn{color:#DDD}.pos.dk .pbar .iconbtn{color:#fff}
 .pos.dk .titem{border-bottom-color:#2E3135}.pos.dk .titem .q{color:#8E9297}.pos.dk .ttot{border-top-color:#33363B}
 .pos.dk .ptabs{background:#1B1C1F;border-top-color:#33363B}.pos.dk .ptabs button{color:#9EA2A8}.pos.dk .ptabs button.on{color:#FF6B76;border-top-color:#FF6B76}
@@ -231,12 +231,24 @@ const Sync = {
     this.flush(); Img.sync(); RP.autoConnect();
   },
   // เน็ตกลับมา: ส่งบิลค้าง แล้วดึงราคา/สินค้า/สิทธิ์ล่าสุด
+  // v2.7.0: เน็ตกระตุกบ่อย → เดิมโหลดสินค้าทั้งร้าน + วาดหน้าขายใหม่ทุกครั้ง (เครื่องค้างกลางการยิง)
+  //         ตอนนี้: ส่งบิลทันที · โหลดสินค้าใหม่ไม่เกิน 1 ครั้ง/3 นาที และทำตอนหยุดยิงแล้ว · วาดหน้าขายใหม่ครั้งเดียว
   async back() {
     if (!S.user) return;
     await this.flush();
-    try { await loadProducts(true); await loadSettings(); Img.sync(); if (S.view === 'pos' && !POS.pay) POS.render(); } catch (e) { }
-    if (!this.box.length) toast('ออนไลน์แล้ว — ส่งข้อมูลครบ และอัปเดตราคาล่าสุดแล้ว');
+    if (Date.now() - (this.backAt || 0) < 180000) return;
+    this.backAt = Date.now();
+    whenQuiet('syncBack', async () => {
+      try {
+        const before = this.sig();
+        await loadProducts(true); POS._quietSettings = true; await loadSettings(); POS._quietSettings = false; Img.sync();
+        if (S.view === 'pos' && !POS.pay && this.sig() !== before) POS.render();
+      } catch (e) { POS._quietSettings = false; }
+      if (!this.box.length) toast('ออนไลน์แล้ว — ส่งข้อมูลครบ และอัปเดตราคาล่าสุดแล้ว');
+    });
   },
+  // ลายเซ็นข้อมูลที่หน้าขายใช้ (สินค้า/ราคา/การตั้งค่า) — ไม่เปลี่ยน = ไม่ต้องวาดใหม่
+  sig() { let h = S.products.length; for (const p of S.products) { const s = p.sku + '|' + p.name + '|' + p.price + '|' + p.available + '|' + (p.updatedAt || ''); for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0; } return h + ':' + JSON.stringify(S.settings || {}).length; },
 };
 window.Sync = Sync;
 
@@ -389,6 +401,8 @@ function keypad(title, init, cb, opt = {}) {
   const money = opt.money != null ? opt.money : /ราคา|ค่าบริการ|ชำระ|ยอด|เงิน/.test(label + ' ' + head);
   const dark = Theme.dark();
   const ov = document.createElement('div'); ov.className = 'ov kpov' + (dark ? ' dk' : ''); if (opt.z) ov.style.zIndex = opt.z;
+  if (opt.scanClose) ov.setAttribute('data-scan-close', '');   // แป้นน้ำหนัก/ราคาจากหน้าขาย: ยิงชิ้นถัดไป = ยกเลิกแป้นนี้
+  const kHist = [];   // [เวลา, ค่าก่อนกด] ของปุ่มที่มาจากแป้นพิมพ์จริง — ใช้ถอนตัวเลขที่เครื่องยิงพิมพ์หลุดเข้ามา
   const K = (k, t, cls = '') => `<button type="button" data-k="${k}" class="${cls}">${t}</button>`;
   ov.innerHTML = `<div class="kpbox" role="dialog"><div class="kph"><button type="button" class="kpx" data-k="x">✕</button><div class="kpt">${head}</div>${sndBtn()}</div>
     <div class="kpvr"><span class="kpl">${label === head ? '' : label}${opt.sub ? `<small>${opt.sub}</small>` : ''}</span><span class="kpv2" id="kv"></span></div>
@@ -407,7 +421,9 @@ function keypad(title, init, cb, opt = {}) {
   // pointerdown = ตอบสนองเร็วที่สุด · กันคลิกซ้อน
   ov.addEventListener('pointerdown', e => { const b = e.target.closest('[data-k]'); if (!b) return; /* แตะพื้นที่ว่างรอบ ๆ ไม่ปิด — ปิดด้วย ✕ เท่านั้น */ e.preventDefault(); b.classList.add('dn'); setTimeout(() => b.classList.remove('dn'), 110); press(b.dataset.k); });
   ov.addEventListener('click', e => e.preventDefault());
-  const kd = e => { if (!document.body.contains(ov) || e.defaultPrevented) return; if (/^[\d.]$/.test(e.key)) { e.preventDefault(); press(e.key); } else if (e.key === 'Backspace') { e.preventDefault(); press('del'); } else if (e.key === 'Enter') { e.preventDefault(); ok(); } else if (e.key === 'Escape') close(); };
+  ov.close = close;
+  ov._scanUndo = t0 => { const h = kHist.find(x => x[0] >= t0 - 1); if (h) { v = h[1]; show(); } };
+  const kd = e => { if (!document.body.contains(ov) || e.defaultPrevented) return; if (/^[\d.]$/.test(e.key)) { e.preventDefault(); kHist.push([e.timeStamp || performance.now(), v]); if (kHist.length > 30) kHist.shift(); press(e.key); } else if (e.key === 'Backspace') { e.preventDefault(); press('del'); } else if (e.key === 'Enter') { e.preventDefault(); ok(); } else if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', kd, true);
   show();
   return ov;
@@ -507,13 +523,14 @@ const POS = {
       this.save();
     };
     if (o.price != null) return go(o.price, 1);
-    if (p.byWeight === 'Y') return keypad('น้ำหนัก (กก.) — ' + esc(p.name), '', w => go(p.price || 0, w), { min: 0, sub: `ราคา ${baht(p.price)} / กก.` });
-    if (!num(p.price)) return keypad('ระบุราคา — ' + esc(p.name), '', v => go(v, 1), { min: 0 });
+    if (p.byWeight === 'Y') return keypad('น้ำหนัก (กก.) — ' + esc(p.name), '', w => go(p.price || 0, w), { min: 0, sub: `ราคา ${baht(p.price)} / กก.`, scanClose: true });
+    if (!num(p.price)) return keypad('ระบุราคา — ' + esc(p.name), '', v => go(v, 1), { min: 0, scanClose: true });
     go(p.price, 1);
   },
   scan(code) {
     const f = findByCode(code);
-    if (!f) { toast('ไม่พบสินค้า ' + code, 1); if (can('editProducts') && !isKiosk()) setTimeout(() => confirmDlg(`ไม่พบบาร์โค้ด <b>${esc(code)}</b> — เพิ่มเป็นสินค้าใหม่?`, 'เพิ่มสินค้า').then(y => y && editProduct({ barcode: code })), 200); return false; }
+    // v2.7.0: ไม่พบสินค้า → แถบแจ้งเตือนมีปุ่ม "เพิ่มสินค้า" (ไม่เด้งหน้าต่างขวาง · เดิมหน้าต่างนี้ทำให้ยิงชิ้นถัดไปไม่เข้า)
+    if (!f) { if (can('editProducts') && !isKiosk()) actToast(`ไม่พบบาร์โค้ด ${code}`, 'เพิ่มสินค้า', () => editProduct({ barcode: code }), 1); else toast('ไม่พบสินค้า ' + code, 1); if (window.ScanLog) ScanLog.add('notfound', code, 'ไม่พบสินค้า'); return false; }
     this.add(f.p, f.price != null ? { price: f.price } : {}); return true;
   },
   newTicket() { this.t = { items: [], customer: null, discount: null, pointsUse: 0 }; this.pay = null; this.save(); this.render(); },
@@ -525,7 +542,7 @@ const POS = {
       <div class="pos-l"><div class="pbar"><div class="pside l"><button class="iconbtn" id="pm">${I(IC.menu, 24)}</button>${isKiosk() ? '' : `<button class="iconbtn" onclick="go('home')" title="Back to management">${I(IC.home, 22)}</button>`}<div class="ttl" id="pt"></div><span class="netpill"></span></div>
         <div class="pclock" id="pclk" title="เวลา กรุงเทพฯ"></div>
         <div class="pside r"><div class="who2" title="แคชเชียร์"><span class="ic">${I(IC.user, 20)}</span><b>${esc(S.user.name)}</b></div>
-        <button class="iconbtn" id="psvc" title="Services">${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
+        <button class="iconbtn" id="psvc" title="Services"${typeof svcList === 'function' && !svcList().length ? ' style="display:none"' : ''}>${I('<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 22)}</button>
         <button class="iconbtn" id="ps" title="Search">${I(IC.search, 22)}</button><button class="iconbtn" id="pcam" title="Camera scan">${I(IC.scan, 22)}</button>${Theme.btn('iconbtn')}${FS.btn()}<button class="iconbtn pdrw" id="pdrw" title="เปิดลิ้นชักเก็บเงิน">${I('<rect x="2.5" y="10" width="19" height="10" rx="1.5"/><path d="M4.5 10l2-5.5h11l2 5.5"/><path d="M9.5 15h5"/>', 22)}</button><button class="iconbtn tb" onclick="switchUser()" title="ออกจากระบบ">${I(IC.logout, 22)}</button></div></div>
         <div id="pmain" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
         <div class="cartbar" id="cbar"></div></div>
@@ -537,7 +554,7 @@ const POS = {
     tick(); clearInterval(this.clk); this.clk = setInterval(tick, 10000);
     $('#ps', el).onclick = () => this.search();
     $('#pcam', el).onclick = () => { let refresh = () => { };
-      openScanner((code, ctx) => { const ok = this.scan(code); if (!ok) { try { Scanner.err && Scanner.err(); } catch (e) { } toast('ไม่พบสินค้า ' + code, 1); } refresh(ok ? this.lastAdded : -1); return ''; },
+      openScanner((code, ctx) => { const ok = this.scan(code); if (!ok) { try { Scanner.err && Scanner.err(); } catch (e) { } } refresh(ok ? this.lastAdded : -1); return ''; },
         { continuous: true, title: 'สแกนขายสินค้า', onClose: () => this.render(),
           // มือถือ: กล้องครึ่งบน · ครึ่งล่างเป็นตั๋วออเดอร์ (จำนวน ราคารวม) + ปุ่มชำระเงิน
           panel: (pane, sc) => {
@@ -562,7 +579,8 @@ const POS = {
       if (this.previewScan(code)) { this.codeMatches(code).length ? beep() : Scanner.err(); return; }
       if (!this.scan(code)) Scanner.err();
     });
-    const ps = () => this.render();
+    // การตั้งค่ามาจากเซิร์ฟเวอร์ → วาดหน้าขายใหม่ตอนหยุดยิงแล้ว (ไม่วาดทับกลางการสแกน)
+    const ps = () => { if (this._quietSettings) return; whenQuiet('posRender', () => { if (S.view === 'pos' && this.el && !this.pay) this.render(); }); };
     document.addEventListener('mm:settings', ps);
     S.cleanup = () => { document.removeEventListener('mm:settings', ps); };
     this.render();
@@ -802,24 +820,42 @@ const POS = {
   renderTicket() {
     if (!this.el) return;
     const T = this.totals(), t = this.t, c = t.customer;
-    const pr = $('#pr', this.el);
-    pr.innerHTML = `<div class="thead"><button class="iconbtn" id="tback" style="display:none">${I(IC.back)}</button><h3>ตั๋วออเดอร์ <span id="tsy" style="display:none;font-size:13px;vertical-align:middle">🔗</span><span id="smt" class="tiny" style="display:none;font-weight:400;margin-left:6px;opacity:.75"></span></h3><button class="iconbtn" id="tc" title="ลูกค้า">${I(IC.userplus, 24)}</button><button class="iconbtn" id="tm">${I(IC.dots, 24)}</button></div>
-      ${c ? `<div class="cust">${I(IC.user, 18)}<div class="grow"><b>${esc(c.name)}</b> ${esc(c.phone || '')}<div class="tiny">${num(c.points)} แต้ม${num(c.credit) ? ' · ค้างชำระ ' + money(c.credit) : ''}${t.pointsUse ? ` · ใช้ ${t.pointsUse} แต้ม` : ''}</div></div><button class="iconbtn" id="cx">${I(IC.x, 18)}</button></div>` : ''}
-      <div class="tlist">${t.items.length ? t.items.map((it, i) => `<div class="titem" data-i="${i}"><span class="nm">${esc(it.name)}</span><span class="q">×${it.byWeight === 'Y' ? num(it.qty).toFixed(3).replace(/\.?0+$/, '') + 'กก.' : num(it.qty)}</span><span class="num">${baht(num(it.qty) * num(it.price))}</span></div>`).join('') : '<div class="empty" style="padding-top:60px">ยังไม่มีสินค้า<br><span class="tiny">แตะปุ่มสินค้า หรือสแกนบาร์โค้ด</span></div>'}</div>
-      ${num(t.cashOut) ? `<div class="cashout">💵 ต้องจ่ายเงินสดให้ลูกค้า ${bahtL(t.cashOut)}</div>` : ''}
-      <div class="ttot">${T.disc ? `<div class="kv"><span>รวม</span><span>${baht(T.sub)}</span></div><div class="kv"><span>ส่วนลด</span><span style="color:var(--red)">-${baht(T.disc)}</span></div>` : ''}<div class="kv tgt"><b>รวมทั้งหมด</b><b>${baht(T.total)}</b></div></div>
-      ${this.pay ? '' : `<button class="btn payb" id="pay" ${t.items.length ? '' : 'disabled'}>ชำระเงิน</button>`}`;
-    const cb = $('#cbar', this.el);
-    if (cb) cb.innerHTML = this.pay ? '' : `<button class="iconbtn" id="cbt" style="position:relative">${I(IC.cart, 26)}<span class="badge" style="position:absolute;top:-2px;right:-4px;background:var(--red);color:#fff;border-radius:99px;font-size:11px;padding:0 6px">${T.count}</span></button><button class="btn" id="cbp" ${t.items.length ? '' : 'disabled'}>ชำระเงิน ${baht(T.total)}</button>`;
+    const pr = $('#pr', this.el); if (!pr) return;
     const narrow = innerWidth < 900;
-    if (narrow) { $('#tback', pr).style.display = ''; $('#tback', pr).onclick = () => $('#pos', this.el).classList.remove('showT'); }
-    const cbt = $('#cbt', this.el); if (cbt) cbt.onclick = () => { $('#pos', this.el).classList.add('showT'); this.fitTicket(); };
-    const cbp = $('#cbp', this.el); if (cbp) cbp.onclick = () => this.startPay();
-    const pay = $('#pay', pr); if (pay) pay.onclick = () => this.startPay();
-    $('#tc', pr).onclick = () => pickCustomer(cu => { this.t.customer = { id: cu.id, name: cu.name, phone: cu.phone, points: cu.points, credit: cu.credit, creditLimit: cu.creditLimit }; this.t.pointsUse = 0; this.save(); if (this.pay) this.renderPay(); });
-    const cx = $('#cx', pr); if (cx) cx.onclick = () => { this.t.customer = null; this.t.pointsUse = 0; this.save(); if (this.pay) this.renderPay(); };
-    $('#tm', pr).onclick = () => this.ticketMenu();
-    $$('.titem', pr).forEach(r => r.onclick = () => { if (!this.pay) this.editItem(+r.dataset.i); });
+    const rows = t.items.length ? t.items.map((it, i) => `<div class="titem" data-i="${i}"><span class="nm">${esc(it.name)}</span><span class="q">×${it.byWeight === 'Y' ? num(it.qty).toFixed(3).replace(/\.?0+$/, '') + 'กก.' : num(it.qty)}</span><span class="num">${baht(num(it.qty) * num(it.price))}</span></div>`).join('') : '<div class="empty" style="padding-top:60px">ยังไม่มีสินค้า<br><span class="tiny">แตะปุ่มสินค้า หรือสแกนบาร์โค้ด</span></div>';
+    const sum = `${num(t.cashOut) ? `<div class="cashout">💵 ต้องจ่ายเงินสดให้ลูกค้า ${bahtL(t.cashOut)}</div>` : ''}
+      <div class="ttot">${T.disc ? `<div class="kv"><span>รวม</span><span>${baht(T.sub)}</span></div><div class="kv"><span>ส่วนลด</span><span style="color:var(--red)">-${baht(T.disc)}</span></div>` : ''}<div class="kv tgt"><b>รวมทั้งหมด</b><b>${baht(T.total)}</b></div></div>`;
+    // v2.7.0: ยิงบาร์โค้ด = เปลี่ยนแค่รายการกับยอดรวม → แก้เฉพาะส่วนนั้น (เดิมสร้างตั๋วใหม่ทั้งก้อน + ผูกปุ่มใหม่ทุกแถวทุกครั้ง)
+    const sk = [!!this.pay, c ? [c.id, c.name, c.phone, c.points, c.credit].join('|') : '', t.pointsUse || 0, narrow].join('~');
+    const L0 = $('.tlist', pr), S0 = $('#tsum', pr);
+    if (this._tsk === sk && L0 && S0) {
+      L0.innerHTML = rows; S0.innerHTML = sum;
+      const pay = $('#pay', pr); if (pay) pay.disabled = !t.items.length;
+    } else {
+      this._tsk = sk;
+      pr.innerHTML = `<div class="thead"><button class="iconbtn" id="tback" style="display:none">${I(IC.back)}</button><h3>ตั๋วออเดอร์ <span id="tsy" style="display:none;font-size:13px;vertical-align:middle">🔗</span><span id="smt" class="tiny" style="display:none;font-weight:400;margin-left:6px;opacity:.75"></span></h3><button class="iconbtn" id="tc" title="ลูกค้า">${I(IC.userplus, 24)}</button><button class="iconbtn" id="tm">${I(IC.dots, 24)}</button></div>
+        ${c ? `<div class="cust">${I(IC.user, 18)}<div class="grow"><b>${esc(c.name)}</b> ${esc(c.phone || '')}<div class="tiny">${num(c.points)} แต้ม${num(c.credit) ? ' · ค้างชำระ ' + money(c.credit) : ''}${t.pointsUse ? ` · ใช้ ${t.pointsUse} แต้ม` : ''}</div></div><button class="iconbtn" id="cx">${I(IC.x, 18)}</button></div>` : ''}
+        <div class="tlist">${rows}</div><div id="tsum">${sum}</div>
+        ${this.pay ? '' : `<button class="btn payb" id="pay" ${t.items.length ? '' : 'disabled'}>ชำระเงิน</button>`}`;
+      if (narrow) { $('#tback', pr).style.display = ''; $('#tback', pr).onclick = () => $('#pos', this.el).classList.remove('showT'); }
+      const pay = $('#pay', pr); if (pay) pay.onclick = () => this.startPay();
+      $('#tc', pr).onclick = () => pickCustomer(cu => { this.t.customer = { id: cu.id, name: cu.name, phone: cu.phone, points: cu.points, credit: cu.credit, creditLimit: cu.creditLimit }; this.t.pointsUse = 0; this.save(); if (this.pay) this.renderPay(); });
+      const cx = $('#cx', pr); if (cx) cx.onclick = () => { this.t.customer = null; this.t.pointsUse = 0; this.save(); if (this.pay) this.renderPay(); };
+      $('#tm', pr).onclick = () => this.ticketMenu();
+      // แตะรายการ: ผูกครั้งเดียวที่กล่องรายการ (ไม่ต้องผูกใหม่ทุกแถวทุกการยิง)
+      $('.tlist', pr).onclick = e => { const r = e.target.closest('.titem'); if (r && !this.pay) this.editItem(+r.dataset.i); };
+      if (window.TSync) TSync.badge();
+    }
+    const cb = $('#cbar', this.el);
+    if (cb) {
+      if (this.pay) cb.innerHTML = '';
+      else if ($('#cbt .badge', cb) && $('#cbp', cb)) { $('#cbt .badge', cb).textContent = T.count; const p = $('#cbp', cb); p.textContent = 'ชำระเงิน ' + baht(T.total); p.disabled = !t.items.length; }
+      else {
+        cb.innerHTML = `<button class="iconbtn" id="cbt" style="position:relative">${I(IC.cart, 26)}<span class="badge" style="position:absolute;top:-2px;right:-4px;background:var(--red);color:#fff;border-radius:99px;font-size:11px;padding:0 6px">${T.count}</span></button><button class="btn" id="cbp" ${t.items.length ? '' : 'disabled'}>ชำระเงิน ${baht(T.total)}</button>`;
+        $('#cbt', cb).onclick = () => { $('#pos', this.el).classList.add('showT'); this.fitTicket(); };
+        $('#cbp', cb).onclick = () => this.startPay();
+      }
+    }
     this.fitTicket();
   },
   // ตัวอักษรรายการในตั๋วใหญ่ที่สุดที่ใส่ได้ (ลูกค้าส่วนมากซื้อ 1–4 ชิ้น) · รายการเยอะจนถึงขอบล่าง → ย่อทั้งหมดให้พอดีช่อง
@@ -859,6 +895,7 @@ const POS = {
     const ov = sheet(esc(it.name), `<div class="row" style="justify-content:center;gap:14px;margin:6px 0 14px"><button class="btn ghost" id="m" style="width:60px;font-size:24px">−</button><input class="in center" id="q" type="number" inputmode="decimal" step="any" value="${it.qty}" style="width:120px;font-size:24px;font-family:var(--fh)"><button class="btn ghost" id="p" style="width:60px;font-size:24px">+</button></div>
       <label class="f"><span>ราคาต่อหน่วย ${pe ? '' : pePin ? '' : '(ไม่มีสิทธิ์แก้ราคา)'}</span><div class="row"><input class="in grow" id="pr" type="number" inputmode="decimal" step="any" value="${it.price}" ${pe ? '' : 'readonly'}>${pePin ? `<button class="btn ghost sm" id="unl">🔒 แก้ราคา</button>` : ''}</div></label>`,
       `${can('clearTicket') ? `<button class="btn ghost grow" id="rm" style="color:var(--red)">${I(IC.trash, 18)} ลบ</button>` : ''}<button class="btn grow green" id="ok">ตกลง</button>`);
+    ov.setAttribute('data-scan-close', '');   // ยิงชิ้นถัดไประหว่างเปิดหน้าต่างนี้ = ปิดหน้าต่าง (ไม่บันทึก) แล้วเพิ่มสินค้าใหม่
     const q = $('#q', ov), step = it.byWeight === 'Y' ? .1 : 1; let canPr = pe;
     const unl = $('#unl', ov); if (unl) unl.onclick = async () => { if (await gate('priceEdit')) { canPr = true; $('#pr', ov).readOnly = false; $('#pr', ov).focus(); unl.remove(); } };
     $('#m', ov).onclick = () => q.value = Math.max(step, Math.round((num(q.value) - step) * 1000) / 1000);
@@ -1144,7 +1181,8 @@ const TSync = {
   dev: (() => { let d = LS.get('tkDev', ''); if (!d) { d = Math.random().toString(36).slice(2, 10); LS.set('tkDev', d); } return d; })(),
   rev: LS.get('tkRev', 0), last: null, applying: false, dc: null, pc: null, peerAt: 0, direct: false, own: null, handled: '',
   bc: ('BroadcastChannel' in window) ? new BroadcastChannel('mm-ticket') : null,
-  on() { return LS.get('tkSync', true) && !!S.user; },
+  on() { return LS.get('tkSync', true) && !!S.user && feat('tksync'); },
+  live() { return Date.now() - this.peerAt < 600000; },   // เห็นอีกเครื่องภายใน 10 นาที
   code() { let h = 2166136261; const s = (S.apiUrl || 'local') + '|' + (S.user ? S.user.id : ''); for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0; return '9' + String(h % 10000000).padStart(7, '0'); },
   msg() { const t = POS.t; return { k: 'tk', dev: this.dev, u: S.user.id, rev: this.rev, t: { items: t.items, customer: t.customer, discount: t.discount, pointsUse: t.pointsUse || 0, cashOut: t.cashOut || 0 } }; },
   out() {
@@ -1155,7 +1193,8 @@ const TSync = {
     const s = JSON.stringify(m);
     let sent = false; try { if (this.dc && this.dc.readyState === 'open') { this.dc.send(s); sent = true; } } catch (e) { }
     // สำรองผ่าน Google: ส่งเสมอเมื่อยังไม่เชื่อมตรง · ถ้าเชื่อมตรงแล้วส่งช้า ๆ ไว้ให้เครื่องที่เพิ่งเปิด
-    if (S.apiUrl) { clearTimeout(this.rt); this.rt = setTimeout(() => api('displayPush', { code: this.code(), state: this.last }).catch(() => { }), sent ? 1500 : 60); }
+    // v2.7.0: ร้านที่ใช้เครื่องเดียว (ไม่เห็นอีกเครื่องเลย) → รวมการยิงหลายชิ้นเป็นการส่งครั้งเดียว ไม่ยิงคำขอไป Google ทุกชิ้น
+    if (S.apiUrl) { clearTimeout(this.rt); this.rt = setTimeout(() => apiQuiet('displayPush', { code: this.code(), state: this.last }).catch(() => { }), sent || !this.live() ? 1500 : 60); }
   },
   in(m) {
     if (!m || m.k !== 'tk' || m.dev === this.dev || !this.on() || m.u !== S.user.id) return;
@@ -1183,12 +1222,14 @@ const TSync = {
     clearTimeout(this.pt);
     if (this.on() && S.apiUrl && !document.hidden) {
       try {
-        const r = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'displayPull', payload: { code: this.code(), v: this.v } }) }).then(x => x.json());
+        // ตัดเวลารอ 10 วิ (เดิมไม่มี → เน็ตค้างครั้งเดียว ซิงก์หยุดไปเลย)
+        const ac = window.AbortController ? new AbortController() : null, tm = ac && setTimeout(() => ac.abort(), 10000);
+        const r = await fetch(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'displayPull', payload: { code: this.code(), v: this.v } }), signal: ac ? ac.signal : undefined }).then(x => x.json()).finally(() => tm && clearTimeout(tm));
         if (r && r.ok && !r.same && r.v) { this.v = r.v; this.in(r.state); }
       } catch (e) { }
     }
-    const live = Date.now() - this.peerAt < 600000;
-    this.pt = setTimeout(() => this.pull(), document.hidden ? 8000 : this.direct ? 6000 : live ? 1200 : 2000);
+    // ยังไม่เคยเห็นอีกเครื่อง → ถามห่าง ๆ (10 วิ) แทนทุก 2 วิ · เจออีกเครื่องแล้วค่อยถามถี่
+    this.pt = setTimeout(() => this.pull(), document.hidden ? 15000 : this.direct ? 6000 : this.live() ? 1200 : 10000);
   },
   // ---- เชื่อมตรง WebRTC ระหว่างเครื่อง (ใช้ช่องส่งสัญญาณเดียวกับจอลูกค้า) ----
   wire(ch) {
@@ -1229,10 +1270,9 @@ const TSync = {
         }
       } catch (e) { }
     }
-    const live = Date.now() - this.peerAt < 600000;
-    this.st = setTimeout(() => this.rtc(), document.hidden ? 10000 : open ? 8000 : this.own ? 1500 : live ? 3000 : 6000);
+    this.st = setTimeout(() => this.rtc(), document.hidden ? 20000 : open ? 8000 : this.own ? (this.live() ? 1500 : 6000) : this.live() ? 3000 : 15000);
   },
-  start() { if (this.started) return; this.started = true; this.pull(); setTimeout(() => this.rtc(), 800); document.addEventListener('visibilitychange', () => { if (!document.hidden) { this.pull(); this.rtc(); } }); setInterval(() => this.badge(), 15000); }
+  start() { if (this.started) return; if (!feat('tksync')) return; this.started = true; this.pull(); setTimeout(() => this.rtc(), 800); document.addEventListener('visibilitychange', () => { if (!document.hidden) { this.pull(); this.rtc(); } }); setInterval(() => this.badge(), 15000); }
 };
 window.TSync = TSync;
 if (TSync.bc) TSync.bc.onmessage = e => { const m = e.data; if (m === 'hello') { if (TSync.on() && TSync.last) TSync.bc.postMessage(TSync.last.dev === TSync.dev ? TSync.last : TSync.msg()); return; } TSync.in(m); };

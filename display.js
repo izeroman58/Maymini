@@ -54,6 +54,7 @@ const Display = {
   dev: (() => { let d = ''; try { d = localStorage.getItem('mm_dispSrc') || ''; if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem('mm_dispSrc', d); } } catch (e) { } return d; })(),
   seq: 0,
   push(state) {
+    if (!feat('display')) return;
     const A = this.assets();
     this.seq = Math.max(this.seq + 1, Date.now());
     const { shop, welcome, promo, logoMode, logo, brandW, brandC, ads, idle, ...dyn } = state || {};   // repush ส่งของเดิมกลับมา → ตัดส่วนใหญ่ออกก่อน
@@ -70,7 +71,7 @@ const Display = {
     // สำรองผ่าน Google: ส่งโลโก้เฉพาะเมื่อเปลี่ยน หรือทุก 60 วิ (ให้จอที่เพิ่งเปิดได้โลโก้ด้วย)
     if (code && S.apiUrl) {
       clearTimeout(this.t);
-      this.t = setTimeout(() => { const f = this.rAK !== A.k || Date.now() - (this.rAt || 0) > 60000; api('displayPush', { code, state: f ? this.last : { ...this.last, shop: undefined, welcome: undefined, promo: undefined, logoMode: undefined, logo: undefined, brandW: undefined, brandC: undefined, ads: undefined, idle: undefined } }).then(() => { if (f) { this.rAK = A.k; this.rAt = Date.now(); } }).catch(() => { }); }, s.mode === 'cart' ? 150 : 0);
+      this.t = setTimeout(() => { const f = this.rAK !== A.k || Date.now() - (this.rAt || 0) > 60000; apiQuiet('displayPush', { code, state: f ? this.last : { ...this.last, shop: undefined, welcome: undefined, promo: undefined, logoMode: undefined, logo: undefined, brandW: undefined, brandC: undefined, ads: undefined, idle: undefined } }).then(() => { if (f) { this.rAK = A.k; this.rAt = Date.now(); } }).catch(() => { }); }, s.mode === 'cart' ? 150 : 0);
     }
   },
   // ---- ให้ลูกค้ากรอกที่จอลูกค้า ----
@@ -110,7 +111,7 @@ const Display = {
   listen() {
     clearTimeout(this.sigT);
     const code = LS.get('dispCode', '');
-    if (!code || !S.apiUrl || !('RTCPeerConnection' in window) || !S.user) return;
+    if (!code || !S.apiUrl || !('RTCPeerConnection' in window) || !S.user || !feat('display')) return;
     const tick = async () => {
       const open = this.alive();
       try {
@@ -132,7 +133,7 @@ const Display = {
           await sig(code, 'answer', { id: off.id, sdp: pc.localDescription.toJSON ? pc.localDescription.toJSON() : { type: 'answer', sdp: pc.localDescription.sdp } });
         }
       } catch (e) { }
-      this.sigT = setTimeout(tick, document.hidden ? 8000 : open ? 5000 : 2500);
+      this.sigT = setTimeout(tick, document.hidden ? 12000 : open ? 6000 : 4000);
     };
     tick();
   }

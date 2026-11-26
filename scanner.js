@@ -12,8 +12,11 @@
 'use strict';
 const SCFG_DEF = { maxGap: 50, minLen: 4, autoEnter: true, stripAim: true, sound: true, prefix: '', suffix: '', serial: false, baud: 9600 };
 const Scanner = {
-  get cfg() { return { ...SCFG_DEF, ...LS.get('scannerCfg', {}) }; },
-  setCfg(o) { LS.set('scannerCfg', { ...this.cfg, ...o }); },
+  // v2.7.0: เก็บค่าตั้งไว้ในหน่วยความจำ (เดิมอ่าน localStorage + JSON.parse ทุกตัวอักษร ~17 ครั้ง/การยิง)
+  _cfg: null, _seenEnter: null, lastAt: 0, drops: 0,
+  get cfg() { return this._cfg || (this._cfg = { ...SCFG_DEF, ...LS.get('scannerCfg', {}) }); },
+  setCfg(o) { LS.set('scannerCfg', { ...this.cfg, ...o }); this._cfg = null; },
+  seenEnter() { if (this._seenEnter == null) this._seenEnter = !!LS.get('scanSeenEnter', false); return this._seenEnter; },
   handlers: {},           // handlers[ชื่อหน้า] = fn(code)  — ใช้เมื่อเปิดหน้านั้นอยู่
   history: [],            // สำหรับหน้าทดสอบ
   b: null, timer: null,
@@ -66,7 +69,7 @@ const Scanner = {
     }
     clearTimeout(this.timer);
     // ส่วนใหญ่เครื่องยิงส่ง Enter ท้าย → รอ Enter ให้นานพอ ไม่ตัดกลางรหัส (เครื่องที่ไม่ส่ง Enter จบเองหลังหยุด 300ms)
-    this.timer = setTimeout(() => { if (this.b) this.finish('idle'); }, LS.get('scanSeenEnter', false) ? 400 : 260);
+    this.timer = setTimeout(() => { if (this.b) this.finish('idle'); }, this.seenEnter() ? 400 : 260);
   },
   clean(code) {
     const cfg = this.cfg;
@@ -92,7 +95,7 @@ const Scanner = {
     }
     // แป้นไทยที่ไม่ส่งตำแหน่งปุ่ม: ตัว - / + ฯลฯ ก็คือปุ่มตัวเลขบนแป้นไทย → แปลงจากตัวอักษรที่กดทั้งหมด
     const code = this.clean(b.thai && b.noCode ? this.thai2en(b.keys.join('')) : b.chars.join(''));
-    if (term === 'Enter' && !LS.get('scanSeenEnter', false)) LS.set('scanSeenEnter', true);
+    if (term === 'Enter' && !this.seenEnter()) { LS.set('scanSeenEnter', true); this._seenEnter = true; }
     const ms = Math.round(b.last - b.t0), avg = b.gaps.length ? b.gaps.reduce((a, x) => a + x, 0) / b.gaps.length : 0;
     this.history.unshift({ code, len: code.length, ms, avg: Math.round(avg * 10) / 10, term, thai: b.thai, src: 'HID', at: new Date() }); this.history = this.history.slice(0, 30);
     if (!code) return false;
@@ -111,9 +114,30 @@ const Scanner = {
     el.value = pre + code; el.dispatchEvent(new Event('input', { bubbles: true }));
     this.dispatch(code, { el, before: { v: pre, s: pre.length, e: pre.length } }, 'Enter', e);
   },
+  topOv() { const a = document.querySelectorAll('.ov'); return a.length ? a[a.length - 1] : null; },
+  // v2.7.0: หน้าต่างที่ปิดได้เมื่อยิงชิ้นใหม่ — ถามยืนยัน / การ์ดราคา / แก้จำนวน / แป้นน้ำหนักจากหน้าขาย (ไม่มีช่องกรอกข้อมูลสำคัญ)
+  autoClose(ov, b) {
+    if (!ov || ov.sticky || ov.hasAttribute('data-scan-keep')) return false;
+    if (!ov.hasAttribute('data-scan-close')) {
+      if (ov.classList.contains('kpov') || ov.classList.contains('scan')) return false;
+      if (ov.querySelector('input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]),textarea,select,video')) return false;
+    }
+    if (ov._scanUndo && b) { try { ov._scanUndo(b.t0); } catch (e) { } }
+    try { ov.close ? ov.close() : ov.remove(); } catch (e) { ov.remove(); }
+    if (ov.isConnected) ov.remove();
+    return true;
+  },
   dispatch(code, b, term, ev) {
     const cfg = this.cfg;
-    const el = b ? b.el : (this.isField(document.activeElement) ? document.activeElement : null);
+    this.lastAt = Date.now();
+    const stop = () => { if (ev) { ev.preventDefault(); ev.stopPropagation(); } };
+    let el = b ? b.el : (this.isField(document.activeElement) ? document.activeElement : null);
+    // เดิม: มีหน้าต่างค้าง (เช่น "ไม่พบบาร์โค้ด — เพิ่มเป็นสินค้าใหม่?") → การยิงทุกครั้งหลังจากนั้นหายเงียบ ๆ จนกว่าจะปิดหน้าต่าง
+    // ตอนนี้: ยิงชิ้นใหม่ = ปิดหน้าต่างประเภทนั้นให้เอง แล้วรับการยิงต่อทันที
+    if (!(el && el.hasAttribute('data-scan-field') && !el.closest('[data-scan-close]'))) {
+      for (let k = 0; k < 5; k++) { const top = this.topOv(); if (!top || !this.autoClose(top, b)) break; }
+      if (el && !el.isConnected) el = null;
+    }
     const overlay = $('.ov') || $('.scan:not(.inline)');
     const h = this.handlers[S.view];
     const nativeField = el && (el.hasAttribute('data-scan-field') || overlay);
@@ -143,14 +167,21 @@ const Scanner = {
       try { f.scrollIntoView({ block: 'nearest' }); } catch (e) { }
     } else if (S.user && !overlay) {
       // ไม่มีหน้าที่รับ → เปิดดูราคาสินค้า
+      stop();
       const f = window.findByCode && findByCode(code);
       if (f) { beep(); productCard(f.p, f.price); } else { this.err(); toast('ไม่พบสินค้า ' + code, 1); }
+    } else {
+      // มีหน้าต่างที่มีข้อมูลกำลังกรอกอยู่ → ไม่ปิดให้ (กันข้อมูลหาย) แต่แจ้งให้รู้ ไม่เงียบ · Enter ของเครื่องยิงต้องไม่ไปกด "ตกลง"
+      stop();
+      const top = this.topOv(); if (top && top._scanUndo && b) { try { top._scanUndo(b.t0); } catch (e) { } }
+      this.drops++; this.err(); toast(`ยิงไม่เข้า: มีหน้าต่างเปิดค้างอยู่ — ปิดหน้าต่างก่อนแล้วยิงใหม่ (${code})`, 1);
+      if (window.ScanLog) ScanLog.add('blocked', code, top && (top.querySelector('h3') || {}).textContent);
     }
     document.dispatchEvent(new CustomEvent('mm:scan', { detail: code }));
   },
   err() {
     if (!this.cfg.sound) return;
-    try { const c = beep.c || (beep.c = new (window.AudioContext || window.webkitAudioContext)()); const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = 220; g.gain.value = .07; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .25); } catch (e) { }
+    try { const c = audioCtx(); if (c) { const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = 220; g.gain.value = .07; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .25); } } catch (e) { }
     try { navigator.vibrate && navigator.vibrate([80, 60, 80]); } catch (e) { }
   },
   on(view, fn) { this.handlers[view] = fn; },
@@ -191,11 +222,18 @@ const Scanner = {
   start() {
     if (this.started) return; this.started = true;
     window.addEventListener('keydown', e => this.onKey(e), true);
+    addEventListener('storage', e => { if (e.key === 'mm_scannerCfg') this._cfg = null; if (e.key === 'mm_scanSeenEnter') this._seenEnter = null; });
     if (this.cfg.serial && this.serialOK) this.serialConnect(true).catch(() => { });
   }
 };
 window.Scanner = Scanner;
 Scanner.start();
+// v2.7.0: บันทึกเหตุการณ์ที่ยิงไม่เข้า (ดูได้ที่ เพิ่มเติม › เครื่องยิงบาร์โค้ด) — ช่วยหาสาเหตุเมื่อร้านแจ้งว่า "ยิงไม่ติด"
+const ScanLog = {
+  list: [],
+  add(kind, code, info) { this.list.unshift({ kind, code, info: String(info || '').slice(0, 60), at: new Date() }); this.list.length = Math.min(this.list.length, 20); }
+};
+window.ScanLog = ScanLog;
 
 /* ---------- หน้าตั้งค่า + ทดสอบเครื่องยิงบาร์โค้ด ---------- */
 VIEWS.scannerset = el => {
@@ -239,7 +277,9 @@ VIEWS.scannerset = el => {
       if (/^\d{12}$/.test(last.code)) tips.push(['blue', 'ได้รหัส 12 หลัก (UPC-A) — ระบบค้นหาแบบเติม 0 ข้างหน้าให้อัตโนมัติ']);
       if (!tips.length) tips.push(['green', 'เครื่องยิงทำงานปกติ ✓']);
     }
-    $('#tips', el).innerHTML = tips.map(([c2, t]) => `<div class="alert ${c2}" style="margin-top:8px">${I(c2 === 'green' ? IC.check : IC.alert, 18)}<div class="small">${t}</div></div>`).join('');
+    const lg = window.ScanLog ? ScanLog.list.filter(x => x.kind === 'blocked').slice(0, 6) : [];
+    $('#tips', el).innerHTML = tips.map(([c2, t]) => `<div class="alert ${c2}" style="margin-top:8px">${I(c2 === 'green' ? IC.check : IC.alert, 18)}<div class="small">${t}</div></div>`).join('')
+      + (lg.length ? `<div class="alert amber" style="margin-top:8px">${I(IC.alert, 18)}<div class="small"><b>ยิงไม่เข้า ${lg.length} ครั้งล่าสุด</b> (มีหน้าต่างกรอกข้อมูลเปิดค้าง)<br>${lg.map(x => `${x.at.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · ${esc(x.code)} · ${esc(x.info || 'หน้าต่าง')}`).join('<br>')}</div></div>` : '');
   };
   Scanner.on('scannerset', code => {
     const f = findByCode(code);

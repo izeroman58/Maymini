@@ -206,8 +206,9 @@ const OStore = {
   start() {
     if (this.started || !this.allowed()) return; this.started = true;
     setTimeout(() => this.backfill().then(() => this.sync()), 4000);
-    setInterval(() => { if (!document.hidden) this.sync(); }, 120000);
-    document.addEventListener('mm:online', () => this.backfill().then(() => this.sync(true)));
+    // v2.7.0: ไม่ดึงยอดขายตอนกำลังยิงบาร์โค้ด (รอให้หยุดยิงก่อน) · ไม่ดึงเมื่ออยู่หน้าขายแบบเงียบ ๆ ทุก 2 นาที
+    setInterval(() => { if (!document.hidden && S.view !== 'pos') whenQuiet('ostoreSync', () => this.sync()); }, 120000);
+    document.addEventListener('mm:online', () => whenQuiet('ostoreBack', () => this.backfill().then(() => this.sync(true))));
   }
 };
 window.OStore = OStore;

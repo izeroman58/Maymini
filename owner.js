@@ -21,10 +21,10 @@ function sumDays(days, from, to) {
 const IC_LEDGER = '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h5"/>';
 function qaButtons(own) {
   return [
-    own ? { k: 'ledger', c: 'var(--green)', ic: IC_LEDGER, t: 'บันทึกรายรับ-รายจ่าย', fn: () => go('ledger') } : { k: 'pos', c: 'var(--green)', ic: IC.cart, t: 'ขายสินค้า', fn: () => go('pos') },
+    own && feat('ledger') ? { k: 'ledger', c: 'var(--green)', ic: IC_LEDGER, t: 'บันทึกรายรับ-รายจ่าย', fn: () => go('ledger') } : { k: 'pos', c: 'var(--green)', ic: IC.cart, t: 'ขายสินค้า', fn: () => go('pos') },
     own ? { k: 'reports', c: '#2B4C9B', ic: IC.chart, t: 'รายงาน', fn: () => go('reports') } : { k: 'scan', c: 'var(--red)', ic: IC.scan, t: 'เช็คราคา', fn: () => go('scan') },
     can('receiveGoods') && { k: 'receipt', c: '#E07A00', ic: IC.cam, t: 'ใบเสร็จร้านส่ง', fn: () => newReceipt() },
-    own ? { k: 'tax', c: '#7B3FB8', ic: IC.tax, t: 'ภาษี', fn: () => go('tax') } : { k: 'labels', c: '#2B4C9B', ic: IC.print, t: 'พิมพ์ฉลาก', fn: () => go('labels') }
+    own && feat('tax') ? { k: 'tax', c: '#7B3FB8', ic: IC.tax, t: 'ภาษี', fn: () => go('tax') } : { k: 'labels', c: '#2B4C9B', ic: IC.print, t: 'พิมพ์ฉลาก', fn: () => go('labels') }
   ].filter(Boolean);
 }
 function qaDraw(box, own) {
@@ -66,7 +66,7 @@ VIEWS.home = async el => {
    ${own ? '<div id="jobsb"></div><div id="rsh"></div><div id="kpi"></div><div id="vat"></div>' : ''}<div id="alerts"></div><div id="stats"></div>
    ${S.apiUrl ? '' : `<div class="alert blue">${I(IC.alert, 20)}<div>กำลังใช้ <b>โหมดทดลอง</b> ข้อมูลอยู่ในเครื่องนี้เท่านั้น</div></div>`}`;
   qaDraw($('#qa', el), own);
-  if (own && window.restockHome) restockHome($('#rsh', el));
+  if (own && window.restockHome && feat('restock')) restockHome($('#rsh', el));
   const t = todayISO(), m0 = t.slice(0, 8) + '01', lmEnd = addDays(m0, -1), lm0 = lmEnd.slice(0, 8) + '01';
   if (own && window.jobsBadge) jobsBadge($('#jobsb', el));
   if (own) {
@@ -278,7 +278,7 @@ VIEWS.settings = el => {
   _settingsView(el);
   if (!isOwner()) return;
   const c = document.createElement('div'); c.className = 'card';
-  c.innerHTML = `<h3>การแสดงผล</h3><button class="btn ghost block" onclick="brandDlg()">โลโก้ร้าน (หน้าใส่ PIN · แถบบน · จอลูกค้า · ไอคอนแท็บ)</button><button class="btn ghost block" style="margin-top:8px" onclick="fontDlg()">ฟอนต์และขนาดตัวอักษร</button><button class="btn ghost block" style="margin-top:8px" onclick="vatDlg()">สถานะ VAT</button><button class="btn ghost block" style="margin-top:8px" onclick="go('svcset')">ค่าบริการ โอนเงิน/เติมเงิน/จ่ายบิล</button>`;
+  c.innerHTML = `<h3>การแสดงผล</h3><button class="btn ghost block" onclick="brandDlg()">โลโก้ร้าน (หน้าใส่ PIN · แถบบน · จอลูกค้า · ไอคอนแท็บ)</button><button class="btn ghost block" style="margin-top:8px" onclick="go('appearance')">ธีมสี · โหมดมืด · ฟอนต์</button><button class="btn ghost block" style="margin-top:8px" onclick="go('features')">ฟีเจอร์ · เปิด/ปิดโมดูลเสริม</button><button class="btn ghost block" style="margin-top:8px" onclick="vatDlg()">สถานะ VAT</button><button class="btn ghost block" style="margin-top:8px" onclick="go('svcset')">ค่าบริการ โอนเงิน/เติมเงิน/จ่ายบิล</button>`;
   el.insertBefore(c, el.children[2] || null);
 };
 
@@ -313,3 +313,47 @@ function brandDlg() {
   $('#ok', ov).onclick = async () => { try { busy(1); await saveSetting('brandLogo', col); await saveSetting('brandLogoW', wh); busy(0); ov.remove(); toast('บันทึกโลโก้แล้ว'); Brand.favicon(); go(S.view, S.viewArg); } catch (e) { busy(0); toast(e.message, 1); } };
   pv();
 }
+
+/* ---------- v2.7.0 ฟีเจอร์: เปิด/ปิดโมดูลเสริม (เจ้าของร้าน) ---------- */
+(function () { const st = document.createElement('style'); st.textContent = `.ftg{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer}.ftg:last-child{border-bottom:0}
+.ftg .fe{font-size:24px;width:34px;text-align:center;flex:none}.ftg .ft{flex:1;min-width:0}.ftg .ft b{display:block}.ftg .ft small{color:var(--ink2);display:block;line-height:1.35}
+.sw2{position:relative;width:52px;height:30px;flex:none}.sw2 input{opacity:0;width:0;height:0;position:absolute}.sw2 i{position:absolute;inset:0;border-radius:99px;background:#C9C3C4;transition:background .15s}.sw2 i:after{content:'';position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.sw2 input:checked+i{background:var(--green)}.sw2 input:checked+i:after{transform:translateX(22px)}.sw2 input:focus-visible+i{outline:2px solid var(--red);outline-offset:2px}
+.acc{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}.acc button{all:unset;cursor:pointer;border-radius:14px;border:2px solid var(--line);padding:10px;display:flex;flex-direction:column;align-items:center;gap:6px;font-weight:600;background:var(--card)}.acc button.on{border-color:var(--ink)}.acc .dot{width:44px;height:44px;border-radius:50%;box-shadow:inset 0 0 0 3px #ffffff55}
+.seg3{display:flex;gap:8px}.seg3 button{flex:1;min-height:48px}`; document.head.appendChild(st); })();
+VIEWS.features = el => {
+  if (ownerOnly(el)) return;
+  const cur = () => { try { return JSON.parse(S.settings.features || '{}') || {}; } catch (e) { return {}; } };
+  el.innerHTML = vhead('ฟีเจอร์ · เปิด/ปิดโมดูล', '', 'more') + `<div class="card small muted">ปิดสิ่งที่ร้านไม่ได้ใช้ → เมนูดูง่ายขึ้น และเครื่องไม่ต้องทำงานเบื้องหลังของโมดูลนั้น (เร็วขึ้น) · ข้อมูลเดิมไม่หาย เปิดกลับมาก็ใช้ต่อได้ · ใช้กับทุกเครื่องในร้าน</div>`
+    + FEATURES.map(g => `<div class="card"><h3>${g.g}</h3>${g.items.map(([k, e, t, d]) => `<label class="ftg"><span class="fe">${e}</span><span class="ft"><b>${t}</b><small>${d}</small></span><span class="sw2"><input type="checkbox" data-f="${k}" ${feat(k) ? 'checked' : ''}><i></i></span></label>`).join('')}</div>`).join('');
+  $$('[data-f]', el).forEach(c => c.onchange = async () => {
+    const f = cur(), k = c.dataset.f;
+    if (c.checked) delete f[k]; else f[k] = false;
+    c.disabled = true;
+    try {
+      await saveSetting('features', f);
+      toast((c.checked ? 'เปิด ' : 'ปิด ') + c.closest('.ftg').querySelector('b').textContent + ' แล้ว');
+      if (k === 'tksync' && window.TSync) { if (c.checked) TSync.start(); else { clearTimeout(TSync.pt); clearTimeout(TSync.st); TSync.started = false; } }
+      if (k === 'display' && window.Display) { if (c.checked) Display.listen(); else clearTimeout(Display.sigT); }
+      if (Drawer.el) Drawer.close();
+    } catch (e) { c.checked = !c.checked; toast(e.message, 1); }
+    c.disabled = false;
+  });
+};
+
+/* ---------- v2.7.0 ธีมสี · โหมดสว่าง/มืด · ฟอนต์ ---------- */
+VIEWS.appearance = el => {
+  const own = isOwner();
+  el.innerHTML = vhead('ธีมสี · ฟอนต์', '', 'more') + `
+    <div class="card"><h3>สีหลักของร้าน</h3><div class="small muted" style="margin-bottom:10px">แถบด้านบน ปุ่มหลัก ไอคอน และเมนูที่เลือก${own ? ' · ใช้กับทุกเครื่องในร้าน' : ' · เจ้าของร้านเป็นผู้เลือก'}</div>
+      <div class="acc" id="acc">${Theme.ACCENTS.map(([k, n, c]) => `<button type="button" data-a="${k}" class="${Theme.accent() === k ? 'on' : ''}" ${own ? '' : 'disabled style="opacity:.55;cursor:default"'}><span class="dot" style="background:${c}"></span>${n}</button>`).join('')}</div></div>
+    <div class="card"><h3>โหมดหน้าจอ (เฉพาะเครื่องนี้)</h3><div class="seg3" id="md">${[['light', '☀️ สว่าง'], ['dark', '🌙 มืด'], ['auto', '🔄 ตามเครื่อง']].map(([k, n]) => `<button type="button" class="btn ${Theme.mode() === k ? '' : 'ghost'}" data-m="${k}">${n}</button>`).join('')}</div>
+      <div class="tiny muted" style="margin-top:6px">ตามเครื่อง = สว่างตอนกลางวัน มืดตอนกลางคืน ตามที่ตั้งไว้ในมือถือ/แท็บเล็ต</div></div>
+    ${own ? `<div class="card"><h3>ตัวอักษร</h3><button class="btn ghost block" onclick="fontDlg()">ฟอนต์และขนาดตัวอักษร</button><button class="btn ghost block" style="margin-top:8px" onclick="brandDlg()">โลโก้ร้าน</button></div>` : ''}`;
+  $$('[data-a]', el).forEach(b => b.onclick = async () => {
+    if (!own) return;
+    const k = b.dataset.a, old = Theme.accent(); Theme.setAccent(k); $$('[data-a]', el).forEach(x => x.classList.toggle('on', x === b));
+    try { await saveSetting('uiAccent', k); toast('เปลี่ยนสีหลักแล้ว'); } catch (e) { Theme.setAccent(old); toast(e.message, 1); go('appearance'); }
+  });
+  $$('[data-m]', el).forEach(b => b.onclick = () => { Theme.setMode(b.dataset.m); $$('[data-m]', el).forEach(x => x.classList.toggle('ghost', x !== b)); });
+};
