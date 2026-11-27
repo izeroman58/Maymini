@@ -375,7 +375,7 @@ html.dark .muted{color:var(--ink2)}
 /* หน้าใส่ PIN: ใช้โทนแดง-ชมพูไล่สีแบบเดิมเสมอ ไม่ขึ้นกับโหมดมืด */
 html.dark .login{color-scheme:light;--ink:#1D1B1C;--ink2:#5E5759;--ink3:#9A9294;--line:#ECE6E7;--bg:#F7F4F2;--card:#fff;--red-l:color-mix(in srgb,var(--red) 10%,#fff);--sh:0 1px 2px rgba(60,20,25,.06),0 4px 16px rgba(60,20,25,.06);background:radial-gradient(120% 60% at 50% 0%,#FFE1E5 0%,#F7F4F2 60%);background:radial-gradient(120% 60% at 50% 0%,color-mix(in srgb,var(--red) 12%,#fff) 0%,#F7F4F2 60%);color:#1D1B1C}
 html.dark .login .pinpad button,html.dark .login .btn.ghost,html.dark .login .in,html.dark .login .card{background:#fff!important;color:#1D1B1C}
-html:has(.login) body{background:#F7F4F2}
+html:has(.login) body{background:#C4001A}
 
 /* ปุ่ม ✕ ล้างช่องค้นหา */
 .sclr{position:absolute;z-index:3;border:0;border-radius:50%;background:#8E8E93;color:#fff;font-size:17px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;touch-action:manipulation;opacity:.85}
@@ -387,16 +387,21 @@ html.dark .sclr{background:#5A5D63}
 .cit .t{font-size:18px;font-weight:700}.cit .m{font-size:15px}
 
 /* เมนูบริการ: เกือบเต็มจอ เหลือขอบบน-ล่างข้างละ 10% · ปุ่ม/ไอคอน/ตัวอักษรใหญ่ */
-.ov:has(.svmenu){align-items:center}
-.sheet.svmenu{max-width:min(1240px,96vw);height:80dvh;max-height:80dvh;border-radius:22px}
-.sheet.svmenu .sh h3{font-size:clamp(22px,3.2vh,30px)}
-.sheet.svmenu .sb{flex:1;min-height:0;display:flex;padding-bottom:18px}
-.svmg{flex:1;display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:clamp(10px,1.6vh,16px)}
-.svmg .btn{flex-direction:column;gap:clamp(4px,1vh,10px);min-height:0;height:auto;border-radius:20px;padding:10px 8px;color:#fff;text-align:center;line-height:1.15}
-.svmg .ic{font-size:clamp(40px,7.5vh,76px);line-height:1}
-.svmg b{font-size:clamp(22px,3.6vh,34px);font-weight:800}
-.svmg .ds{font-size:clamp(14px,1.9vh,18px);font-weight:500;opacity:.92}
-@media (orientation:portrait),(max-width:700px){.svmg{grid-template-columns:repeat(2,1fr)}.svmg .ds{display:none}}
+.ov:has(.svmenu){align-items:center;justify-content:center;padding:0 4vw}
+.sheet.svmenu{width:min(900px,80vw);max-width:none;height:70dvh;max-height:70dvh;border-radius:22px;margin:0 auto}
+.sheet.svmenu .sh h3{font-size:clamp(20px,3vh,28px)}
+.sheet.svmenu .sb{flex:1;min-height:0;display:flex;padding-bottom:16px}
+.svmg{flex:1;display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:clamp(8px,1.4vh,14px)}
+.svmg .btn{flex-direction:column;gap:clamp(3px,.8vh,8px);min-height:0;height:auto;border-radius:18px;padding:8px 6px;color:#fff;text-align:center;line-height:1.15;overflow:hidden}
+.svmg .ic{font-size:clamp(34px,6vh,64px);line-height:1}
+.svmg b{font-size:clamp(18px,3vh,30px);font-weight:800}
+.svmg .ds{font-size:clamp(12px,1.6vh,16px);font-weight:500;opacity:.92}
+@media (orientation:portrait),(max-width:700px){
+ .sheet.svmenu{width:92vw}
+ .svmg{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(4,1fr);grid-auto-rows:1fr}
+ .svmg .ds{display:none}
+ .svmg .ic{font-size:clamp(30px,5vh,52px)}.svmg b{font-size:clamp(17px,2.6vh,24px)}
+}
 
 /* หน้าต่างบริการ: ตัวเลขสำคัญ (เบอร์ เลขบัญชี เลขบิล ยอดเงิน) ใหญ่ใกล้เคียงปุ่มแป้นตัวเลข */
 .svs .sfield{padding:10px 14px}
@@ -409,6 +414,25 @@ html.dark .sclr{background:#5A5D63}
 .svs .svh{font-size:clamp(15px,2vh,18px)}.svs .svh b{font-size:clamp(17px,2.3vh,21px)}
 .svs .svl .btn.sm{min-height:44px;font-size:17px;padding:6px 14px}
 .svs .seg button{font-size:17px}
+
+/* หน้าใส่ PIN: พื้นแดงสดไล่สี โลโก้ขาว การ์ด PIN สีขาว (เหมือนกันทั้งโหมดสว่าง/มืด) */
+.login,html.dark .login{background:radial-gradient(130% 75% at 50% 0%,#FF3A4E 0%,#E8001C 42%,#B30016 100%)!important;color:#fff}
+.login .brand .muted,.login>#ver,.login>.tiny.muted{color:rgba(255,255,255,.9)!important}
+.login .brand img{filter:drop-shadow(0 4px 14px rgba(90,0,12,.35))}
+.login .card{box-shadow:0 14px 44px rgba(90,0,12,.38),0 2px 6px rgba(90,0,12,.2);border:0}
+.login .pinpad button,html.dark .login .pinpad button{background:#F7F3F3!important;box-shadow:0 1px 0 rgba(0,0,0,.06)}
+.login .pinpad button:active{background:#FFD9DE!important}
+.login .dots i{background:#E7DFE0!important}.login .dots i.on{background:#E8001C!important}
+.login .iconbtn,.login .iconbtn svg{color:#fff;stroke:#fff}
+
+/* ตรวจนับสต็อก: ตัวเลขที่นับเป็นปุ่มใหญ่ แตะแล้วเปิดแป้นตัวเลข */
+.item.cnt{gap:10px;align-items:center}
+.item.cnt.last{background:var(--green-l);box-shadow:inset 4px 0 0 var(--green)}
+.cntv{min-width:84px;height:56px;padding:0 12px;border-radius:14px;border:2px dashed var(--line);background:var(--card);color:var(--ink3);font-family:var(--fh);font-size:20px;font-weight:700;cursor:pointer;flex:none;touch-action:manipulation}
+.cntv.on{border:2px solid var(--green);color:var(--ink);font-size:26px;background:var(--green-l)}
+.cntv:active{transform:scale(.96)}
+
+.rs-why{cursor:help;border-bottom:1px dotted var(--ink3);touch-action:manipulation}.rs-why i{font-style:normal;color:var(--blue,#2563EB);font-size:.95em}
 </style>
 <script>try{var _t=localStorage.getItem('mm_theme'),_pd=localStorage.getItem('mm_posDark');_t=_t?JSON.parse(_t):(_pd==null||JSON.parse(_pd)?'dark':'light');if(JSON.parse(localStorage.getItem('mm_themeMode')||'""')==='auto')_t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';if(_t==='dark')document.documentElement.classList.add('dark');document.documentElement.dataset.theme=_t;var _a=JSON.parse(localStorage.getItem('mm_accent')||'""');if(_a)document.documentElement.dataset.accent=_a;}catch(e){}</script>
 </head>
@@ -421,7 +445,7 @@ html.dark .sclr{background:#5A5D63}
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.7.0';
+const APP_VER = '2.7.1';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -781,7 +805,8 @@ function sheet(title, body, foot, opts = {}) {
   const ov = document.createElement('div'); ov.className = 'ov';
   ov.innerHTML = `<div class="sheet${opts.cls ? ' ' + opts.cls : ''}" role="dialog"><div class="sh"><h3>${title}</h3><button class="iconbtn" data-x>${I(IC.x)}</button></div><div class="sb">${body}</div>${foot ? `<div class="sf">${foot}</div>` : ''}</div>`;
   const close = () => { ov.remove(); opts.onClose && opts.onClose(); };
-  ov.addEventListener('click', e => { if (e.target === ov && !opts.sticky && !ov.sticky) close(); });
+  // ทั้งระบบ: แตะพื้นที่ว่างรอบหน้าต่างไม่ปิด (กันข้อมูลหายเพราะแตะพลาด) — ปิดด้วย ✕ เท่านั้น · ยกเว้นหน้าต่างที่ขอไว้ (backdropClose)
+  ov.addEventListener('click', e => { if (e.target === ov && opts.backdropClose && !opts.sticky && !ov.sticky) close(); });
   $('[data-x]', ov).onclick = close; ov.close = close;
   document.body.appendChild(ov); return ov;
 }
@@ -901,7 +926,7 @@ const ThaiDate = {
       $('[data-x]', c).onclick = close;
       if (ThaiDate._place && bg.isConnected) ThaiDate._place();   // เปลี่ยนโหมดเดือน/ปี ความสูงเปลี่ยน → จัดตำแหน่งใหม่
     };
-    bg.onclick = e => { if (e.target === bg) close(); };
+    bg.onclick = e => { if (e.target === bg) { const b = $('[data-x]', c); if (b) { b.animate && b.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.15)' }, { transform: 'scale(1)' }], 260); } } };   // ปิดด้วยปุ่ม ปิด เท่านั้น
     document.body.appendChild(bg); draw();
     // กล่องเล็กลอยติดช่องวันที่ทุกขนาดจอ: ใต้ช่อง → ถ้าไม่พอวางเหนือช่อง → ไม่พอทั้งคู่วางกลางจอ · ไม่ล้นขอบจอ
     const place = () => {
@@ -1817,10 +1842,12 @@ async function clockOutFlow() {
 
 function renderLogin(mode) {
   mode = mode || 'login';
+  // หน้าต่างที่ค้างจากรอบก่อน (ออกจากระบบ/ล็อกจอขณะเปิดหน้าต่างอยู่) ไม่ให้บังแป้น PIN
+  document.querySelectorAll('.ov, .busy').forEach(o => o.remove()); try { busyEl = null; } catch (e) { }
   let pin = '', vtap = 0;
   app.innerHTML = `<div class="login">
-    <div style="position:fixed;top:calc(8px + var(--safe-t));right:8px;color:var(--ink2)">${FS.btn()}</div>
-    <div class="brand"><img src="${Brand.color()}" alt="ร้านเมย์ Mini Mart" style="display:block;margin:0 auto;width:min(240px,60vw);height:auto;max-height:24vh;object-fit:contain"><div class="muted small" style="margin-top:6px">${esc(S.device.name || '')}</div></div>
+    <div style="position:fixed;top:calc(8px + var(--safe-t));right:8px;color:#fff">${FS.btn()}</div>
+    <div class="brand"><img src="${Brand.white()}" alt="ร้านเมย์ Mini Mart" style="display:block;margin:0 auto;width:min(240px,60vw);height:auto;max-height:24vh;object-fit:contain"><div class="muted small" style="margin-top:6px">${esc(S.device.name || '')}</div></div>
     <div class="card" style="width:100%;max-width:360px">
       <div class="center disp" style="font-size:18px;margin-top:4px">${mode === 'clock' ? 'ใส่ PIN เพื่อลงเวลาเข้างาน' : 'PIN'}</div>
       <div class="dots">${'<i></i>'.repeat(4)}</div>
@@ -1831,10 +1858,16 @@ function renderLogin(mode) {
     </div>
     <div class="tiny muted" id="ver" style="margin-top:14px;padding:6px 14px">v${APP_VER}<span class="vclk"> · ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} น.</span></div></div>`;
   const dots = () => $$('.dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
-  let sending = false;
+  let sending = false, gen = 0;
+  // สถานะในการ์ด PIN เอง (ไม่พึ่งหน้าต่างหมุนของระบบ ซึ่งงานอื่นอาจปิดทับ) — ไม่ให้เห็นจุดเต็มค้างโดยไม่รู้ว่าระบบกำลังทำอะไร
+  $('.dots').insertAdjacentHTML('afterend', '<div class="center small" id="lst" style="min-height:20px;margin-top:-4px;color:var(--ink2)"></div>');
+  const st = (t, err) => { const e = $('#lst'); if (e) { e.innerHTML = t || ''; e.style.color = err ? 'var(--red)' : 'var(--ink2)'; } const pp = $('.pinpad'); if (pp) pp.style.opacity = sending ? '.45' : ''; };
+  const reset = (msg) => { gen++; sending = false; pin = ''; dots(); st(msg || '', !!msg); busy(0); };
   const submit = async () => {
     if (sending || pin.length < 4) return;
-    sending = true; busy(1, 'กำลังเข้าสู่ระบบ...');
+    sending = true; const my = ++gen; st('<span class="spin dark" style="width:14px;height:14px;vertical-align:-2px"></span> กำลังตรวจรหัส… (แตะ ล้าง เพื่อยกเลิก)');
+    // เน็ตช้า/Google ไม่ตอบ: ครบ 25 วินาทีให้กลับมาใส่รหัสใหม่ได้ ไม่ค้าง
+    const wd = setTimeout(() => { if (my === gen && sending) reset('เน็ตช้าหรือไม่ตอบ — ใส่รหัสอีกครั้ง'); }, 25000);
     const dev = { id: S.device.id, type: devType(), ua: navigator.userAgent, name: S.device.name || '' };
     try {
       let r = null, fast = false;
@@ -1848,6 +1881,8 @@ function renderLogin(mode) {
         }
         OfflineAuth.remember(r.user, pin, r.token);
       }
+      clearTimeout(wd);
+      if (my !== gen) return;   // ผู้ใช้กดยกเลิก/หมดเวลาไปแล้ว — ไม่เข้าระบบซ้อน
       S.token = r.token; S.user = r.user; LS.set('token', r.token); LS.set('user', r.user);
       if (r.device) { S.device = { ...S.device, ...r.device }; LS.set('device', S.device); }
       if (fast) {
@@ -1872,13 +1907,17 @@ function renderLogin(mode) {
       await boot();
       if (mode === 'clock' && S.view !== 'pos') go('pos');
       if (r.mustChangePin) { toast('กรุณาเปลี่ยนรหัสเริ่มต้น 1234'); changePinDlg(); }
-    } catch (e) { busy(0); pin = ''; dots(); toast(e.message, 1); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (x) { } }
-    sending = false;
+    } catch (e) { clearTimeout(wd); if (my !== gen) return; busy(0); pin = ''; dots(); st(''); toast(e.message, 1); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (x) { } }
+    if (my === gen) { sending = false; st(''); }
   };
-  const add = d => { if (pin.length >= 4) return; pin += d; dots(); if (pin.length === 4) setTimeout(submit, 80); };
+  // กำลังตรวจรหัสอยู่ = ไม่รับตัวเลขเพิ่ม · ครบ 4 หลักแล้วยังไม่ส่ง (เช่น กลับมาจากพักแอป) = ส่งใหม่
+  const add = d => { if (sending) return; if (pin.length >= 4) { pin = ''; } pin += d; dots(); st(''); if (pin.length === 4) setTimeout(submit, 80); };
   $$('.pinpad [data-n]').forEach(b => b.onclick = () => add(b.dataset.n));
-  $('.pinpad [data-c]').onclick = () => { pin = ''; dots(); };
-  $('.pinpad [data-del]').onclick = () => { pin = pin.slice(0, -1); dots(); };
+  $('.pinpad [data-c]').onclick = () => reset();
+  $('.pinpad [data-del]').onclick = () => { if (sending) return; pin = pin.slice(0, -1); dots(); st(''); };
+  // กลับมาจากพักแอป/สลับแอป แล้วจุดเต็มค้างแต่ไม่ได้กำลังส่ง → ล้างให้ใส่ใหม่
+  const wake = () => { if (!$('.login')) return; if (!sending && pin.length) { pin = ''; dots(); st(''); } };
+  addEventListener('pageshow', wake); document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   $('#clk').onclick = () => renderLogin(mode === 'clock' ? 'login' : 'clock');
   document.onkeydown = e => { if (!$('.login') || $('.ov')) return; if (/^\d$/.test(e.key)) add(e.key); else if (e.key === 'Backspace') { pin = pin.slice(0, -1); dots(); } };
   const cf = $('#cfg'); if (cf) cf.onclick = connectDlg;
@@ -3309,23 +3348,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.7.0"></script>
-<script src="logic.js?v=2.7.0"></script>
-<script src="cache.js?v=2.7.0"></script>
-<script src="offline.js?v=2.7.0"></script>
-<script src="scanner.js?v=2.7.0"></script>
-<script src="printer.js?v=2.7.0"></script>
-<script src="pos.js?v=2.7.0"></script>
-<script src="idle.js?v=2.7.0"></script>
-<script src="display.js?v=2.7.0"></script>
-<script src="reports.js?v=2.7.0"></script>
-<script src="inventory.js?v=2.7.0"></script>
-<script src="people.js?v=2.7.0"></script>
-<script src="quality.js?v=2.7.0"></script>
-<script src="services.js?v=2.7.0"></script>
-<script src="owner.js?v=2.7.0"></script>
-<script src="books.js?v=2.7.0"></script>
-<script src="restock.js?v=2.7.0"></script>
+<script src="qr.js?v=2.7.1"></script>
+<script src="logic.js?v=2.7.1"></script>
+<script src="cache.js?v=2.7.1"></script>
+<script src="offline.js?v=2.7.1"></script>
+<script src="scanner.js?v=2.7.1"></script>
+<script src="printer.js?v=2.7.1"></script>
+<script src="pos.js?v=2.7.1"></script>
+<script src="idle.js?v=2.7.1"></script>
+<script src="display.js?v=2.7.1"></script>
+<script src="reports.js?v=2.7.1"></script>
+<script src="inventory.js?v=2.7.1"></script>
+<script src="people.js?v=2.7.1"></script>
+<script src="quality.js?v=2.7.1"></script>
+<script src="services.js?v=2.7.1"></script>
+<script src="owner.js?v=2.7.1"></script>
+<script src="books.js?v=2.7.1"></script>
+<script src="restock.js?v=2.7.1"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

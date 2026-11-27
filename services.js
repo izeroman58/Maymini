@@ -50,7 +50,7 @@ const SVC_FEAT = { out: 'moneysvc', in: 'moneysvc', topup: 'moneysvc', bill: 'mo
 const svcList = () => Object.values(SVC).filter(s => feat(SVC_FEAT[s.key] || s.key));
 function svcMenu() {
   if (!svcList().length) return toast('ปิดบริการทั้งหมดไว้ — เปิดได้ที่ เพิ่มเติม › ฟีเจอร์', 1);
-  const ov = sheet('บริการ', `<div class="svmg">${svcList().map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color}"><span class="ic">${s.icon}</span><b>${s.name}</b><span class="ds">${s.desc}</span></button>`).join('')}</div>`, '', { cls: 'svmenu' });
+  const ov = sheet('บริการ', `<div class="svmg">${svcList().map(s => `<button class="btn" data-k="${s.key}" style="background:${s.color}"><span class="ic">${s.icon}</span><b>${s.name}</b><span class="ds">${s.desc}</span></button>`).join('')}</div>`, '', { cls: 'svmenu', sticky: true });
   $$('[data-k]', ov).forEach(b => b.onclick = () => { ov.remove(); svcDialog(b.dataset.k); });
 }
 function svcDialog(kind) {
@@ -340,7 +340,9 @@ VIEWS.jobs = async el => {
     $$('[data-cancel]', el).forEach(b => b.onclick = async () => { if (await confirmDlg('ยกเลิกงานนี้? (เช่น ลูกค้าขอยกเลิก — อย่าลืมคืนเงินบิลถ้าคืนเงินลูกค้า)', 'ยกเลิกงาน', true)) upd(b.dataset.cancel, 'cancelled', 'ยกเลิกโดยเจ้าของร้าน'); });
     $$('[data-back]', el).forEach(b => b.onclick = () => upd(b.dataset.back, 'pending', ''));
   };
-  const load = async () => { try { rows = (await api('jobs', { limit: 300 })).rows; } catch (e) { $('#jl', el).innerHTML = `<div class="card empty">${esc(e.message)}</div>`; return; } draw(); };
+  // งานล่าสุดเก็บในเครื่อง: เปิดหน้าแล้วเห็นทันที · ดึงใหม่เบื้องหลัง
+  const cached = LS.get('jobsCache:' + (S.user ? S.user.id : ''), null); if (cached && cached.length && !rows.length) { rows = cached; draw(); }
+  const load = async () => { try { const r = (await api('jobs', { limit: 300 })).rows; LS.set('jobsCache:' + (S.user ? S.user.id : ''), r); if (!el.isConnected) return; rows = r; } catch (e) { if (!rows.length) $('#jl', el).innerHTML = `<div class="card empty">${esc(e.message)}</div>`; else toast('อัปเดตงานไม่ได้ — แสดงข้อมูลล่าสุดในเครื่อง', 1); return; } draw(); };
   $('#rf', el).onclick = load; load();
   clearInterval(VIEWS.jobs.t); VIEWS.jobs.t = setInterval(() => { if (S.view === 'jobs' && !document.hidden && !$('.ov')) load(); else if (S.view !== 'jobs') clearInterval(VIEWS.jobs.t); }, 30000);
 };
@@ -621,7 +623,8 @@ VIEWS.inst = async el => {
   };
   const load = async force => { rows = await Inst.list(force); if (el.isConnected) draw(); };
   let tt; $('#q', el).oninput = e => { clearTimeout(tt); tt = setTimeout(() => { IV.q = e.target.value; draw(); }, 150); };
-  load(true);
+  // ข้อมูลในเครื่องก่อน แล้วอัปเดตเบื้องหลัง
+  load(false).then(() => Inst.refresh()).then(() => { if (el.isConnected && !$('.ov')) load(false); }).catch(() => { });
 };
 function instDetail(p, reload) {
   const st = Inst.stat(p), SC = { paid: ['ชำระแล้ว', 'green'], late: ['เกินกำหนด', 'red'], today: ['ครบวันนี้', 'amber'], wait: ['รอชำระ', 'gray'] };

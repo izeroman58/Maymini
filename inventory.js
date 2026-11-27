@@ -2,6 +2,25 @@
    สินค้าคงคลัง: ตรวจนับสต็อก / ใบสั่งซื้อ / มูลค่าสต็อก / แผ่นบาร์โค้ด A4
    ========================================================= */
 'use strict';
+/* ปรับสต็อกจากการนับ: ใส่จำนวนแล้วมีผลในเครื่องทันที · ส่ง Google เป็นชุดเบื้องหลัง · ไม่มีเน็ต = เก็บคิวไว้ส่งทีหลัง (ไม่หายเมื่อปิดแอป) */
+const StkQ = {
+  q() { return LS.get('stkQ', {}); }, n() { return Object.keys(this.q()).length; }, has(sku) { return sku in this.q(); },
+  set(p, v) {
+    p.stock = String(v); p.trackStock = 'Y';
+    try { if (window.Cache) Cache.staleBefore = Date.now(); } catch (e) { }
+    const q = this.q(); q[p.sku] = v; LS.set('stkQ', q); clearTimeout(this.t); this.t = setTimeout(() => this.flush(), 700);
+  },
+  async flush() {
+    if (this.busy) return; const q = this.q(), rows = Object.entries(q).map(([sku, stock]) => ({ sku, stock }));
+    this.rt = null; if (!rows.length) return; this.busy = true;
+    try { await api('adjustStock', { rows }); const now = this.q(); rows.forEach(r => { if (now[r.sku] === r.stock) delete now[r.sku]; }); LS.set('stkQ', now); }
+    catch (e) { clearTimeout(this.rt); this.rt = setTimeout(() => this.flush(), 20000); if (!e.offline) toast('ส่งยอดสต็อกไม่สำเร็จ จะลองใหม่: ' + e.message, 1); }
+    this.busy = false; this.onchange && this.onchange();
+    if (this.n() && !this.rt) this.t = setTimeout(() => this.flush(), 1500);
+  }
+};
+window.StkQ = StkQ;
+addEventListener('online', () => StkQ.flush()); document.addEventListener('mm:booted', () => StkQ.flush());
 VIEWS.inventory = el => {
   const it = [
     ['restock', IC.box, 'วางแผนสั่งของ', 'สินค้าหมด/ใกล้หมด · แนะนำจำนวนสั่งจากยอดขายให้พอถึงสิ้นเดือน', isOwner() && window.Restock && Restock.on()],
@@ -22,7 +41,7 @@ VIEWS.stockcount = async el => {
   if (!S.products.length) await loadProducts(true).catch(() => { });
   const d = CNT.d;
   if (!d) {
-    let hist = []; try { hist = (await api('list', { table: 'StockCounts' })).rows.sort((a, b) => String(b.finishedAt).localeCompare(a.finishedAt)); } catch (e) { }
+    let hist = []; try { hist = (await loadTable('StockCounts')).slice().sort((a, b) => String(b.finishedAt).localeCompare(a.finishedAt)); } catch (e) { }
     el.innerHTML = vhead('ตรวจนับสต็อก', '', 'inventory') + `
      <div class="card"><h3>เริ่มตรวจนับใหม่</h3>
        <div class="list menu">
@@ -44,61 +63,62 @@ VIEWS.stockcount = async el => {
   // ---- กำลังนับ ----
   const inScope = p => d.scope.type === 'all' || (d.scope.type === 'category' && d.scope.categories.includes(p.category || '')) || (d.scope.type === 'selected' && (d.scope.skus.includes(p.sku) || p.sku in d.counts));
   let filt = 'all', q = '', limit = 80;
-  el.innerHTML = vhead(esc(d.name), `<button class="btn ghost sm" id="cx" style="color:var(--red)">ยกเลิก</button>`) + `
-    <div class="card" style="position:sticky;top:calc(56px + var(--safe-t));z-index:5"><div class="row"><div class="grow"><div class="small muted">นับแล้ว</div><div class="disp" style="font-size:22px" id="pg"></div></div><button class="btn" id="scn">${I(IC.scan, 20)} สแกน</button></div>
-      <div class="prog" style="margin-top:8px"><i id="pb"></i></div>
-      <div class="row" style="margin-top:10px"><input class="in grow" id="kb" placeholder="ยิงบาร์โค้ด / ค้นหา" inputmode="search"></div>
-      <div class="seg" id="md" style="margin-top:8px"><button data-m="inc">สแกน = +1</button><button data-m="ask">สแกนแล้วใส่จำนวน</button></div>
-      <div id="lastc"></div></div>
+  el.innerHTML = vhead(esc(d.name), `<button class="btn ghost sm" id="cx">เสร็จ</button>`) + `
+    <div class="card" id="cc" style="position:sticky;top:calc(56px + var(--safe-t));z-index:5;padding:10px 12px">
+      <div class="row" style="gap:8px"><input class="in grow" id="kb" placeholder="ยิงบาร์โค้ด / พิมพ์ค้นหา" inputmode="search" style="min-height:48px;font-size:17px"><button class="btn" id="scn" style="min-height:48px">${I(IC.scan, 20)} สแกน</button></div>
+      <div class="tiny muted" style="margin-top:6px">นับแล้ว <b id="pg"></b> · สแกน/แตะตัวเลข → ใส่จำนวนที่มีจริง → ✔ ปรับสต็อกทันที <span id="sq"></span></div></div>
     <div class="chips" id="fl"></div>
-    <div class="list" id="cl"></div>
-    <div class="row" style="margin-top:12px;gap:8px"><button class="btn ghost grow" id="sv">บันทึกร่าง</button><button class="btn green grow" id="fin">${I(IC.check, 18)} ปิดการนับ & ปรับสต็อก</button></div>
-    <div class="tiny muted" style="margin-top:6px">ร่างการนับเก็บไว้ในเครื่องนี้ ปิดแอปแล้วกลับมานับต่อได้</div>`;
+    <div class="list" id="cl"></div>`;
   const save = () => { CNT.d = d; };
   const list = () => S.products.filter(inScope);
-  // รายการที่เพิ่งนับ ขึ้นบนสุดของรายการ (ล่าสุดก่อน)
-  d.recent = d.recent || [];
-  const setCount = (p, v, add) => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); const cur = d.counts[p.sku]; d.counts[p.sku] = { c: add ? num(cur && cur.c) + v : v, e: cur ? cur.e : num(p.stock) }; d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); };
-  // ใส่จำนวนแทนการยิงซ้ำหลายรอบ: เพิ่ม (+) หรือแก้เป็นจำนวนรวม
-  const qty = (p, how, after) => keypad((how === 'add' ? 'เพิ่มจำนวน — ' : 'จำนวนรวมที่นับได้ — ') + esc(p.name), '', v => { setCount(p, v, how === 'add'); draw(); after && after(); },
-    { sub: `นับแล้ว ${d.counts[p.sku] ? num(d.counts[p.sku].c) : 0} · ในระบบ ${num(p.stock)}${how === 'add' ? ' · ใส่จำนวนที่จะบวกเพิ่ม' : ''}`, z: 95 });
-  const lastHTML = p => { const c = d.counts[p.sku]; return `<div class="row" style="gap:8px;align-items:center"><div class="grow" style="min-width:0"><div class="tiny muted">ล่าสุด</div><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</b></div><span class="tag green" style="font-size:18px;padding:4px 12px">${c ? num(c.c) : 0}</span></div>
-      <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost sm grow" onclick="CNTQ('${esc(p.sku)}','add')">＋ เพิ่มจำนวน</button><button class="btn ghost sm grow" onclick="CNTQ('${esc(p.sku)}','set')">แก้จำนวนรวม</button></div>`; };
-  const drawLast = () => { const box = $('#lastc', el); const p = d.recent[0] && IDX.bySku[d.recent[0]]; if (box) box.innerHTML = p ? `<div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#ecfdf3">${lastHTML(p)}</div>` : ''; };
-  window.CNTQ = (sku, how) => { const p = IDX.bySku[sku]; if (!p) return; qty(p, how, () => { const b = document.querySelector('.scan .last'); if (b) b.innerHTML = lastHTML(p); }); };
+  // รายการที่เพิ่งนับ/แก้ ขึ้นบนสุด (ล่าสุดก่อน)
+  d.recent = d.recent || []; d.mode = 'inc';
+  // ใส่จำนวน = ปรับสต็อกให้ตรงทันที (ในเครื่องก่อน แล้วส่ง Google เบื้องหลัง · ไม่มีเน็ตก็เข้าคิวส่งเอง)
+  const setCount = (p, v) => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); const cur = d.counts[p.sku]; d.counts[p.sku] = { c: v, e: cur ? cur.e : num(p.stock) }; d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); StkQ.set(p, v); };
+  const touch = p => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); };
+  // แตะตัวเลข = แป้นตัวเลขใหญ่มีเสียง · หัวแป้นแสดงชื่อสินค้า ในระบบ และนับแล้ว · ✔ = บันทึกทันที
+  const edit = p => {
+    const c = d.counts[p.sku];
+    keypad(esc(p.name), c ? c.c : num(p.stock), v => { setCount(p, v); draw(); toast(`✔ ปรับสต็อก ${p.name} = ${v}`); setTimeout(() => { const r = $('#cl .item', el); r && r.scrollIntoView({ block: 'nearest' }); }, 30); },
+      { sub: `ในระบบ${c ? ' (ก่อนนับ)' : ''} ${num(c ? c.e : p.stock)} · ใส่จำนวนที่มีจริง`, z: 95, replace: true, okLabel: '✔ บันทึก' });
+  };
   const draw = () => {
     const L = list(), done = L.filter(p => p.sku in d.counts).length;
-    $('#pg', el).textContent = `${done.toLocaleString()} / ${L.length.toLocaleString()}`; $('#pb', el).style.width = (L.length ? done / L.length * 100 : 0) + '%';
-    $$('#md button', el).forEach(b => b.classList.toggle('on', b.dataset.m === d.mode));
+    $('#pg', el).textContent = `${done.toLocaleString()} / ${L.length.toLocaleString()}`; const sq = $('#sq', el); if (sq) sq.innerHTML = StkQ.n() ? `· <span class="tag amber" style="padding:0 6px">รอส่ง ${StkQ.n()}</span>` : '';
     $('#fl', el).innerHTML = [['all', 'ทั้งหมด'], ['todo', 'ยังไม่นับ'], ['done', 'นับแล้ว'], ['diff', 'มีส่วนต่าง']].map(([k, n]) => `<button class="chip ${filt === k ? 'on' : ''}" data-f="${k}">${n}</button>`).join('');
     $$('[data-f]', el).forEach(b => b.onclick = () => { filt = b.dataset.f; limit = 80; draw(); });
     const t = q.toLowerCase().split(/\s+/).map(norm).filter(Boolean);
     let res = L.filter(p => t.every(x => p._n.includes(x)));
-    // เรียงรายการที่เพิ่งนับไว้บนสุด
     const rk = {}; d.recent.forEach((x, i) => rk[x] = i + 1);
     if (d.recent.length) res = res.map((p, i) => [p, i]).sort((a, b) => (rk[a[0].sku] || 1e9) - (rk[b[0].sku] || 1e9) || a[1] - b[1]).map(x => x[0]);
-    drawLast();
     if (filt === 'todo') res = res.filter(p => !(p.sku in d.counts)); else if (filt === 'done') res = res.filter(p => p.sku in d.counts); else if (filt === 'diff') res = res.filter(p => p.sku in d.counts && num(d.counts[p.sku].c) !== num(d.counts[p.sku].e));
-    $('#cl', el).innerHTML = res.slice(0, limit).map(p => { const c = d.counts[p.sku], diff = c ? num(c.c) - num(c.e) : null; const isLast = p.sku === d.recent[0]; return `<div class="item" style="cursor:default${isLast ? ';background:#ecfdf3;box-shadow:inset 4px 0 0 var(--green)' : ''}"><div class="grow"><div class="t">${isLast ? '<span class="tag green" style="margin-right:6px">ล่าสุด</span>' : ''}${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)} · ระบบ ${num(c ? c.e : p.stock)}${diff ? ` · <b style="color:${diff > 0 ? 'var(--green)' : 'var(--red)'}">${diff > 0 ? '+' : ''}${Math.round(diff * 1000) / 1000}</b>` : ''}</div></div><input class="in num right" style="width:84px;min-height:40px" type="number" inputmode="decimal" step="any" data-s="${esc(p.sku)}" value="${c ? c.c : ''}" placeholder="นับ"></div>`; }).join('') + (res.length > limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red)">แสดงเพิ่ม (${res.length - limit})</div>` : '') || '<div class="empty">ไม่มีรายการ</div>';
-    $$('#cl [data-s]', el).forEach(i => i.onchange = () => { const p = IDX.bySku[i.dataset.s]; if (i.value === '') { delete d.counts[p.sku]; save(); } else setCount(p, num(i.value)); draw(); });
+    $('#cl', el).innerHTML = res.slice(0, limit).map(p => {
+      const c = d.counts[p.sku], sys = num(c ? c.e : p.stock), diff = c ? num(c.c) - sys : null, isLast = p.sku === d.recent[0], pend = StkQ.has(p.sku);
+      return `<div class="item cnt${isLast ? ' last' : ''}" style="cursor:default"><div class="grow" style="min-width:0"><div class="t" style="font-size:17px">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}</div>
+        <div class="small" style="margin-top:2px">${c ? 'ก่อนนับ' : 'ในระบบ'} <b style="font-size:17px">${sys}</b>${pend ? ' · <span class="tag amber" style="padding:0 6px">รอส่ง</span>' : c ? ' · <span style="color:var(--green)">ปรับแล้ว ✓</span>' : ''}${diff ? ` · ต่าง <b style="color:${diff > 0 ? 'var(--green)' : 'var(--red)'}">${diff > 0 ? '+' : ''}${Math.round(diff * 1000) / 1000}</b>` : c ? ' · <span style="color:var(--green)">ตรง ✓</span>' : ''}</div></div>
+        <button class="cntv${c ? ' on' : ''}" data-s="${esc(p.sku)}" aria-label="แก้จำนวนที่นับ">${c ? num(c.c) : p.trackStock === 'Y' ? num(p.stock) : 'นับ'}</button></div>`;
+    }).join('') + (res.length > limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red)">แสดงเพิ่ม (${res.length - limit})</div>` : '') || '<div class="empty">ไม่มีรายการ</div>';
+    $$('#cl [data-s]', el).forEach(b => b.onclick = () => edit(IDX.bySku[b.dataset.s]));
     const m = $('#more', el); if (m) m.onclick = () => { limit += 150; draw(); };
   };
   const hit = (code, ctx) => {
     const f = findByCode(code); if (!f) { toast('ไม่พบ ' + code, 1); ctx && ctx.showLast('ไม่พบ ' + esc(code)); return; }
     const p = f.p;
     if (d.scope.type !== 'selected' && !inScope(p)) { toast(p.name + ' ไม่อยู่ในขอบเขตการนับนี้', 1); return; }
-    if (d.mode === 'ask') { keypad('จำนวนที่นับได้ — ' + esc(p.name), d.counts[p.sku] ? d.counts[p.sku].c : '', v => { setCount(p, v); draw(); }, { sub: 'ในระบบ ' + num(p.stock) }); return 'close'; }
-    setCount(p, 1, true); ctx && ctx.showLast(lastHTML(p)); draw(); if (!ctx) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (document.querySelector('.kpov')) return;   // กำลังใส่จำนวนอยู่ ไม่รับสแกนซ้อน
+    touch(p); q = ''; const k = $('#kb', el); if (k) k.value = ''; filt = filt === 'todo' ? 'all' : filt; draw(); edit(p);
+    // รายการที่สแกนขึ้นบนสุดของรายการทันที (เลื่อนให้เห็น)
+    const r = $('#cl .item', el); if (r) try { r.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { }
   };
-  $('#scn', el).onclick = () => openScanner((c, ctx) => hit(c, ctx), { continuous: d.mode === 'inc', title: 'สแกนนับสต็อก' });
+  const scnB = $('#scn', el);
+  scnB.onclick = () => { scnB.hidden = true; openScanner((c, ctx) => hit(c, ctx), { continuous: true, title: 'สแกนนับสต็อก', onClose: () => { if (scnB.isConnected) scnB.hidden = false; } }); };
   Scanner.on('stockcount', c => { if (findByCode(c)) { beep(); hit(c); } else { Scanner.err(); toast('ไม่พบ ' + c, 1); } });
   const kb = $('#kb', el);
-  kb.onkeydown = e => { if (e.key === 'Enter' && kb.value.trim()) { const v = kb.value.trim(); if (findByCode(v)) { beep(); hit(v); kb.value = ''; q = ''; } else { q = v; } draw(); } };
+  kb.onkeydown = e => { if (e.key === 'Enter' && kb.value.trim()) { const v = kb.value.trim(); if (findByCode(v)) { beep(); hit(v); } else { q = v; draw(); } } };
   kb.oninput = () => { if (!/^\d{8,}$/.test(kb.value)) { q = kb.value; limit = 80; draw(); } };
-  $$('#md button', el).forEach(b => b.onclick = () => { d.mode = b.dataset.m; save(); draw(); });
-  $('#sv', el).onclick = () => { save(); toast('บันทึกร่างในเครื่องแล้ว'); };
-  $('#cx', el).onclick = async () => { if (await confirmDlg('ยกเลิกการนับนี้? ข้อมูลที่นับจะหายไป', 'ยกเลิกการนับ', true)) { CNT.d = null; go('stockcount'); } };
-  $('#fin', el).onclick = () => {
+  $('#cx', el).onclick = () => { StkQ.flush(); CNT.d = null; go('stockcount'); toast('จบการนับ — สต็อกที่ใส่ปรับแล้วทุกรายการ'); };
+  StkQ.onchange = () => { if (el.isConnected) draw(); };
+  if (false) $('#fin', el).onclick = () => {
     const L = list(), n = Object.keys(d.counts).length; if (!n) return toast('ยังไม่ได้นับสินค้า', 1);
     let dv = 0, dq = 0; Object.entries(d.counts).forEach(([sku, c]) => { const p = IDX.bySku[sku]; const df = num(c.c) - num(p ? p.stock : c.e); dq += df; dv += df * num(p && p.cost); });
     const ov = sheet('ปิดการนับและปรับสต็อก', `<div class="kv"><span>นับแล้ว</span><b>${n} / ${L.length} รายการ</b></div><div class="kv"><span>ส่วนต่างรวม</span><b>${Math.round(dq * 1000) / 1000} ชิ้น</b></div>${can('viewCost') ? `<div class="kv"><span>มูลค่าส่วนต่าง (ทุน)</span><b style="color:${dv < 0 ? 'var(--red)' : 'var(--green)'}">${baht(dv)}</b></div>` : ''}
@@ -120,7 +140,10 @@ VIEWS.stockcount = async el => {
 VIEWS.stockvalue = async el => {
   if (!can('viewCost')) return ownerOnly(el);
   el.innerHTML = vhead('มูลค่าสต็อก', `<button class="btn ghost sm" id="ex">CSV</button>`, 'inventory') + '<div id="sv"><div class="card center"><span class="spin dark"></span></div></div>';
-  await loadProducts(true).catch(() => { });
+  // คำนวณจากสินค้าในเครื่องทันที · อัปเดตสต็อกจาก Google เบื้องหลัง แล้ววาดใหม่ถ้าตัวเลขเปลี่ยน
+  if (!S.products.length) await loadProducts(true).catch(() => { });
+  else if (!el._bg) { const sig = () => S.products.reduce((a, p) => a + num(p.stock) * 31 + num(p.cost), 0), s0 = sig(); loadProducts(true).then(() => { if (el.isConnected && S.view === 'stockvalue' && !$('.ov') && sig() !== s0) { el._bg = 1; VIEWS.stockvalue(el); } }).catch(() => { }); }
+  el._bg = 0;
   const tr = S.products.filter(p => p.trackStock === 'Y');
   const pos = tr.filter(p => num(p.stock) > 0), neg = tr.filter(p => num(p.stock) < 0), nocost = pos.filter(p => !num(p.cost) && !num(p.costPct));
   const cats = {}; let T = { qty: 0, cost: 0, retail: 0, n: 0 };
@@ -142,7 +165,7 @@ VIEWS.polist = async el => {
   el.innerHTML = vhead('ใบสั่งซื้อ', `<button class="btn sm" id="nw">${I(IC.plus, 18)} สร้าง</button>`, 'inventory') + '<div class="list" id="pl"><div class="empty"><span class="spin dark"></span></div></div>';
   $('#nw', el).onclick = () => poForm(null);
   try {
-    const rows = (await api('list', { table: 'POs' })).rows.sort((a, b) => String(b.date).localeCompare(a.date));
+    const rows = (await loadTable('POs')).slice().sort((a, b) => String(b.date).localeCompare(a.date));
     S.pos = rows;
     $('#pl', el).innerHTML = rows.length ? rows.map(p => `<div class="item" data-id="${esc(p.id)}"><div class="grow"><div class="t">${esc(p.supplier || 'ไม่ระบุร้าน')}</div><div class="m">${thDate(p.date)} · ${esc(p.id)} · ${Logic.J(p.items, []).length} รายการ</div></div><span class="tag ${p.status === 'received' ? 'green' : p.status === 'sent' ? 'blue' : 'gray'}">${{ draft: 'ร่าง', sent: 'สั่งแล้ว', received: 'รับของแล้ว' }[p.status] || p.status}</span><div class="price" style="font-size:15px;color:var(--ink);margin-left:8px">${baht(p.total)}</div></div>`).join('') : '<div class="empty">ยังไม่มีใบสั่งซื้อ</div>';
     $$('#pl [data-id]', el).forEach(x => x.onclick = () => poForm(rows.find(p => p.id === x.dataset.id)));

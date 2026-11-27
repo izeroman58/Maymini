@@ -406,13 +406,15 @@ function keypad(title, init, cb, opt = {}) {
   const K = (k, t, cls = '') => `<button type="button" data-k="${k}" class="${cls}">${t}</button>`;
   ov.innerHTML = `<div class="kpbox" role="dialog"><div class="kph"><button type="button" class="kpx" data-k="x">✕</button><div class="kpt">${head}</div>${sndBtn()}</div>
     <div class="kpvr"><span class="kpl">${label === head ? '' : label}${opt.sub ? `<small>${opt.sub}</small>` : ''}</span><span class="kpv2" id="kv"></span></div>
-    <div class="kpg">${K(1, 1)}${K(2, 2)}${K(3, 3)}${K('del', '⌫', 'kdel')}${K(4, 4)}${K(5, 5)}${K(6, 6)}${K(7, 7)}${K(8, 8)}${K(9, 9)}${K('ok', 'ตกลง', 'kok')}${K(0, 0)}${K('00', '00')}${opt.noDot ? K('c', 'ล้าง') : K('.', '.')}</div></div>`;
+    <div class="kpg">${K(1, 1)}${K(2, 2)}${K(3, 3)}${K('del', '⌫', 'kdel')}${K(4, 4)}${K(5, 5)}${K(6, 6)}${K(7, 7)}${K(8, 8)}${K(9, 9)}${K('ok', opt.okLabel || 'ตกลง', 'kok')}${K(0, 0)}${K('00', '00')}${opt.noDot ? K('c', 'ล้าง') : K('.', '.')}</div></div>`;
   document.body.appendChild(ov);
   const show = () => { $('#kv', ov).textContent = (money ? '฿' : '') + (v || '0'); };
   const close = () => { ov.remove(); document.removeEventListener('keydown', kd, true); const sw = e => { e.stopPropagation(); e.preventDefault(); }; const off = () => { document.removeEventListener('click', sw, true); document.removeEventListener('pointerdown', off, true); }; document.addEventListener('click', sw, true); setTimeout(() => document.addEventListener('pointerdown', off, true), 0); setTimeout(off, 600); };   // กันคลิกทะลุไปโดนหน้าต่างด้านล่าง
   const ok = () => { if (opt.raw) { close(); return cb(v); } const n = num(v); if (opt.min != null && n <= opt.min) { Scanner.err && Scanner.err(); return toast('กรุณาใส่ตัวเลข', 1); } close(); cb(n); };
+  let fresh = !!opt.replace;   // ค่าเดิมแสดงไว้ กดตัวเลขแรก = พิมพ์ทับใหม่ทั้งหมด
   const press = k => {
     if (k === 'x') return close(); if (k === 'ok') return ok();
+    if (fresh && k !== 'del') { fresh = false; if (k !== 'c') v = ''; } fresh = false;
     if (k === 'del') v = v.slice(0, -1); else if (k === 'c') v = '';
     else if (k === '.') { if (v.includes('.')) return; v = (v || '0') + '.'; }
     else if (v.length < (opt.maxLen || 9)) v = (v === '0' && !opt.raw ? '' : v) + k;

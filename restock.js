@@ -158,6 +158,22 @@ const RS_ST = { out: ['var(--red)', 'red', 'หมดแล้ว'], urgent: ['#
 const rsQty = (v, w) => w ? (Math.round(v * 10) / 10).toLocaleString() : Math.round(v).toLocaleString();
 // แถบล่างลอยเหนือแถบเมนูล่าง (ถ้ามี)
 function rsSticky(x) { if (!x) return; const n = document.querySelector('.nav'), on = n && getComputedStyle(n).display !== 'none' && getComputedStyle(n).position === 'fixed'; x.style.bottom = (on ? n.offsetHeight + 8 : 8) + 'px'; }
+const RS_WHY_T = 'ยอดขายเฉลี่ย (รวมผลฤดูกาลแล้ว) · 📈/📉 ฤดูกาล = ตัวคูณช่วงขายดี/ขายลง · แตะเพื่อดูวิธีคิด';
+// อธิบายที่มาของ "ขาย …/สัปดาห์ · ฤดูกาล ×…" ของสินค้าแต่ละตัว
+function rsWhy(i, R) {
+  const C = R.C || {}, w = i.p.byWeight === 'Y', u = esc(i.p.unit || (w ? 'กก.' : 'ชิ้น')), f = i.fac || 1, base = f ? i.daily / f : i.daily;
+  const r1 = v => (Math.round(v * 100) / 100).toLocaleString(), cv = R.cv || { days: 30, label: '30 วัน' }, sf = +C.safety || 0, need = i.daily * (cv.days + sf);
+  const ov = sheet('ที่มาของตัวเลข', `<div class="small" style="line-height:1.65">
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">${esc(i.p.name)}</div>
+    <div class="card" style="padding:10px 12px;margin:0 0 10px"><b>ขาย ${rsRate(i.daily, w)}</b> = ยอดขายเฉลี่ยที่คาดว่าจะขายได้ในช่วงที่จะสั่งของ<br>
+      · ยอดขายจริงเฉลี่ย <b>${r1(base)} ${u}/วัน</b> (${r1(base * 7)} ${u}/สัปดาห์) คิดผสมจาก 3 ช่วง: 7 วันล่าสุด (20%) · 28 วันล่าสุด (45%) · ${R.look || C.look || 90} วันล่าสุด (35%) — นับเฉพาะวันที่มีข้อมูลขาย ช่วงล่าสุดมีน้ำหนักมากเพื่อตามทันกระแส<br>
+      · คูณฤดูกาล ×${f.toFixed(2)} → <b>${r1(i.daily)} ${u}/วัน</b>${i.daily < 1 ? ` (แสดงเป็นต่อสัปดาห์ = ${r1(i.daily * 7)})` : ''}</div>
+    <div class="card" style="padding:10px 12px;margin:0 0 10px"><b>${f > 1 ? '📈' : f < 1 ? '📉' : ''} ฤดูกาล ×${f.toFixed(2)}</b> = ช่วงที่จะสั่งของนี้ (${esc(cv.label || '')}) ปีก่อน ๆ ขาย${f >= 1 ? 'ดีกว่า' : 'น้อยกว่า'}ช่วง 28 วันที่ผ่านมา <b>${Math.abs(Math.round((f - 1) * 100))}%</b> ระบบจึง${f >= 1 ? 'เผื่อสั่งเพิ่ม' : 'ลดจำนวนสั่ง'}ตามนั้น<br>
+      · ${esc(R.fNote || 'คิดจากประวัติยอดขายรายเดือน')} · จำกัดตัวคูณ 0.7–1.6 เท่า · ×1.00 = เดือนปกติ (แสดงเมื่อต่างจากปกติ 10% ขึ้นไป)</div>
+    <div class="card" style="padding:10px 12px;margin:0"><b>ควรมี</b> = ขาย/วัน × (ช่วงสั่งของ ${cv.days} วัน + สำรอง ${sf} วัน) = <b>${rsQty(need, w)} ${u}</b>${i.stock != null ? `<br>· เหลือ ${rsQty(i.stock, w)}${i.oo ? ` · สั่งแล้วรอของ ${rsQty(i.oo, w)}` : ''} → แนะนำสั่ง <b>${rsQty(i.sugg || 0, w)} ${u}</b>` : ''}</div>
+    <div class="tiny muted" style="margin-top:8px">ปรับช่วงสั่งของ/สำรอง/ยอดย้อนหลัง/ฤดูกาลได้ที่ ⚙️ ตั้งค่า</div></div>`);
+  return ov;
+}
 const rsRate = (v, w, u) => v <= 0 ? '0' : v >= 1 ? `${(Math.round(v * 10) / 10).toLocaleString()}/วัน` : `${(Math.round(v * 70) / 10).toLocaleString()}/สัปดาห์`;
 const rsDay = d => !isFinite(d) ? '—' : d < 1 ? 'ไม่ถึง 1 วัน' : d >= 365 ? 'เกิน 1 ปี' : Math.floor(d) + ' วัน';
 
@@ -201,6 +217,7 @@ VIEWS.restock = async el => {
   let qt = 0; $('#q', box).oninput = e => { clearTimeout(qt); qt = setTimeout(() => { F.q = e.target.value; draw(); }, 150); };
   $('#ct', box).onchange = e => { F.cat = e.target.value; draw(); };
   const match = i => (!F.cat || (i.p.category || '__none') === F.cat) && (!F.q || norm(i.p.name + (i.p.barcode || '')).includes(norm(F.q)));
+  box._R = R; if (!box._why) { box._why = 1; box.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-why]'); if (!t) return; e.stopPropagation(); e.preventDefault(); const R2 = box._R, sku = t.dataset.why; const i = R2.items.find(y => y.p.sku === sku) || (R2.untracked || []).map(y => ({ ...y, stock: null, sugg: 0, oo: 0 })).find(y => y.p.sku === sku); i && rsWhy(i, R2); }, true); }
   const draw = () => {
     $$('.rs-k .stat', box).forEach(s => s.classList.toggle('on', F.tab === 'need' && F.st === s.dataset.k));
     const ls = $('#ls', box), LIM = 150;
@@ -209,7 +226,7 @@ VIEWS.restock = async el => {
       F.cnt = F.cnt || {};
       ls.innerHTML = `<div class="alert blue small" style="margin-bottom:8px">${I(IC.alert, 18)}<div>สินค้าขายดีที่ยัง <b>ไม่ได้ติดตามสต็อก</b> — ระบบบอกได้ว่า<b>ควรมีของเท่าไหร่</b>ให้พอขาย${esc(R.cv.label.replace(/ \(.*/, ''))} · <b>ใส่จำนวนที่มีบนชั้น</b> แล้วระบบบอกจำนวนที่ต้องสั่ง · กด “เริ่มติดตามสต็อก” เพื่อให้ระบบนับให้เองต่อจากนี้</div></div>`
         + (L.length ? `<div class="list">${L.slice(0, LIM).map(i => { const w = i.p.byWeight === 'Y', c = F.cnt[i.p.sku], nd = Math.ceil(i.need - 1e-9), sg = c == null || c === '' ? null : Math.max(0, Math.ceil(i.need - num(c) - 1e-9)); return `<div class="rs-row" style="--c:#1F5FBF"><span data-ud="${esc(i.p.sku)}" style="cursor:pointer;flex:none">${pthumb(i.p, 38)}</span><div class="grow" style="min-width:0"><div class="nm" data-ud="${esc(i.p.sku)}" style="cursor:pointer">${esc(i.p.name)}</div>
-          <div class="rs-tl">ขาย <b>${rsRate(i.daily)}</b>${Math.abs(i.fac - 1) >= .1 ? ` · ${i.fac > 1 ? '📈' : '📉'} ฤดูกาล ×${i.fac.toFixed(2)}` : ''} · ควรมี <b>${rsQty(nd, w)}</b> ${esc(i.p.unit || 'ชิ้น')}</div>
+          <div class="rs-tl"><span class="rs-why" data-why="${esc(i.p.sku)}" title="${RS_WHY_T}">ขาย <b>${rsRate(i.daily)}</b>${Math.abs(i.fac - 1) >= .1 ? ` · ${i.fac > 1 ? '📈' : '📉'} ฤดูกาล ×${i.fac.toFixed(2)}` : ''} <i>ⓘ</i></span> · ควรมี <b>${rsQty(nd, w)}</b> ${esc(i.p.unit || 'ชิ้น')}</div>
           <div class="rs-ft"><div class="rs-tl">${sg == null ? 'ใส่จำนวนที่มี →' : sg > 0 ? `<b style="color:#C25E00">ต้องสั่ง ${rsQty(sg, w)}</b>` : '<b style="color:var(--green)">พอแล้ว</b>'}</div><div style="text-align:right;flex:none"><div class="tiny muted">มีอยู่</div><div class="rs-q"><input data-c="${esc(i.p.sku)}" type="number" inputmode="decimal" value="${c == null ? '' : c}" placeholder="—"></div></div></div></div></div>`; }).join('')}</div>` : '<div class="card empty">ไม่มี</div>');
       $$('[data-ud]', ls).forEach(x => x.onclick = () => { const i = R.untracked.find(y => y.p.sku === x.dataset.ud); i && rsDetail({ ...i, stock: null, sugg: 0, st: 'untr', oo: 0, cost: num(i.p.cost) }, R); });
       $$('[data-c]', ls).forEach(x => x.onchange = () => { F.cnt[x.dataset.c] = x.value === '' ? null : Math.max(0, num(x.value)); draw(); });
@@ -233,7 +250,7 @@ VIEWS.restock = async el => {
         const pct = isFinite(i.left) ? Math.max(3, Math.min(100, i.left / cvd * 100)) : 100, q = qOf(i);
         return `<div class="rs-row" style="--c:${c}">${F.tab === 'need' ? `<input type="checkbox" data-s="${esc(i.p.sku)}" ${F.sel.has(i.p.sku) ? 'checked' : ''}>` : ''}<span data-dt="${esc(i.p.sku)}" style="cursor:pointer;flex:none">${pthumb(i.p, 40)}</span>
           <div class="grow" style="min-width:0"><div class="nm" data-dt="${esc(i.p.sku)}" style="cursor:pointer">${esc(i.p.name)}</div>
-            <div class="rs-tl"><span class="tag ${tg}" style="padding:1px 7px">${nm}</span> เหลือ <b>${i.neg ? `<span style="color:var(--red)" title="สต็อกติดลบ — ควรตรวจนับ">${rsQty(i.raw, w)} ⚠</span>` : rsQty(i.stock, w)}</b> · ขาย <b>${rsRate(i.daily, w)}</b>${i.oo ? ` · สั่งแล้ว ${rsQty(i.oo, w)}` : ''}${Math.abs(i.fac - 1) >= .1 ? ` · <span style="color:${i.fac > 1 ? '#0B8A3E' : '#9E9597'}">${i.fac > 1 ? '📈' : '📉'} ฤดูกาล ×${i.fac.toFixed(2)}</span>` : ''}</div>
+            <div class="rs-tl"><span class="tag ${tg}" style="padding:1px 7px">${nm}</span> เหลือ <b>${i.neg ? `<span style="color:var(--red)" title="สต็อกติดลบ — ควรตรวจนับ">${rsQty(i.raw, w)} ⚠</span>` : rsQty(i.stock, w)}</b> · <span class="rs-why" data-why="${esc(i.p.sku)}" title="${RS_WHY_T}">ขาย <b>${rsRate(i.daily, w)}</b>${Math.abs(i.fac - 1) >= .1 ? ` · <span style="color:${i.fac > 1 ? '#0B8A3E' : '#9E9597'}">${i.fac > 1 ? '📈' : '📉'} ฤดูกาล ×${i.fac.toFixed(2)}</span>` : ''} <i>ⓘ</i></span>${i.oo ? ` · สั่งแล้ว ${rsQty(i.oo, w)}` : ''}</div>
             <div class="rs-bar"><i style="width:${pct}%;background:${c}"></i></div>
             <div class="rs-ft"><div class="rs-tl">${i.st === 'slow' ? (i.last ? 'ขายล่าสุด ' + thDate(i.last) : `ไม่มียอดขาย ${R.look} วัน`) : i.neg ? '<span style="color:var(--red)">สต็อกติดลบ — ควรตรวจนับ</span>' : i.stock <= 0 ? (i.daily * num(i.p.price) >= 5 ? `<span style="color:var(--red)">ขาดโอกาสขาย ~${baht(i.daily * num(i.p.price), 0)}/วัน</span>` : 'หมดสต็อก') : `พออีก <b>${rsDay(i.left)}</b>`}${i.sup ? ` · 🏪 ${esc(i.sup)}` : ''}${i.st === 'slow' || i.st === 'over' ? ` · ทุนจม ${baht(i.stock * i.cost)}` : ''}</div>
           ${F.tab === 'need' ? `<div style="text-align:right;flex:none"><div class="tiny muted">สั่ง (${u}) · <span data-v="${esc(i.p.sku)}">${i.cost ? baht(q * i.cost) : 'ไม่มีทุน'}</span></div><div class="rs-q"><button data-m="${esc(i.p.sku)}">−</button><input data-q="${esc(i.p.sku)}" type="number" inputmode="decimal" value="${q}"><button data-p="${esc(i.p.sku)}">+</button></div></div>` : i.sugg ? `<div class="tiny muted" style="text-align:right;flex:none">ควรสั่ง <b style="font-size:16px;color:var(--ink)">${rsQty(i.sugg, w)}</b></div>` : ''}</div></div></div>`;

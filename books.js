@@ -142,7 +142,7 @@ function vatTag(p) { if (!p) return ''; const t = VATX.tag(p); return t && (t.c 
 VIEWS.vatcheck = async el => {
   if (ownerOnly(el)) return;
   el.innerHTML = vhead('ตรวจสินค้ายกเว้น VAT', '', 'tax') + `<div class="empty"><span class="spin dark"></span></div>`;
-  await loadSettings().catch(() => { });
+  if (!S.settings || !Object.keys(S.settings).length) await loadSettings().catch(() => { }); else loadSettings().catch(() => { });   // ใช้ค่าในเครื่องก่อน
   if (!S.products.length) await loadProducts(true).catch(e => toast(e.message, 1));
   const tab = S.vxTab || (S.vxTab = 'cats');
   const A = VATX.analyze(S.products);

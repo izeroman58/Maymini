@@ -38,9 +38,11 @@ function aggregate(rows) {
   const A = { gross: 0, refund: 0, disc: 0, net: 0, cost: 0, profit: 0, bills: 0, refunds: 0, days: {}, hours: {}, prod: {}, cat: {}, staff: {}, pay: {} };
   rows.forEach(o => {
     const isR = o.status === 'refund', sg = isR ? -1 : 1, day = String(o.date).slice(0, 10), hr = String(o.date).slice(11, 13);
-    const tot = num(o.total), cost = Math.abs(num(o.cost)) * sg;
-    if (isR) { A.refund += Math.abs(tot); A.refunds++; } else { A.gross += num(o.subtotal); A.disc += num(o.discount); A.bills++; }
-    A.net += tot; A.cost += cost;
+    // ยอดขายสุทธิ = ไม่รวมเงินรับแทน (โอน/เติมเงิน/จ่ายบิล/รับชำระหนี้) — ตรงกับหน้าหลักเจ้าของร้านและบัญชี 40(8)
+    let opass = 0, opc = 0; (o._items || []).forEach(it => { if (!it.pass) return; const q = Math.abs(num(it.qty)) * sg; opass += q * num(it.price); opc += q * num(it.cost); });
+    const recv = num(o.total), tot = recv - opass, cost = Math.abs(num(o.cost)) * sg - opc;
+    if (isR) { A.refund += Math.abs(tot); A.refunds++; } else { A.gross += num(o.subtotal) - opass; A.disc += num(o.discount); A.bills++; }
+    A.net += tot; A.cost += cost; A.recv = (A.recv || 0) + recv;
     const dd = A.days[day] || (A.days[day] = { net: 0, cost: 0, bills: 0 }); dd.net += tot; dd.cost += cost; if (!isR) dd.bills++;
     A.hours[hr] = (A.hours[hr] || 0) + tot;
     const st = A.staff[o.cashierName || o.cashier] || (A.staff[o.cashierName || o.cashier] = { bills: 0, net: 0, refund: 0, cost: 0 });
@@ -217,14 +219,16 @@ function reportsRange(el) {
     A = blendImported(aggregate(R), RS.staff || sel.length ? null : imp); const P = blendImported(aggregate(PR), RS.staff || sel.length ? null : pimp);
     const k = (t, v, s, cur, prv, inv) => `<div class="stat"><div class="k">${t}</div><div class="v">${v}</div><div class="tiny muted">${cur != null ? chgTag(cur, prv, inv) + ' ' : ''}${s || ''}</div></div>`;
     const yoy = spanDays(RS.from, RS.to) >= 300, pn = single() ? 'เทียบวันก่อน' : yoy ? 'เทียบช่วงเดียวกันปีก่อน' : 'เทียบช่วงก่อน';
-    const extra = [(A.pass || 0) - (A.debt || 0) > 0 && `เงินรับแทน (โอน/เติม/บิล) ${money((A.pass || 0) - (A.debt || 0), 0)}`, A.debt && `รับชำระหนี้ ${money(A.debt, 0)}`, A.inst && `ผ่อนสินค้า (ดาวน์/ค่างวด) ${money(A.inst, 0)}`].filter(Boolean);
+    const outx = [(A.pass || 0) - (A.debt || 0) > 0 && `เงินรับแทน (โอน/เติม/บิล) ${money((A.pass || 0) - (A.debt || 0), 0)}`, A.debt && `รับชำระหนี้ ${money(A.debt, 0)}`].filter(Boolean);
+    const extra = [outx.length && `<b>ไม่รวม</b>ในยอดขายสุทธิ: ${outx.join(' · ')} (รับเงินทั้งหมด ${money(A.recv || 0, 0)})`, A.inst && `รวมอยู่ในยอดขายสุทธิ: ผ่อนสินค้า (ดาวน์/ค่างวด) ${money(A.inst, 0)}`].filter(Boolean);
     $('#kpi', el).innerHTML = `<div class="grid3" style="margin-bottom:${extra.length ? 6 : 12}px">${k('ยอดขายสุทธิ', baht(A.net), pn, A.net, P.net)}${vc ? k('กำไรขั้นต้น', baht(A.profit), A.net ? 'อัตรา ' + (A.profit / A.net * 100).toFixed(1) + '%' : '', A.profit, P.profit) : k('จำนวนบิล', A.bills, '', A.bills, P.bills)}${k('เฉลี่ย/บิล', baht(A.bills ? A.net / A.bills : 0), A.bills + ' บิล', A.bills ? A.net / A.bills : 0, P.bills ? P.net / P.bills : 0)}${k('ยอดขาย (ก่อนหัก)', baht(A.gross), '', A.gross, P.gross)}${k('ส่วนลด', baht(A.disc), '', A.disc, P.disc, 1)}${k('คืนเงิน', baht(A.refund), A.refunds + ' ใบ', A.refund, P.refund, 1)}</div>
-      ${extra.length ? `<div class="tiny muted" style="margin:0 4px 12px">รวมอยู่ในยอดขายสุทธิ: ${extra.join(' · ')}</div>` : ''}
+      ${extra.length ? `<div class="tiny muted" style="margin:0 4px 12px">${extra.join('<br>')}</div>` : ''}
       ${sel.length ? `<div class="alert blue small" style="margin:0 0 12px">${I(IC.sale, 18)}<div>แสดงเฉพาะการชำระแบบ <b>${sel.map(payName).join(' + ')}</b> · บิลที่แยกชำระหลายวิธีนับเฉพาะส่วนที่จ่ายด้วยวิธีนี้${imp && (imp.days && Object.keys(imp.days).length || imp.months && imp.months.length) ? ' · ไม่รวมยอดที่นำเข้า (ไม่มีข้อมูลการชำระ)' : ''}</div></div>` : ''}
       ${A.partial.length ? `<div class="alert amber small" style="margin:0 0 12px">${I(IC.alert, 18)}<div>${A.partial.map(ym => TH_MF[+ym.slice(5, 7) - 1] + ' ' + (+ym.slice(0, 4) + 543)).join(', ')} มีแค่ยอดรวมทั้งเดือน (นำเข้า) ไม่มียอดรายวัน — ช่วงที่เลือกครอบไม่ครบเดือนจึงยังไม่นับ · เลือก “เดือนก่อน”, “12 เดือน”, “ปีนี้/ปีที่แล้ว” หรือกำหนดเองให้ครอบทั้งเดือน</div></div>` : ''}
       ${A.impDN || A.impM ? `<div class="alert blue small" style="margin:0 0 12px">${I(IC.io, 18)}<div>รวมยอดที่นำเข้าแล้ว: ${[A.impDN && `รายวัน ${A.impDN} วัน ${money(A.impD, 0)}`, A.impM && `รายเดือน ${Object.keys(A.months).length} เดือน ${money(A.impM, 0)}`].filter(Boolean).join(' · ')} — ยอดนำเข้าไม่มีจำนวนบิล/รายละเอียดสินค้า (เฉลี่ยต่อบิล สินค้าขายดี และตารางสินค้า/หมวด/พนักงาน/การชำระ คิดจากใบเสร็จเท่านั้น)${A.impM ? ' · ยอดรายเดือนนับเมื่อเลือกช่วงครอบทั้งเดือน' : ''}</div></div>` : ''}`;
     // เฉลี่ย/บิล: คิดจากใบเสร็จเท่านั้น
-    { const nb = R.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), pb = PR.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + num(o.total), 0), PA = aggregate(PR);
+    { const sv = o => num(o.total) - (o._items || []).reduce((a3, it) => a3 + (it.pass ? Math.abs(num(it.qty)) * num(it.price) : 0), 0);
+      const nb = R.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + sv(o), 0), pb = PR.filter(o => o.status !== 'refund').reduce((a2, o) => a2 + sv(o), 0), PA = aggregate(PR);
       const v = $$('#kpi .stat', el)[2]; if (v) v.outerHTML = k('เฉลี่ย/บิล', baht(A.bills ? nb / A.bills : 0), A.bills + ' บิล', A.bills ? nb / A.bills : 0, PA.bills ? pb / PA.bills : 0); }
     // กราฟหลัก: ช่วงนี้เทียบช่วงก่อนหน้า (แท่งเทา)
     let data, ttl;

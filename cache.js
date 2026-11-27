@@ -84,7 +84,10 @@ loadTable = t => swr('t:' + t, () => api('list', { table: t }).then(r => r.rows)
 function warmCache() {
   if (!S.user || S.user.role !== 'owner' || !S.apiUrl) return;
   const t = todayISO(), y = t.slice(0, 4), lm = addDays(t.slice(0, 8) + '01', -1).slice(0, 8) + '01';
-  setTimeout(() => { [dailySummary(lm, t), dailySummary(y + '-01-01', y + '-12-31'), loadTable('Licenses'), loadTable('Receipts'), loadTable('Sales'), loadTable('TaxFilings')].forEach(p => p.catch(() => { })); }, 1500);
+  setTimeout(() => { [dailySummary(lm, t), dailySummary(y + '-01-01', y + '-12-31'), loadTable('Licenses'), loadTable('Receipts'), loadTable('Sales'), loadTable('TaxFilings')].forEach(p => p.catch(() => { }));
+    // ตารางอื่นที่เจ้าของเปิดบ่อย เตรียมไว้ในเครื่อง (ทีละตาราง ไม่แย่งเน็ตหน้าขาย) → เปิดหน้าครั้งแรกไม่ต้องรอโหลด
+    ['Users', 'Devices', 'POs', 'StockCounts'].reduce((pr, tb) => pr.then(() => new Promise(r => setTimeout(r, 400))).then(() => loadTable(tb).catch(() => { })), Promise.resolve());
+    try { window.Inst && Inst.refresh && Inst.refresh().catch(() => { }); } catch (e) { } }, 1500);
 }
 
 /* =========================================================
