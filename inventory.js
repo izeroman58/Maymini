@@ -77,10 +77,14 @@ VIEWS.stockcount = async el => {
   const setCount = (p, v) => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); const cur = d.counts[p.sku]; d.counts[p.sku] = { c: v, e: cur ? cur.e : num(p.stock) }; d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); StkQ.set(p, v); };
   const touch = p => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); };
   // แตะตัวเลข = แป้นตัวเลขใหญ่มีเสียง · หัวแป้นแสดงชื่อสินค้า ในระบบ และนับแล้ว · ✔ = บันทึกทันที
-  const edit = p => {
-    const c = d.counts[p.sku];
-    keypad(esc(p.name), c ? c.c : num(p.stock), v => { setCount(p, v); draw(); toast(`✔ ปรับสต็อก ${p.name} = ${v}`); setTimeout(() => { const r = $('#cl .item', el); r && r.scrollIntoView({ block: 'nearest' }); }, 30); },
-      { sub: `ในระบบ${c ? ' (ก่อนนับ)' : ''} ${num(c ? c.e : p.stock)} · ใส่จำนวนที่มีจริง`, z: 95, replace: true, okLabel: '✔ บันทึก' });
+  const edit = (p, btn) => {
+    const c = d.counts[p.sku], sys = num(c ? c.e : p.stock), cur = c ? num(c.c) : num(p.stock);
+    const top = `<div class="kpi-i"><div class="kpi-n">${esc(p.name)}</div><div class="kpi-m">${esc(p.barcode || p.sku)}</div><div class="kpi-s">${c ? 'ก่อนนับ' : 'ในระบบ'} <b>${sys}</b> <span data-kd></span></div></div><div class="kpi-v" data-kv></div>`;
+    const ov = keypad('ใส่จำนวนที่มีจริง', cur, v => { setCount(p, v); draw(); toast(`✔ ปรับสต็อก ${p.name} = ${v}`); setTimeout(() => { const r = $('#cl .item', el); r && r.scrollIntoView({ block: 'nearest' }); }, 30); },
+      { dock: true, top, z: 95, replace: true, okLabel: '✔ บันทึก', money: false,
+        onShow: (v, o) => { const x = o.querySelector('[data-kd]'); if (!x) return; const df = v === '' ? null : num(v) - sys; x.innerHTML = df == null ? '' : df ? `· ต่าง <b style="color:${df > 0 ? '#2E7D32' : '#E31837'}">${df > 0 ? '+' : ''}${Math.round(df * 1000) / 1000}</b>` : '· <span style="color:#2E7D32">ตรง ✓</span>'; } });
+    // รายการที่แตะ "เด้งขึ้น" ไปอยู่เหนือแป้นตัวเลข
+    try { const row = btn && btn.closest('.item'), t = ov.querySelector('.kptop'); if (row && t && t.animate) { const a = row.getBoundingClientRect(), b = t.getBoundingClientRect(); t.animate([{ transform: `translateY(${a.top - b.top}px)`, opacity: .6 }, { transform: 'none', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1.1)' }); } } catch (e) { }
   };
   const draw = () => {
     const L = list(), done = L.filter(p => p.sku in d.counts).length;
@@ -94,11 +98,11 @@ VIEWS.stockcount = async el => {
     if (filt === 'todo') res = res.filter(p => !(p.sku in d.counts)); else if (filt === 'done') res = res.filter(p => p.sku in d.counts); else if (filt === 'diff') res = res.filter(p => p.sku in d.counts && num(d.counts[p.sku].c) !== num(d.counts[p.sku].e));
     $('#cl', el).innerHTML = res.slice(0, limit).map(p => {
       const c = d.counts[p.sku], sys = num(c ? c.e : p.stock), diff = c ? num(c.c) - sys : null, isLast = p.sku === d.recent[0], pend = StkQ.has(p.sku);
-      return `<div class="item cnt${isLast ? ' last' : ''}" style="cursor:default"><div class="grow" style="min-width:0"><div class="t" style="font-size:17px">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}</div>
+      return `<div class="item cnt${isLast ? ' last' : ''}" style="cursor:default"><span class="cth" data-pinfo="${esc(p.sku)}">${pthumb(p, 60)}</span><div class="grow" style="min-width:0"><div class="t pnm" style="font-size:17px" data-pinfo="${esc(p.sku)}">${esc(p.name)}</div><div class="m">${esc(p.barcode || p.sku)}${isLast && !c ? ' · <span style="color:var(--red)">แตะตัวเลขเพื่อแก้ ›</span>' : ''}</div>
         <div class="small" style="margin-top:2px">${c ? 'ก่อนนับ' : 'ในระบบ'} <b style="font-size:17px">${sys}</b>${pend ? ' · <span class="tag amber" style="padding:0 6px">รอส่ง</span>' : c ? ' · <span style="color:var(--green)">ปรับแล้ว ✓</span>' : ''}${diff ? ` · ต่าง <b style="color:${diff > 0 ? 'var(--green)' : 'var(--red)'}">${diff > 0 ? '+' : ''}${Math.round(diff * 1000) / 1000}</b>` : c ? ' · <span style="color:var(--green)">ตรง ✓</span>' : ''}</div></div>
-        <button class="cntv${c ? ' on' : ''}" data-s="${esc(p.sku)}" aria-label="แก้จำนวนที่นับ">${c ? num(c.c) : p.trackStock === 'Y' ? num(p.stock) : 'นับ'}</button></div>`;
+        <button class="cntv${c ? ' on' : ''}" data-s="${esc(p.sku)}" aria-label="แก้จำนวนที่นับ">${c ? num(c.c) : num(p.stock)}</button></div>`;
     }).join('') + (res.length > limit ? `<div class="item center" id="more" style="justify-content:center;color:var(--red)">แสดงเพิ่ม (${res.length - limit})</div>` : '') || '<div class="empty">ไม่มีรายการ</div>';
-    $$('#cl [data-s]', el).forEach(b => b.onclick = () => edit(IDX.bySku[b.dataset.s]));
+    $$('#cl [data-s]', el).forEach(b => b.onclick = () => edit(IDX.bySku[b.dataset.s], b));
     const m = $('#more', el); if (m) m.onclick = () => { limit += 150; draw(); };
   };
   const hit = (code, ctx) => {
@@ -106,7 +110,8 @@ VIEWS.stockcount = async el => {
     const p = f.p;
     if (d.scope.type !== 'selected' && !inScope(p)) { toast(p.name + ' ไม่อยู่ในขอบเขตการนับนี้', 1); return; }
     if (document.querySelector('.kpov')) return;   // กำลังใส่จำนวนอยู่ ไม่รับสแกนซ้อน
-    touch(p); q = ''; const k = $('#kb', el); if (k) k.value = ''; filt = filt === 'todo' ? 'all' : filt; draw(); edit(p);
+    touch(p); q = ''; const k = $('#kb', el); if (k) k.value = ''; filt = filt === 'todo' ? 'all' : filt; draw();   // สแกน = รายการขึ้นบนสุด แสดงสต็อกปัจจุบัน · แตะตัวเลขเพื่อแก้
+    const r0 = $('#cl .item', el); if (r0) { r0.classList.remove('flash'); void r0.offsetWidth; r0.classList.add('flash'); }
     // รายการที่สแกนขึ้นบนสุดของรายการทันที (เลื่อนให้เห็น)
     const r = $('#cl .item', el); if (r) try { r.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { }
   };
@@ -118,6 +123,7 @@ VIEWS.stockcount = async el => {
   kb.oninput = () => { if (!/^\d{8,}$/.test(kb.value)) { q = kb.value; limit = 80; draw(); } };
   $('#cx', el).onclick = () => { StkQ.flush(); CNT.d = null; go('stockcount'); toast('จบการนับ — สต็อกที่ใส่ปรับแล้วทุกรายการ'); };
   StkQ.onchange = () => { if (el.isConnected) draw(); };
+  const pcl = () => { if (!el.isConnected) return removeEventListener('mm:pclose', pcl); draw(); }; addEventListener('mm:pclose', pcl);   // แก้สินค้าจากหน้ารายละเอียด → รายการอัปเดต
   if (false) $('#fin', el).onclick = () => {
     const L = list(), n = Object.keys(d.counts).length; if (!n) return toast('ยังไม่ได้นับสินค้า', 1);
     let dv = 0, dq = 0; Object.entries(d.counts).forEach(([sku, c]) => { const p = IDX.bySku[sku]; const df = num(c.c) - num(p ? p.stock : c.e); dq += df; dv += df * num(p && p.cost); });
@@ -155,7 +161,7 @@ VIEWS.stockvalue = async el => {
     ${nocost.length ? `<div class="alert amber">${I(IC.alert, 18)}<div>มีสต็อกแต่ไม่มีต้นทุน ${nocost.length} รายการ — มูลค่าทุนจะต่ำกว่าจริง</div></div>` : ''}
     <div class="alert blue">${I(IC.alert, 18)}<div>คิดเฉพาะสินค้าที่เปิด “นับสต็อก” (${tr.length} จาก ${S.products.length} รายการ) — เปิดนับสต็อกได้จากการตรวจนับหรือรับสินค้าเข้า</div></div>
     <div class="card"><h3>ตามหมวดหมู่</h3><div class="scroll-x"><table class="t"><tr><th>หมวด</th><th class="right">รายการ</th><th class="right">ทุน</th><th class="right">ขาย</th><th class="right">กำไร%</th></tr>${Object.entries(cats).sort((a, b) => b[1].cost - a[1].cost).map(([n, c]) => `<tr><td>${esc(n)}</td><td class="right">${c.n}</td><td class="right num">${money(c.cost)}</td><td class="right num">${money(c.retail)}</td><td class="right">${c.retail ? ((c.retail - c.cost) / c.retail * 100).toFixed(1) : '-'}</td></tr>`).join('')}</table></div></div>
-    <div class="card"><h3>มูลค่าสูงสุด 15 อันดับ</h3>${top.map(x => `<div class="kv"><span>${esc(x.p.name)} <span class="muted tiny">× ${num(x.p.stock)}</span></span><b>${money(x.v)}</b></div>`).join('') || '<div class="muted small">ไม่มี</div>'}</div>`;
+    <div class="card"><h3>มูลค่าสูงสุด 15 อันดับ</h3>${top.map(x => `<div class="kv" style="align-items:center"><span class="row" style="gap:10px;min-width:0"><span data-pinfo="${esc(x.p.sku)}">${pthumb(x.p, 36)}</span><span class="pnm" data-pinfo="${esc(x.p.sku)}">${esc(x.p.name)}</span> <span class="muted tiny">× ${num(x.p.stock)}</span></span><b>${money(x.v)}</b></div>`).join('') || '<div class="muted small">ไม่มี</div>'}</div>`;
   $('#ex', el).onclick = () => download(`stock_value_${todayISO()}.csv`, toCSV([['SKU', 'ชื่อ', 'หมวด', 'คงเหลือ', 'ต้นทุน', 'ราคาขาย', 'มูลค่าทุน', 'มูลค่าขาย']].concat(tr.map(p => [p.sku, p.name, p.category, p.stock, p.cost, p.price, Math.round(num(p.stock) * num(p.cost) * 100) / 100, Math.round(num(p.stock) * num(p.price) * 100) / 100]))));
 };
 
@@ -183,7 +189,7 @@ function poForm(po) {
     `<button class="btn ghost grow" id="pr">${I(IC.print, 18)} พิมพ์</button>${ro ? '' : `<button class="btn ghost grow" id="sv">บันทึก</button><button class="btn green grow" id="rc">รับของเข้าสต็อก</button>`}`);
   const tot = () => items.reduce((s, i) => s + num(i.qty) * num(i.cost), 0);
   const draw = () => {
-    $('#its', ov).innerHTML = items.map((it, i) => `<div style="border-bottom:1px solid var(--line);padding:6px 0"><div class="row"><div class="grow small" style="font-weight:600">${esc(it.name)}</div>${ro ? '' : `<button class="iconbtn" data-x="${i}">${I(IC.x, 16)}</button>`}</div><div class="grid3"><label class="tiny muted">จำนวน<input class="in" type="number" step="any" data-k="qty" data-i="${i}" value="${it.qty}" ${ro ? 'readonly' : ''}></label><label class="tiny muted">ทุน/หน่วย<input class="in" type="number" step="any" data-k="cost" data-i="${i}" value="${it.cost}" ${ro ? 'readonly' : ''}></label><div class="tiny muted right">รวม<div class="num" style="font-size:15px;color:var(--ink);padding-top:10px">${money(num(it.qty) * num(it.cost))}</div></div></div></div>`).join('') || '<div class="empty small">ยังไม่มีรายการ</div>';
+    $('#its', ov).innerHTML = items.map((it, i) => `<div style="border-bottom:1px solid var(--line);padding:6px 0"><div class="row">${IDX.bySku[it.sku] ? `<span data-pinfo="${esc(it.sku)}">${pthumb(IDX.bySku[it.sku], 40)}</span>` : ''}<div class="grow small${IDX.bySku[it.sku] ? ' pnm' : ''}" style="font-weight:600"${IDX.bySku[it.sku] ? ` data-pinfo="${esc(it.sku)}"` : ''}>${esc(it.name)}</div>${ro ? '' : `<button class="iconbtn" data-x="${i}">${I(IC.x, 16)}</button>`}</div><div class="grid3"><label class="tiny muted">จำนวน<input class="in" type="number" step="any" data-k="qty" data-i="${i}" value="${it.qty}" ${ro ? 'readonly' : ''}></label><label class="tiny muted">ทุน/หน่วย<input class="in" type="number" step="any" data-k="cost" data-i="${i}" value="${it.cost}" ${ro ? 'readonly' : ''}></label><div class="tiny muted right">รวม<div class="num" style="font-size:15px;color:var(--ink);padding-top:10px">${money(num(it.qty) * num(it.cost))}</div></div></div></div>`).join('') || '<div class="empty small">ยังไม่มีรายการ</div>';
     $('#tt', ov).textContent = baht(tot());
     $$('[data-k]', ov).forEach(i => i.onchange = () => { items[+i.dataset.i][i.dataset.k] = num(i.value); draw(); });
     $$('[data-x]', ov).forEach(b => b.onclick = () => { items.splice(+b.dataset.x, 1); draw(); });

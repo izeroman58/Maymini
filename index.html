@@ -431,6 +431,11 @@ html.dark .sclr{background:#5A5D63}
 .cntv{min-width:84px;height:56px;padding:0 12px;border-radius:14px;border:2px dashed var(--line);background:var(--card);color:var(--ink3);font-family:var(--fh);font-size:20px;font-weight:700;cursor:pointer;flex:none;touch-action:manipulation}
 .cntv.on{border:2px solid var(--green);color:var(--ink);font-size:26px;background:var(--green-l)}
 .cntv:active{transform:scale(.96)}
+.cntv:not(.on){font-size:26px;color:var(--ink);border-style:solid}
+.vct{all:unset;cursor:pointer;font-size:20px;padding:4px 8px;border-radius:10px}.vct.off{opacity:.3;filter:grayscale(1)}.vct:active{background:#0001}
+[data-pinfo]{cursor:pointer}.pnm[data-pinfo]{text-decoration:underline dotted 1px;text-underline-offset:4px}
+.cnt .cth{flex:none;margin-right:12px;align-self:center}
+.item.cnt.flash{animation:cflash 1.2s ease-out}@keyframes cflash{0%,30%{background:rgba(227,24,55,.25)}100%{}}
 
 .rs-why{cursor:help;border-bottom:1px dotted var(--ink3);touch-action:manipulation}.rs-why i{font-style:normal;color:var(--blue,#2563EB);font-size:.95em}
 
@@ -457,7 +462,7 @@ html.dark .sclr{background:#5A5D63}
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.7.3';
+const APP_VER = '2.7.5';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -850,10 +855,48 @@ function tick() {
   try { const c = audioCtx(); if (!c) return; const o = c.createOscillator(), g = c.createGain(); o.type = 'square'; o.frequency.value = 1150; g.gain.setValueAtTime(.32, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .06); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + .065); } catch (e) { }
   try { navigator.vibrate && navigator.vibrate(12); } catch (e) { }
 }
-const sndBtn = () => `<button type="button" class="sndt" title="เสียงกดแป้น (แตะเพื่อปิด/เปิด)" onclick="toggleKeySnd()">${keySndOn() ? '🔊' : '🔇'}</button>`;
+const sndBtn = () => `<button type="button" class="sndt" title="เสียงกดแป้น (แตะเพื่อปิด/เปิด)" onclick="toggleKeySnd()">${keySndOn() ? '🔊' : '🔇'}</button><button type="button" class="vct${keyVoiceOn() ? '' : ' off'}" title="เสียงพูดตัวเลข (แตะเพื่อปิด/เปิด)" onclick="toggleKeyVoice()">🗣️</button>`;
+// v2.7.5: เสียงพูดตามปุ่มที่กด — ใช้เสียงภาษาไทยที่ติดตั้งในเครื่อง (Android: Google/Samsung TTS ทำงานในเครื่อง ไม่ต้องใช้เน็ต)
+const keyVoiceOn = () => LS.get('keyVoice', false) === true;
+const Voice = {
+  W: { 0: 'ศูนย์', 1: 'หนึ่ง', 2: 'สอง', 3: 'สาม', 4: 'สี่', 5: 'ห้า', 6: 'หก', 7: 'เจ็ด', 8: 'แปด', 9: 'เก้า', '00': 'ศูนย์ศูนย์', '.': 'จุด', del: 'ลบ', ok: 'ตกลง', c: 'ล้าง', C: 'ล้าง', '+': 'บวก', '-': 'ลบ', '*': 'คูณ', '/': 'หาร', '=': 'เท่ากับ', bk: 'ย้อน', '%': 'เปอร์เซ็นต์' },
+  v: null, ok: null,
+  pick() { try { const vs = window.speechSynthesis ? speechSynthesis.getVoices() : []; this.v = vs.find(v => /^th/i.test(v.lang) && v.localService) || vs.find(v => /^th/i.test(v.lang)) || null; } catch (e) { this.v = null; } return this.v; },
+  say(t, force) {
+    if (!t || (!force && !keyVoiceOn()) || !window.speechSynthesis) return;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(String(t)); u.lang = 'th-TH'; const v = this.v || this.pick(); if (v) u.voice = v; u.rate = 1.3; u.volume = 1; speechSynthesis.speak(u); } catch (e) { }
+  },
+  key(b) {
+    if (!keyVoiceOn()) return;
+    let k = b.dataset.k != null ? b.dataset.k : b.dataset.ck != null ? b.dataset.ck : b.dataset.q != null ? b.dataset.q : b.textContent.trim();
+    if (k === 'x') return;
+    if (k in this.W) return this.say(this.W[k]);
+    k = String(k).replace(/[฿,\s]|พอดี/g, ''); if (/^\d+(\.\d+)?$/.test(k)) return this.say(k);
+  }
+};
+try { if (window.speechSynthesis) { Voice.pick(); speechSynthesis.onvoiceschanged = () => Voice.pick(); } } catch (e) { }
+function toggleKeyVoice() {
+  const on = !keyVoiceOn();
+  if (on && !window.speechSynthesis) return toast('เครื่อง/เบราว์เซอร์นี้ไม่รองรับเสียงพูด', 1);
+  LS.set('keyVoice', on); $$('.vct').forEach(x => x.classList.toggle('off', !on));
+  if (!on) return toast('ปิดเสียงพูดตัวเลขแล้ว');
+  const v = Voice.pick();
+  if (!v) toast('เปิดเสียงพูดแล้ว — ถ้าไม่ได้ยินเสียงภาษาไทย: การตั้งค่าเครื่อง › การจัดการทั่วไป › แปลงข้อความเป็นเสียง › ⚙️ ติดตั้งข้อมูลเสียง › ไทย (โหลดครั้งเดียว ใช้ได้ไม่ต้องมีเน็ต)', 0, 9000);
+  else toast(v.localService ? 'เปิดเสียงพูดตัวเลขแล้ว (เสียงไทยในเครื่อง ใช้ได้ไม่ต้องมีเน็ต)' : 'เปิดเสียงพูดตัวเลขแล้ว — แนะนำโหลดข้อมูลเสียงไทยลงเครื่อง (การตั้งค่า › แปลงข้อความเป็นเสียง) จะพูดได้แม้ไม่มีเน็ต', 0, 6000);
+  Voice.say('หนึ่ง สอง สาม', true);
+}
 function toggleKeySnd() { const on = !keySndOn(); LS.set('keySnd', on); $$('.sndt').forEach(x => x.textContent = on ? '🔊' : '🔇'); toast(on ? 'เปิดเสียงกดแป้นแล้ว' : 'ปิดเสียงกดแป้นแล้ว'); if (on) tick(); }
 // ทุกแป้นตัวเลขในระบบ: มีเสียงกด
-document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.kp button, .kpg button, .npad button, .cpad button, .pinpad button, .qcash button, [data-q]'); if (b && !b.disabled) tick(); }, true);
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.kp button, .kpg button, .npad button, .cpad button, .pinpad button, .qcash button, [data-q], .calc .cg button'); if (b && !b.disabled) { tick(); if (!b.closest('.pinpad,[data-novoice]')) Voice.key(b); } }, true);
+// v2.7.5: แตะรูป/ชื่อสินค้าในรายการ ([data-pinfo]) = รายละเอียดสินค้าเต็ม (แก้ไข ± สต็อก ฉลาก ได้)
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-pinfo]'); if (!t) return;
+  if (Date.now() - (window._kpClosed || 0) < 600) { e.preventDefault(); e.stopPropagation(); return; }   // คลิกทะลุจากการปิดแป้นตัวเลข
+  const p = IDX.bySku[t.dataset.pinfo]; if (!p) return;
+  e.preventDefault(); e.stopPropagation(); productCard(p);
+  const ov = $$('.ov').pop(); if (!ov) return;
+  const iv = setInterval(() => { if (!ov.isConnected) { clearInterval(iv); dispatchEvent(new Event('mm:pclose')); } }, 400);
+}, true);
 // แท็บเล็ต/มือถือ: แตะช่องตัวเลข → แป้นตัวเลขลอยขึ้นมา (ไม่เด้งคีย์บอร์ดของเครื่อง)
 // เปิดเมื่อ "แตะแล้วยกนิ้ว" เท่านั้น — นิ้วเลื่อนจอผ่านช่อง / แตะเพื่อหยุดจอที่กำลังเลื่อน = ไม่เปิด
 const numInput = el => {
@@ -2229,7 +2272,7 @@ VIEWS.scan = el => {
   const drawHist = () => {
     if (mode === 'stock') {
       const uniq = [...new Set(hist)];
-      $('#hist', el).innerHTML = uniq.length ? `<div class="card"><h3>รายการที่นับ (${uniq.length})</h3>${uniq.map(p => `<div class="kv"><span>${esc(p.name)}</span><b>${p._cnt}</b></div>`).join('')}
+      $('#hist', el).innerHTML = uniq.length ? `<div class="card"><h3>รายการที่นับ (${uniq.length})</h3>${uniq.map(p => `<div class="kv" style="align-items:center"><span class="row" style="gap:10px;min-width:0"><span data-pinfo="${esc(p.sku)}">${pthumb(p, 36)}</span><span class="pnm" data-pinfo="${esc(p.sku)}">${esc(p.name)}</span></span><b>${p._cnt}</b></div>`).join('')}
        <div class="seg" id="sm" style="margin-top:10px"><button class="on" data-m="add">บวกเพิ่มเข้าสต็อก</button><button data-m="set">ตั้งเป็นยอดที่นับได้</button></div>
        <button class="btn green block" id="ap" style="margin-top:10px">บันทึกสต็อก</button></div>` : '';
       let sm = 'add'; $$('#sm button', el).forEach(b => b.onclick = () => { sm = b.dataset.m; $$('#sm button', el).forEach(x => x.classList.toggle('on', x === b)); });
@@ -3360,23 +3403,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.7.3"></script>
-<script src="logic.js?v=2.7.3"></script>
-<script src="cache.js?v=2.7.3"></script>
-<script src="offline.js?v=2.7.3"></script>
-<script src="scanner.js?v=2.7.3"></script>
-<script src="printer.js?v=2.7.3"></script>
-<script src="pos.js?v=2.7.3"></script>
-<script src="idle.js?v=2.7.3"></script>
-<script src="display.js?v=2.7.3"></script>
-<script src="reports.js?v=2.7.3"></script>
-<script src="inventory.js?v=2.7.3"></script>
-<script src="people.js?v=2.7.3"></script>
-<script src="quality.js?v=2.7.3"></script>
-<script src="services.js?v=2.7.3"></script>
-<script src="owner.js?v=2.7.3"></script>
-<script src="books.js?v=2.7.3"></script>
-<script src="restock.js?v=2.7.3"></script>
+<script src="qr.js?v=2.7.5"></script>
+<script src="logic.js?v=2.7.5"></script>
+<script src="cache.js?v=2.7.5"></script>
+<script src="offline.js?v=2.7.5"></script>
+<script src="scanner.js?v=2.7.5"></script>
+<script src="printer.js?v=2.7.5"></script>
+<script src="pos.js?v=2.7.5"></script>
+<script src="idle.js?v=2.7.5"></script>
+<script src="display.js?v=2.7.5"></script>
+<script src="reports.js?v=2.7.5"></script>
+<script src="inventory.js?v=2.7.5"></script>
+<script src="people.js?v=2.7.5"></script>
+<script src="quality.js?v=2.7.5"></script>
+<script src="services.js?v=2.7.5"></script>
+<script src="owner.js?v=2.7.5"></script>
+<script src="books.js?v=2.7.5"></script>
+<script src="restock.js?v=2.7.5"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
