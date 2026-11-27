@@ -641,6 +641,7 @@ VIEWS.ledger = async el => {
      <div class="tiny muted">เงินได้ประเภท ม.40(8) · บันทึกตามเงินสดรับ-จ่ายจริง · รายรับไม่รวมเงินรับแทน (โอน/เติมเงิน/จ่ายบิล) · ยอดขายสินค้ายกเว้น VAT ยังนับเป็นรายรับตามปกติ</div>
    </div>
    <button class="btn block green lg-add" id="add">${I(IC.cam, 24)} บันทึกรายจ่าย · ถ่ายรูปบิล</button>
+   <div id="dexp"></div>
    <div class="seg" id="tb" style="margin-bottom:10px">${[['list', 'รายการ'], ['month', 'รายเดือน'], ['cat', 'หมวดรายจ่าย'], ['tax', 'ยื่นภาษี']].map(([k, n]) => `<button data-t="${k}" class="${L.tab === k ? 'on' : ''}">${n}</button>`).join('')}</div>
    <div id="pane"><div class="card center"><span class="spin dark"></span></div></div>
    <div class="card"><h3>ส่งออกรายงานเงินสดรับ-จ่าย</h3><div class="small muted" style="margin:-4px 0 8px">ตามแบบประกาศอธิบดีกรมสรรพากรฯ (ฉบับที่ 161) · ฟอนต์ TH Sarabun</div>
@@ -649,6 +650,7 @@ VIEWS.ledger = async el => {
   $('#yy', el).value = L.y; $('#mm', el).value = L.m;
   $('#tsv', el).onclick = async () => { try { busy(1); await saveSetting('taxInfo', { name: $('#tn', el).value.trim(), taxId: $('#ti', el).value.trim(), shop: $('#ts', el).value.trim(), addr: $('#ta', el).value.trim() }); busy(0); toast('บันทึกหัวรายงานแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
   $('#add', el).onclick = () => expenseForm(null, () => go('ledger'));
+  if (window.DailyExp) DailyExp.mount($('#dexp', el));
   let D = await ledgerData(L.y);
   const inR = (d) => !L.m || +d.slice(5, 7) === L.m;
   const draw = () => {
@@ -843,3 +845,120 @@ async function stockFromBill(r, done) {
     receiptForm({ ...r, type: 'สินค้า', items: JSON.stringify(items), supplier: r.supplier || data.supplier || '', supplierTaxId: r.supplierTaxId || data.supplierTaxId || '', docNo: r.docNo || data.docNo || '', subtotal: r.subtotal || data.subtotal || '', vat: r.vat || data.vat || '', total: r.total || data.total || '', _raw: o.text || '', _engine: o.engine, _img: /^data:/.test(r.fileUrl || '') ? r.fileUrl : '', _done: done }, true);
   } catch (e) { busy(0); toast(e.message, 1); }
 }
+
+/* ---------- รายจ่ายประจำวัน (ผัก · น้ำแข็ง · ค่าแรง) — กดปุ่ม ใส่ยอด ✔ จบ · รูปแนบภายหลังได้ (ไม่บังคับ) ----------
+   บันทึกลงบัญชีรายรับ-รายจ่าย (ตาราง Receipts) ทันทีในเครื่อง แล้วส่ง Google เบื้องหลัง · ไม่มีเน็ต = เข้าคิวส่งเอง */
+const DailyExp = {
+  P: [
+    { k: 'veg', e: '🥬', n: 'ซื้อผัก/ของสด', find: /ผัก|ของสด/, color: '#2E7D32', pay: 'ask' },    // บางแผงโอน/สแกน (มีสลิป) บางแผงเงินสด → ถามทุกครั้ง
+    { k: 'ice', e: '🧊', n: 'ค่าน้ำแข็ง', find: /น้ำแข็ง/, color: '#0288D1', pay: 'เงินสด' },       // คนส่งน้ำแข็งเทใส่ถัง จ่ายเงินสด
+    { k: 'wage', e: '👷', n: 'ค่าจ้างพนักงาน', find: /ค่าจ้าง|ค่าแรง/, color: '#6D4C41', pay: 'เงินสด' }
+  ],
+  // ใช้หมวดที่ร้านมีอยู่แล้ว (เช่น "ค่าน้ำแข็ง ซื้อมาขาย") ถ้าไม่มีสร้างใหม่และปักหมุดไว้
+  async cat(p) {
+    const L = ExpCats.list(); let c = L.find(x => p.find.test(x.n));
+    if (!c) { c = { n: p.n, e: p.e, pin: true }; L.push(c); try { await ExpCats.save(L); } catch (e) { } }
+    return c.n;
+  },
+  q() { return LS.get('dexpQ', []); },
+  async flush() {
+    if (this.busy) return; const Q = this.q(); if (!Q.length) return; this.busy = true;
+    try { await api('upsert', { table: 'Receipts', rows: Q }); const ids = new Set(Q.map(r => r.id)); LS.set('dexpQ', this.q().filter(r => !ids.has(r.id))); }
+    catch (e) { clearTimeout(this.t); this.t = setTimeout(() => this.flush(), 20000); }
+    this.busy = false; this.refresh();
+  },
+  today(p, cn) { const t = todayISO(); return (S.receipts || []).filter(r => String(r.date).slice(0, 10) === t && (r.cat === cn || r.dexp === p.k)); },
+  month(cn) { const m = todayISO().slice(0, 7); return (S.receipts || []).filter(r => String(r.date).slice(0, 7) === m && r.cat === cn).reduce((a, r) => a + num(r.total), 0); },
+  async add(p, extra) {
+    const cn = await this.cat(p), last = LS.get('dexpLast', {}), key = p.k + (extra && extra.who ? ':' + extra.who : '');
+    const save = (v, pay, who) => {
+      const rc = { id: uid('R'), date: todayISO(), type: 'ค่าใช้จ่าย', cat: cn, total: String(v), supplier: who || '', payMethod: pay, note: p.k === 'wage' && who ? 'ค่าจ้างรายวัน ' + who : '', items: '[]', createdAt: new Date().toISOString(), createdBy: S.user.username || S.user.name || '' };
+      (S.receipts = S.receipts || []).push({ ...rc, _new: Date.now() }); window.rcLocalSave && rcLocalSave();
+      LS.set('dexpQ', this.q().concat([rc])); last[key] = v; LS.set('dexpLast', last);
+      this.refresh(); this.flush(); return rc;
+    };
+    keypad(`${p.e} ${esc(p.n)}${extra && extra.who ? ' · ' + esc(extra.who) : ''}`, last[key] || '', v => {
+      if (!num(v)) return toast('ใส่จำนวนเงิน', 1);
+      if (p.pay !== 'ask') { save(v, p.pay, extra && extra.who); return toast(`✔ ${p.n} ${baht(v)} · ${p.pay} บันทึกแล้ว`); }
+      this.payAsk(p, cn, v, save);
+    }, { sub: `วันนี้ ${thDate(todayISO())} · หมวด "${esc(cn)}"${p.pay !== 'ask' ? ' · ' + p.pay : ''}${last[key] ? ' · ครั้งก่อน ' + baht(last[key]) : ''}`, replace: true, okLabel: p.pay === 'ask' ? 'ถัดไป ›' : '✔ บันทึก' });
+  },
+  // ซื้อผัก: เลือกแผง (ไม่บังคับ) + จ่ายเงินสด / โอน-สแกน (เปิดกล้องถ่ายสลิปให้ทันที)
+  payAsk(p, cn, v, save) {
+    const vend = [...new Set((S.receipts || []).filter(r => r.cat === cn && r.supplier).sort((a, b) => String(b.createdAt || b.date).localeCompare(a.createdAt || a.date)).map(r => r.supplier))].slice(0, 6);
+    let who = LS.get('dexpVend', '') || '';
+    const ov = sheet(`${p.e} ${esc(p.n)} ${baht(v)}`, `
+      <div class="small muted" style="margin-bottom:6px">ซื้อจากแผงไหน (ไม่ใส่ก็ได้)</div>
+      <div class="chips" id="vd" style="margin-bottom:6px">${vend.map(n => `<button class="chip${n === who ? ' on' : ''}" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+      <input class="in" id="vn" placeholder="ชื่อแผง / แม่ค้า" maxlength="40" value="${esc(vend.includes(who) ? '' : who)}">
+      <div class="small muted" style="margin:14px 0 6px">จ่ายด้วย</div>
+      <div class="dx-pay"><button class="btn" id="pc" style="background:#2E7D32">💵 เงินสด</button><button class="btn" id="pt" style="background:#1565C0">📱 โอน / สแกน<small>ถ่ายสลิปแนบ</small></button></div>`, '', { cls: 'dxp' });
+    $$('[data-v]', ov).forEach(b => b.onclick = () => { who = b.dataset.v; $('#vn', ov).value = ''; $$('[data-v]', ov).forEach(x => x.classList.toggle('on', x === b)); });
+    const name = () => ($('#vn', ov).value.trim() || who || '').trim();
+    $('#pc', ov).onclick = () => { const n = name(); LS.set('dexpVend', n); ov.remove(); save(v, 'เงินสด', n); toast(`✔ ${p.n} ${baht(v)} · เงินสด บันทึกแล้ว`); };
+    $('#pt', ov).onclick = () => { const n = name(); LS.set('dexpVend', n); ov.remove(); const rc = save(v, 'โอน/สแกน', n); toast(`✔ ${p.n} ${baht(v)} · โอน — ถ่ายสลิปได้เลย`); this.photo(rc.id); };
+  },
+  async wage() {
+    let users = []; try { users = (await quick(loadTable('Users'), 1500, S.users || [])).filter(u => u.active !== 'N' && u.role !== 'owner'); } catch (e) { }
+    const names = [...new Set(users.map(u => u.name || u.username).filter(Boolean))];
+    const ov = sheet('👷 ค่าจ้างพนักงานวันนี้', `<div class="small muted" style="margin-bottom:10px">เลือกคนที่จ่าย แล้วใส่ยอด</div>
+      <div class="dx-who">${names.map(n => `<button class="btn ghost" data-w="${esc(n)}">${esc(n)}</button>`).join('')}<button class="btn ghost" data-w="">ไม่ระบุชื่อ</button></div>
+      <div class="row" style="gap:8px;margin-top:10px"><input class="in grow" id="wn" placeholder="หรือพิมพ์ชื่ออื่น" maxlength="40"><button class="btn" id="wok">ถัดไป</button></div>`);
+    const go = who => { ov.remove(); this.add(this.P[2], { who: String(who || '').trim() }); };
+    $$('[data-w]', ov).forEach(b => b.onclick = () => go(b.dataset.w));
+    $('#wok', ov).onclick = () => go($('#wn', ov).value);
+  },
+  async photo(id) {
+    const r = (S.receipts || []).find(x => x.id === id); if (!r) return;
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';   // เลือกจากคลังภาพได้ (สลิปโอนจากแอปธนาคาร) หรือถ่ายใหม่
+    inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return;
+      try { busy(1, 'กำลังแนบรูป...'); const im = await compressImage(f, 1400, .7); const up = await api('upload', { kind: 'receipt', name: `bill_${r.date}_${Date.now()}.jpg`, mime: im.mime, base64: im.dataUrl }); r.fileId = up.fileId || ''; r.fileUrl = up.fileUrl || ''; r._new = Date.now(); await api('upsert', { table: 'Receipts', rows: [{ ...r, _new: undefined }] }); window.rcLocalSave && rcLocalSave(); busy(0); toast('แนบรูปแล้ว'); this.refresh(); }
+      catch (e) { busy(0); toast(e.offline ? 'ต้องต่อเน็ตเพื่อแนบรูป' : e.message, 1); }
+    };
+    inp.click();
+  },
+  boxes: new Set(),
+  async mount(box) {
+    if (!box) return; this.boxes.add(box); box.className = 'card dx';
+    if (!S.receipts || !S.receipts.length) { try { if (window.rcLoad) await rcLoad(); } catch (e) { } }
+    this.draw(box);
+  },
+  refresh() { this.boxes.forEach(b => { if (b.isConnected) this.draw(b); else this.boxes.delete(b); }); },
+  draw(box) {
+    const L = ExpCats.list(), cn = p => (L.find(x => p.find.test(x.n)) || { n: p.n }).n, pend = new Set(this.q().map(r => r.id));
+    const rows = this.P.map(p => ({ p, c: cn(p), t: this.today(p, cn(p)) }));
+    box.innerHTML = `<div class="row" style="margin-bottom:8px"><h3 class="grow">รายจ่ายประจำวัน</h3><span class="tiny muted">${thDate(todayISO())}</span></div>
+      <div class="dx-g">${rows.map(({ p, t }) => { const s = t.reduce((a, r) => a + num(r.total), 0); return `<button class="dx-b${t.length ? ' done' : ''}" data-k="${p.k}" style="--c:${p.color}"><span class="ic">${p.e}</span><b>${esc(p.n)}</b><span class="v">${t.length ? '✓ ' + baht(s) : 'แตะเพื่อบันทึก'}</span></button>`; }).join('')}</div>
+      ${rows.some(x => x.t.length) ? `<div class="dx-l">${rows.flatMap(({ p, t }) => t.map(r => `<div class="dx-r"><span>${p.e} ${esc(r.supplier || p.n)}</span><span class="tiny muted">${r.payMethod === 'โอน/สแกน' ? '📱 โอน' : '💵 สด'}</span><b>${baht(r.total)}</b>${pend.has(r.id) ? '<span class="tag amber" style="padding:0 6px">รอส่ง</span>' : ''}<button class="iconbtn" data-ph="${esc(r.id)}" title="แนบรูป">${r.fileUrl || r.fileId ? '🖼' : '📷'}</button></div>`)).join('')}</div>` : ''}
+      <div class="tiny muted" style="margin-top:8px">เดือนนี้จ่าย: ${rows.map(({ p, c }) => `${p.e} ${baht(this.month(c))}`).join(' · ')}</div>
+      <div id="dxc" class="dx-c"></div>`;
+    this.compare($('#dxc', box), rows);
+    $$('.dx-b', box).forEach(b => b.onclick = () => { const p = this.P.find(x => x.k === b.dataset.k); p.k === 'wage' ? this.wage() : this.add(p); });
+    $$('[data-ph]', box).forEach(b => b.onclick = () => this.photo(b.dataset.ph));
+  }
+};
+// ซื้อ เทียบ ขาย: 🥬 ซื้อผัก ↔ ขายของสด/ผัก/ผลไม้ · 🧊 ซื้อน้ำแข็ง ↔ ขายน้ำแข็ง (วันนี้ + เดือนนี้)
+DailyExp.MATCH = {
+  veg: { n: 'ผัก/ของสด', test: (nm, cat) => /ผัก|ผลไม้|ของสด|พริก|มะนาว|กะหล่ำ|แตง|มะเขือ|ต้นหอม|ผักชี|กระเทียม|หอมแดง|ข่า|ตะไคร้|ใบมะกรูด|ถั่วฝักยาว|ฟัก|บวบ|มะละกอ|กล้วย|ส้ม|มะม่วง|สับปะรด|ไข่ไก่|ไข่เป็ด/.test(nm + ' ' + cat) && !/น้ำแข็ง|ขนม|เครื่องดื่ม|น้ำผลไม้|กระป๋อง|ดอง|แห้ง|ทอด|อบ|ซอส|ผง/.test(nm + ' ' + cat) },
+  ice: { n: 'น้ำแข็ง', test: (nm, cat) => /น้ำแข็ง/.test(nm) }
+};
+DailyExp.compare = async function (el, rows) {
+  if (!el || !window.fetchOrders) return;
+  const t = todayISO(), m0 = t.slice(0, 8) + '01';
+  let R = []; try { R = await fetchOrders(m0, t); } catch (e) { return; }
+  if (!el.isConnected) return;
+  const sold = { veg: { d: 0, m: 0, items: {} }, ice: { d: 0, m: 0, items: {} } };
+  R.forEach(o => { const sg = o.status === 'refund' ? -1 : 1, day = String(o.date).slice(0, 10) === t;
+    (o._items || []).forEach(it => { if (it.pass) return; const p = IDX.bySku[it.sku] || {}, nm = String(it.name || p.name || ''), cat = String(p.category || it.cat || ''), amt = sg * Math.abs(num(it.qty)) * num(it.price);
+      ['veg', 'ice'].forEach(k => { if (this.MATCH[k].test(nm, cat)) { sold[k].m += amt; if (day) sold[k].d += amt; sold[k].items[nm] = (sold[k].items[nm] || 0) + amt; } }); }); });
+  const buy = k => { const r = rows.find(x => x.p.k === k), c = r ? r.c : ''; return { d: r ? r.t.reduce((a, x) => a + num(x.total), 0) : 0, m: this.month(c) }; };
+  const cell = (s, b) => { if (!s && !b) return '<td class="muted">—</td>'; const g = s - b, pc = b ? Math.round(g / b * 100) : null; return `<td><div class="tiny muted">ขาย ${baht(s)} · ซื้อ ${baht(b)}</div><b style="color:${g >= 0 ? 'var(--green)' : 'var(--red)'}">${g >= 0 ? 'กำไร' : 'ขาดทุน'} ${baht(Math.abs(g))}</b>${pc != null ? ` <span class="tiny">(${pc > 0 ? '+' : ''}${pc}% จากทุน)</span>` : ''}</td>`; };
+  el.innerHTML = `<table class="dx-t"><tr><th></th><th>วันนี้</th><th>เดือนนี้</th></tr>${['veg', 'ice'].map(k => { const b = buy(k), sv = sold[k], e = k === 'veg' ? '🥬' : '🧊'; return `<tr data-cx="${k}"><th>${e} ${this.MATCH[k].n} <span class="tiny muted">ⓘ</span></th>${cell(sv.d, b.d)}${cell(sv.m, b.m)}</tr>`; }).join('')}</table>
+    <div class="tiny muted" style="margin-top:4px">กำไร = ยอดขายสินค้านั้น − เงินที่จ่ายซื้อ · % คิดจากเงินที่ซื้อ · รายวันขึ้นลงได้ (ซื้อวันนี้ ขายพรุ่งนี้) ดูเดือนนี้แม่นกว่า</div>`;
+  $$('[data-cx]', el).forEach(tr => tr.onclick = () => { const k = tr.dataset.cx, it = Object.entries(sold[k].items).sort((a, b) => b[1] - a[1]);
+    sheet(`${k === 'veg' ? '🥬' : '🧊'} นับเป็นยอดขาย${this.MATCH[k].n} (เดือนนี้)`, `<div class="small muted" style="margin-bottom:8px">ระบบนับจากชื่อสินค้า/หมวดที่มีคำว่า ${k === 'veg' ? 'ผัก ผลไม้ ของสด และชื่อผักผลไม้ทั่วไป (ไม่รวมของแปรรูป)' : 'น้ำแข็ง'} · ถ้าขายของสดด้วยปุ่ม "ระบุราคา" ให้ใช้ปุ่ม "ของสด ระบุ" ยอดจะนับตรง</div>
+      <div class="list">${it.length ? it.map(([n, v]) => `<div class="item" style="cursor:default"><div class="grow">${esc(n)}</div><b>${baht(v)}</b></div>`).join('') : '<div class="empty">ยังไม่มียอดขายที่ตรง</div>'}</div>`); });
+};
+window.DailyExp = DailyExp;
+addEventListener('online', () => DailyExp.flush()); setTimeout(() => DailyExp.flush(), 4000);

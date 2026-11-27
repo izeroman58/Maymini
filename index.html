@@ -433,6 +433,18 @@ html.dark .sclr{background:#5A5D63}
 .cntv:active{transform:scale(.96)}
 
 .rs-why{cursor:help;border-bottom:1px dotted var(--ink3);touch-action:manipulation}.rs-why i{font-style:normal;color:var(--blue,#2563EB);font-size:.95em}
+
+.dx-pay{display:grid;grid-template-columns:1fr 1fr;gap:10px}.dx-pay .btn{min-height:84px;font-size:20px;font-weight:800;flex-direction:column;color:#fff}.dx-pay small{font-size:13px;font-weight:500;opacity:.9}
+.dx-c{margin-top:10px}.dx-t{width:100%;border-collapse:collapse;font-size:14px}.dx-t th,.dx-t td{padding:6px 4px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}.dx-t tr:first-child th{border-top:0;font-size:12px;color:var(--ink2);font-weight:600}.dx-t [data-cx]{cursor:pointer}.dx-t b{font-size:15px}
+/* รายจ่ายประจำวัน: ปุ่มใหญ่ 3 ปุ่ม */
+.dx-g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dx-b{border:0;border-radius:16px;padding:12px 6px;min-height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:color-mix(in srgb,var(--c) 14%,var(--card));color:var(--ink);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--c) 45%,transparent);cursor:pointer;touch-action:manipulation;font-family:inherit}
+.dx-b .ic{font-size:34px;line-height:1}.dx-b b{font-size:16px;line-height:1.2;text-align:center}.dx-b .v{font-size:13px;color:var(--ink2)}
+.dx-b.done{background:color-mix(in srgb,var(--c) 26%,var(--card))}.dx-b.done .v{color:var(--ink);font-weight:800;font-size:16px}
+.dx-b:active{transform:scale(.97)}
+.dx-l{margin-top:10px;border-top:1px solid var(--line);padding-top:6px}
+.dx-r{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:15px}.dx-r span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dx-who{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}.dx-who .btn{min-height:56px;font-size:17px}
 </style>
 <script>try{var _t=localStorage.getItem('mm_theme'),_pd=localStorage.getItem('mm_posDark');_t=_t?JSON.parse(_t):(_pd==null||JSON.parse(_pd)?'dark':'light');if(JSON.parse(localStorage.getItem('mm_themeMode')||'""')==='auto')_t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';if(_t==='dark')document.documentElement.classList.add('dark');document.documentElement.dataset.theme=_t;var _a=JSON.parse(localStorage.getItem('mm_accent')||'""');if(_a)document.documentElement.dataset.accent=_a;}catch(e){}</script>
 </head>
@@ -445,7 +457,7 @@ html.dark .sclr{background:#5A5D63}
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.7.1';
+const APP_VER = '2.7.3';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -3348,23 +3360,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.7.1"></script>
-<script src="logic.js?v=2.7.1"></script>
-<script src="cache.js?v=2.7.1"></script>
-<script src="offline.js?v=2.7.1"></script>
-<script src="scanner.js?v=2.7.1"></script>
-<script src="printer.js?v=2.7.1"></script>
-<script src="pos.js?v=2.7.1"></script>
-<script src="idle.js?v=2.7.1"></script>
-<script src="display.js?v=2.7.1"></script>
-<script src="reports.js?v=2.7.1"></script>
-<script src="inventory.js?v=2.7.1"></script>
-<script src="people.js?v=2.7.1"></script>
-<script src="quality.js?v=2.7.1"></script>
-<script src="services.js?v=2.7.1"></script>
-<script src="owner.js?v=2.7.1"></script>
-<script src="books.js?v=2.7.1"></script>
-<script src="restock.js?v=2.7.1"></script>
+<script src="qr.js?v=2.7.3"></script>
+<script src="logic.js?v=2.7.3"></script>
+<script src="cache.js?v=2.7.3"></script>
+<script src="offline.js?v=2.7.3"></script>
+<script src="scanner.js?v=2.7.3"></script>
+<script src="printer.js?v=2.7.3"></script>
+<script src="pos.js?v=2.7.3"></script>
+<script src="idle.js?v=2.7.3"></script>
+<script src="display.js?v=2.7.3"></script>
+<script src="reports.js?v=2.7.3"></script>
+<script src="inventory.js?v=2.7.3"></script>
+<script src="people.js?v=2.7.3"></script>
+<script src="quality.js?v=2.7.3"></script>
+<script src="services.js?v=2.7.3"></script>
+<script src="owner.js?v=2.7.3"></script>
+<script src="books.js?v=2.7.3"></script>
+<script src="restock.js?v=2.7.3"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

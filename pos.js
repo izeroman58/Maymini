@@ -407,9 +407,11 @@ function keypad(title, init, cb, opt = {}) {
   ov.innerHTML = `<div class="kpbox" role="dialog"><div class="kph"><button type="button" class="kpx" data-k="x">✕</button><div class="kpt">${head}</div>${sndBtn()}</div>
     <div class="kpvr"><span class="kpl">${label === head ? '' : label}${opt.sub ? `<small>${opt.sub}</small>` : ''}</span><span class="kpv2" id="kv"></span></div>
     <div class="kpg">${K(1, 1)}${K(2, 2)}${K(3, 3)}${K('del', '⌫', 'kdel')}${K(4, 4)}${K(5, 5)}${K(6, 6)}${K(7, 7)}${K(8, 8)}${K(9, 9)}${K('ok', opt.okLabel || 'ตกลง', 'kok')}${K(0, 0)}${K('00', '00')}${opt.noDot ? K('c', 'ล้าง') : K('.', '.')}</div></div>`;
+  // ช่องข้อความที่ค้างโฟกัสอยู่ (เช่น ชื่อร้านค้า) = คีย์บอร์ดเครื่องยังเปิด → ปิดก่อน ไม่ให้ขึ้นซ้อนกับแป้นตัวเลข
+  try { const ae = document.activeElement; if (ae && ae !== document.body && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) ae.blur(); } catch (e) { }
   document.body.appendChild(ov);
   const show = () => { $('#kv', ov).textContent = (money ? '฿' : '') + (v || '0'); };
-  const close = () => { ov.remove(); document.removeEventListener('keydown', kd, true); const sw = e => { e.stopPropagation(); e.preventDefault(); }; const off = () => { document.removeEventListener('click', sw, true); document.removeEventListener('pointerdown', off, true); }; document.addEventListener('click', sw, true); setTimeout(() => document.addEventListener('pointerdown', off, true), 0); setTimeout(off, 600); };   // กันคลิกทะลุไปโดนหน้าต่างด้านล่าง
+  const close = () => { ov.remove(); document.removeEventListener('keydown', kd, true); const sw = e => { e.stopPropagation(); e.preventDefault(); }; const off = () => { document.removeEventListener('click', sw, true); document.removeEventListener('mousedown', sw, true); document.removeEventListener('pointerdown', off, true); }; document.addEventListener('click', sw, true); document.addEventListener('mousedown', sw, true); setTimeout(() => document.addEventListener('pointerdown', off, true), 0); setTimeout(off, 600); setTimeout(() => { try { const ae = document.activeElement; if (ae && /INPUT|TEXTAREA/.test(ae.tagName) && typeof touchUI === 'function' && touchUI() && !ae.closest('.kpov')) ae.blur(); } catch (e) { } }, 30); };   // กันคลิกทะลุไปโดนหน้าต่างด้านล่าง
   const ok = () => { if (opt.raw) { close(); return cb(v); } const n = num(v); if (opt.min != null && n <= opt.min) { Scanner.err && Scanner.err(); return toast('กรุณาใส่ตัวเลข', 1); } close(); cb(n); };
   let fresh = !!opt.replace;   // ค่าเดิมแสดงไว้ กดตัวเลขแรก = พิมพ์ทับใหม่ทั้งหมด
   const press = k => {

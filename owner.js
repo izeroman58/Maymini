@@ -63,12 +63,13 @@ VIEWS.home = async el => {
   const greet = h < 11 ? 'สวัสดีตอนเช้า' : h < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น';
   el.innerHTML = `<div class="row" style="margin:2px 2px 12px"><div class="grow"><div class="muted small">${greet} · ${thDate(todayISO())}</div><h2 style="font-size:22px">${esc(S.user.name)}</h2></div></div>
    <div class="qa" id="qa"></div>
-   ${own ? '<div id="jobsb"></div><div id="rsh"></div><div id="kpi"></div><div id="vat"></div>' : ''}<div id="alerts"></div><div id="stats"></div>
+   ${own ? '<div id="jobsb"></div><div id="dexp"></div><div id="rsh"></div><div id="kpi"></div><div id="vat"></div>' : ''}<div id="alerts"></div><div id="stats"></div>
    ${S.apiUrl ? '' : `<div class="alert blue">${I(IC.alert, 20)}<div>กำลังใช้ <b>โหมดทดลอง</b> ข้อมูลอยู่ในเครื่องนี้เท่านั้น</div></div>`}`;
   qaDraw($('#qa', el), own);
   if (own && window.restockHome && feat('restock')) restockHome($('#rsh', el));
   const t = todayISO(), m0 = t.slice(0, 8) + '01', lmEnd = addDays(m0, -1), lm0 = lmEnd.slice(0, 8) + '01';
   if (own && window.jobsBadge) jobsBadge($('#jobsb', el));
+  if (own && window.DailyExp && (typeof feat !== 'function' || feat('ledger') !== false)) DailyExp.mount($('#dexp', el));
   if (own) {
     const kpi = $('#kpi', el);
     kpi.innerHTML = `<div class="kpi3">${['วันนี้', 'เดือนนี้', 'เดือนก่อน'].map(n => `<div class="stat"><div class="k">ยอดขาย${n}</div><div class="v"><span class="skel">000,000</span></div></div>`).join('')}</div>`;
