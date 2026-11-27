@@ -183,12 +183,12 @@ const Sync = {
   badge() {
     let el = $('#obx'); const nb = this.box.length, nc = window.CustQ ? CustQ.list.length : 0, n = nb + nc;
     if (!n) { el && el.remove(); return; }
-    if (!el) { el = document.createElement('div'); el.id = 'obx'; el.className = 'outbox'; el.onclick = () => this.flush(true); document.body.appendChild(el); }
+    if (!el) { el = document.createElement('div'); el.id = 'obx'; el.className = 'outbox'; el.onclick = () => this.panel(); document.body.appendChild(el); }
     el.textContent = nc ? `รอส่ง ${nb ? nb + ' บิล · ' : ''}${nc} รายการลูกค้า` : `รอส่ง ${n} บิล`;
   },
   async flush(manual) {
     if (window.Clock) Clock.flush().catch(() => { });
-    if (this.busy || !S.user) return; const b = this.box; if (!b.length) { CustQ.flush(); return this.badge(); }
+    if (this.busy || !S.user) { if (manual && this.busy) toast('กำลังส่งอยู่…'); return; } const b = this.box; if (!b.length) { await CustQ.flush(); if (manual) toast(CustQ.list.length ? `ส่งรายการลูกค้าไม่สำเร็จ — ค้าง ${CustQ.list.length} รายการ (ตรวจเน็ต)` : '✓ ไม่มีบิลค้าง ส่งครบแล้ว', CustQ.list.length ? 1 : 0); this.lastOk = Date.now(); this.lastErr = ''; this.ping(); return this.badge(); }
     this.busy = true;
     try {
       await CustQ.flush(); if (CustQ.list.length) throw Object.assign(new Error('offline'), { offline: true });
@@ -202,10 +202,25 @@ const Sync = {
       (r.customers || []).forEach(x => { const c = (S.customers || []).find(c => c.id === x.id); if (c) Object.assign(c, x); });
       if (S.customers) LS.set('customers', S.customers);
       if ((r.inst || []).length && window.Inst) Inst.merge(r.inst);
-      if (manual) toast('ส่งข้อมูลแล้ว');
-      if (this.box.length) setTimeout(() => this.flush(), 300);
-    } catch (e) { if (manual || !e.offline) toast('ส่งบิลไม่สำเร็จ: ' + e.message, 1); }
-    this.busy = false; this.badge();
+      this.lastOk = Date.now(); this.lastErr = '';
+      if (this.box.length) setTimeout(() => this.flush(manual), 300); else if (manual) toast(`✓ ส่งบิลค้างครบแล้ว (${ok.size} บิลล่าสุด)`);
+    } catch (e) { this.lastErr = e.offline ? 'ไม่มีอินเทอร์เน็ต / ติดต่อ Google ไม่ได้' : e.message; if (manual || !e.offline) toast('ส่งบิลไม่สำเร็จ: ' + this.lastErr, 1); }
+    this.busy = false; this.badge(); this.ping();
+  },
+  ping() { try { dispatchEvent(new Event('mm:sync')); } catch (e) { } },
+  // ☰ › ส่งบิลค้าง: หน้าดูบิลที่ยังไม่ขึ้น Google + ส่งเดี๋ยวนี้
+  panel() {
+    const body = () => {
+      const b = this.box, nc = (window.CustQ && CustQ.list.length) || 0, on = navigator.onLine;
+      const st = this.busy ? `<span class="spin dark" style="width:14px;height:14px;vertical-align:-2px"></span> กำลังส่ง…` : this.lastErr ? `<span style="color:var(--red)">⚠ ${esc(this.lastErr)}</span>` : this.lastOk ? `✓ ส่งล่าสุด ${new Date(this.lastOk).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '';
+      return `<div class="row" style="gap:10px;margin-bottom:10px"><div class="grow"><div style="font-size:22px;font-weight:700">${b.length ? `รอส่ง ${b.length} บิล` : '✓ ไม่มีบิลค้าง'}</div><div class="small muted">${nc ? `รายการลูกค้ารอส่ง ${nc} รายการ · ` : ''}เน็ต: ${on ? '<b style="color:var(--green)">เชื่อมต่อ</b>' : '<b style="color:var(--red)">ไม่มีเน็ต</b>'} · ระบบส่งเองทุก 20 วินาที</div><div class="small" style="margin-top:4px">${st}</div></div></div>
+        ${b.length ? `<div class="list">${b.slice().reverse().slice(0, 60).map(o => { const its = Logic.J(o.items, []); return `<div class="item" style="cursor:default"><div class="grow"><b>${esc(o.id)}</b><div class="small muted">${esc(String(o.date || '').replace('T', ' ').slice(0, 16))} · ${its.length} รายการ · ${esc(o.cashierName || o.cashier || '')}${its.some(i => i.job) ? ' · <span style="color:var(--amber,#e0a000)">มีงานโอน/บิล</span>' : ''}</div></div><b>${money(o.total)}</b></div>`; }).join('')}</div>` : '<div class="empty small">บิลทุกใบในเครื่องนี้ขึ้น Google แล้ว</div>'}
+        <div class="tiny muted" style="margin-top:10px">⚠ อย่าล้างข้อมูลเบราว์เซอร์ (Clear data) ระหว่างที่ยังมีบิลรอส่ง บิลจะหายถาวร</div>`;
+    };
+    const ov = sheet('ส่งบิลค้าง', `<div id="sbx">${body()}</div>`, `<button class="btn primary block" id="snow">📤 ส่งตอนนี้</button>`);
+    const re = () => { if (!ov.isConnected) return removeEventListener('mm:sync', re); $('#sbx', ov).innerHTML = body(); const b = $('#snow', ov); if (b) b.disabled = !!this.busy; };
+    addEventListener('mm:sync', re);
+    $('#snow', ov).onclick = () => { const p = this.flush(true); re(); Promise.resolve(p).then(re); };
   },
   // รูปบิลชำระแทนลูกค้าที่ถ่ายไว้ในเครื่อง → อัปโหลดก่อนส่งบิล (เบื้องหลัง ไม่หน่วงหน้าขาย)
   async photos(batch) {
@@ -1034,7 +1049,7 @@ const POS = {
         ['เช็คราคา', IC.scan, () => go('scan')],
         ['บริการ โอน / เติม / บิล', '<path d="M7 7h11l-3-3M17 17H6l3 3"/>', () => svcMenu()],
         ['สถานะงานโอน / บิล', IC.alert, () => go('jobs')],
-        ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.flush(true), Sync.box.length || '']] },
+        ['ส่งบิลค้าง' + (Sync.box.length ? ` (${Sync.box.length})` : ''), IC.wifi, () => Sync.panel(), Sync.box.length || '']] },
       { t: 'สินค้า', ic: IC.box, items: [
         ['รายการสินค้า', IC.box, () => go('products')],
         can('stockCount') && ['นับสต็อก', IC.count, () => go('stockcount')],

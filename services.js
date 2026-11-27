@@ -286,7 +286,7 @@ VIEWS.svcset = el => {
 
 /* ---------- งานรอดำเนินการ (เจ้าของทำ: โอนเงิน / เติม TrueMoney / ชำระบิล) ---------- */
 const JOB_T = { transfer: ['💸', 'โอนเงินให้ลูกค้า'], wallet: ['📱', 'เติมเงิน TrueMoney'], bill: ['🧾', 'ชำระบิลแทนลูกค้า'] };
-const JOB_ST = { pending: ['รอดำเนินการ', 'amber'], done: ['ทำแล้ว', 'green'], cancelled: ['ยกเลิก', 'gray'] };
+const JOB_ST = { pending: ['รอดำเนินการ', 'amber'], done: ['ทำแล้ว', 'green'], cancelled: ['ยกเลิก', 'gray'], local: ['บิลยังไม่ส่ง', 'red'] };
 async function jobsBadge(box) {
   if (!box) return;
   try { const r = await api('jobs', { status: 'pending', limit: 50 }); const n = r.rows.length; S.jobsN = n; if (!box.isConnected) return;
@@ -328,13 +328,18 @@ VIEWS.jobs = async el => {
       ${j.type === 'bill' ? `<div class="kv"><span class="muted">ประเภทบิล</span><b>${esc(j.billType)}</b></div>${big('เลขที่ผู้ใช้/เลขบิล', j.ref, j.ref)}${j.contact ? `<div class="kv"><span class="muted">ติดต่อลูกค้า</span><span>${esc(j.contact)}</span></div>` : ''}${j.fileUrl ? `<div class="kv"><span class="muted">รูปบิล</span><a href="${esc(j.fileUrl)}" target="_blank">เปิดรูป</a></div>` : ''}` : ''}
       ${big(j.type === 'transfer' ? 'ยอดที่ต้องโอน' : 'ยอด', money(j.amount), String(num(j.amount)))}
       <div class="tiny muted" style="margin-top:4px">บิล ${esc(j.orderId)} · ${esc(String(j.date).replace('T', ' ').slice(0, 16))} · ${esc(j.cashierName || j.cashier || '')} · ค่าบริการ ${money(j.fee, 0)}</div>
-      ${j.status !== 'pending' ? `<div class="tiny" style="margin-top:4px">${st[0]} ${esc(String(j.doneAt).replace('T', ' ').slice(0, 16))} · ${esc(j.doneBy || '')}${j.doneRef ? ' · ' + esc(j.doneRef) : ''}</div>` : ''}
-      ${own ? `<div class="row" style="gap:8px;margin-top:10px">${j.status === 'pending' ? `<button class="btn green grow" data-done="${esc(j.id)}">✔ ทำแล้ว</button><button class="btn ghost" data-cancel="${esc(j.id)}">ยกเลิก</button>` : `<button class="btn ghost sm" data-back="${esc(j.id)}">ย้อนเป็นรอดำเนินการ</button>`}</div>` : ''}</div>`; };
+      ${j.status !== 'pending' && j.status !== 'local' ? `<div class="tiny" style="margin-top:4px">${st[0]} ${esc(String(j.doneAt).replace('T', ' ').slice(0, 16))} · ${esc(j.doneBy || '')}${j.doneRef ? ' · ' + esc(j.doneRef) : ''}</div>` : ''}
+      ${j.status === 'local' ? `<div class="row" style="gap:8px;margin-top:8px;align-items:center"><span class="small grow" style="color:var(--red)">บิลนี้ยังไม่ขึ้น Google — เจ้าของร้านยังไม่ได้รับงาน</span><button class="btn ghost sm" data-sendnow>📤 ส่งบิลค้าง</button></div>` : ''}
+      ${own && j.status !== 'local' ? `<div class="row" style="gap:8px;margin-top:10px">${j.status === 'pending' ? `<button class="btn green grow" data-done="${esc(j.id)}">✔ ทำแล้ว</button><button class="btn ghost" data-cancel="${esc(j.id)}">ยกเลิก</button>` : `<button class="btn ghost sm" data-back="${esc(j.id)}">ย้อนเป็นรอดำเนินการ</button>`}</div>` : ''}</div>`; };
+  // งานจากบิลที่ยังค้างในเครื่อง (ขายตอนเน็ตหลุด) — ยังไม่ถึงเจ้าของร้าน จนกว่าบิลจะส่งขึ้น Google
+  const localJobs = () => { const out = []; ((window.Sync && Sync.box) || []).forEach(o => Logic.J(o.items, []).forEach((it, i) => { const j = it && it.job; if (!j || !j.notify) return; out.push({ ...j, id: o.id + '-J' + i, orderId: o.id, date: o.date, status: 'local', amount: j.amount, fee: j.fee, cashierName: o.cashierName || o.cashier }); })); return out; };
   const draw = () => {
-    const list = tab === 'pending' ? rows.filter(j => j.status === 'pending') : rows;
+    const loc = localJobs(), all = [...loc, ...rows.filter(j => !loc.some(l => l.id === j.id))];
+    const list = tab === 'pending' ? all.filter(j => j.status === 'pending' || j.status === 'local') : all;
     if ($('#tb', el)) $$('#tb button', el).forEach(b => { b.classList.toggle('on', b.dataset.t === tab); b.onclick = () => { tab = b.dataset.t; draw(); }; });
     $('#jl', el).innerHTML = list.length ? list.map(card).join('') : `<div class="card empty">${tab === 'pending' ? '✓ ไม่มีงานค้าง' : 'ยังไม่มีงาน'}</div>`;
     $$('[data-cp]', el).forEach(b => b.onclick = () => copyTxt(b.dataset.cp, b.dataset.lb));
+    $$('[data-sendnow]', el).forEach(b => b.onclick = () => Sync.panel());
     const upd = async (id, status, ref) => { try { busy(1); const r = await api('jobUpdate', { id, status, ref }); busy(0); rows = rows.map(j => j.id === id ? r.job : j); draw(); toast(status === 'done' ? 'บันทึกว่าทำแล้ว' : status === 'cancelled' ? 'ยกเลิกงานแล้ว' : 'ย้อนสถานะแล้ว'); } catch (e) { busy(0); toast(e.message, 1); } };
     $$('[data-done]', el).forEach(b => b.onclick = () => { const ov = sheet('ทำแล้ว', `<label class="f"><span>เลขอ้างอิง / หมายเหตุ (ถ้ามี)</span><input class="in" id="rf2" placeholder="เช่น เลขที่รายการโอน"></label>`, `<button class="btn green block" id="ok">บันทึกว่าทำแล้ว</button>`); $('#ok', ov).onclick = () => { const v = $('#rf2', ov).value.trim(); ov.remove(); upd(b.dataset.done, 'done', v); }; });
     $$('[data-cancel]', el).forEach(b => b.onclick = async () => { if (await confirmDlg('ยกเลิกงานนี้? (เช่น ลูกค้าขอยกเลิก — อย่าลืมคืนเงินบิลถ้าคืนเงินลูกค้า)', 'ยกเลิกงาน', true)) upd(b.dataset.cancel, 'cancelled', 'ยกเลิกโดยเจ้าของร้าน'); });
@@ -342,8 +347,10 @@ VIEWS.jobs = async el => {
   };
   // งานล่าสุดเก็บในเครื่อง: เปิดหน้าแล้วเห็นทันที · ดึงใหม่เบื้องหลัง
   const cached = LS.get('jobsCache:' + (S.user ? S.user.id : ''), null); if (cached && cached.length && !rows.length) { rows = cached; draw(); }
-  const load = async () => { try { const r = (await api('jobs', { limit: 300 })).rows; LS.set('jobsCache:' + (S.user ? S.user.id : ''), r); if (!el.isConnected) return; rows = r; } catch (e) { if (!rows.length) $('#jl', el).innerHTML = `<div class="card empty">${esc(e.message)}</div>`; else toast('อัปเดตงานไม่ได้ — แสดงข้อมูลล่าสุดในเครื่อง', 1); return; } draw(); };
+  const load = async () => { try { const r = (await api('jobs', { limit: 300 })).rows; LS.set('jobsCache:' + (S.user ? S.user.id : ''), r); if (!el.isConnected) return; rows = r; } catch (e) { if (!rows.length && localJobs().length) { draw(); toast('ดึงงานจาก Google ไม่ได้ — แสดงเฉพาะงานในเครื่อง', 1); } else if (!rows.length) $('#jl', el).innerHTML = `<div class="card empty">${esc(e.message)}</div>`; else toast('อัปเดตงานไม่ได้ — แสดงข้อมูลล่าสุดในเครื่อง', 1); return; } draw(); };
   $('#rf', el).onclick = load; load();
+  let nb = Sync.box.length; if (!rows.length && localJobs().length) draw();
+  const onSync = () => { if (S.view !== 'jobs' || !$('#jl', el)) return removeEventListener('mm:sync', onSync); const n = Sync.box.length; draw(); if (n < nb) load(); nb = n; }; addEventListener('mm:sync', onSync);
   clearInterval(VIEWS.jobs.t); VIEWS.jobs.t = setInterval(() => { if (S.view === 'jobs' && !document.hidden && !$('.ov')) load(); else if (S.view !== 'jobs') clearInterval(VIEWS.jobs.t); }, 30000);
 };
 

@@ -122,8 +122,8 @@ VIEWS.stockcount = async el => {
   kb.onkeydown = e => { if (e.key === 'Enter' && kb.value.trim()) { const v = kb.value.trim(); if (findByCode(v)) { beep(); hit(v); } else { q = v; draw(); } } };
   kb.oninput = () => { if (!/^\d{8,}$/.test(kb.value)) { q = kb.value; limit = 80; draw(); } };
   $('#cx', el).onclick = () => { StkQ.flush(); CNT.d = null; go('stockcount'); toast('จบการนับ — สต็อกที่ใส่ปรับแล้วทุกรายการ'); };
-  StkQ.onchange = () => { if (el.isConnected) draw(); };
-  const pcl = () => { if (!el.isConnected) return removeEventListener('mm:pclose', pcl); draw(); }; addEventListener('mm:pclose', pcl);   // แก้สินค้าจากหน้ารายละเอียด → รายการอัปเดต
+  StkQ.onchange = () => { if (el.isConnected && $('#cl', el)) draw(); };
+  const pcl = () => { if (!el.isConnected || !$('#cl', el)) return removeEventListener('mm:pclose', pcl); draw(); }; addEventListener('mm:pclose', pcl);   // แก้สินค้าจากหน้ารายละเอียด → รายการอัปเดต
   if (false) $('#fin', el).onclick = () => {
     const L = list(), n = Object.keys(d.counts).length; if (!n) return toast('ยังไม่ได้นับสินค้า', 1);
     let dv = 0, dq = 0; Object.entries(d.counts).forEach(([sku, c]) => { const p = IDX.bySku[sku]; const df = num(c.c) - num(p ? p.stock : c.e); dq += df; dv += df * num(p && p.cost); });
