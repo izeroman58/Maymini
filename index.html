@@ -435,6 +435,10 @@ html.dark .sclr{background:#5A5D63}
 .vct{all:unset;cursor:pointer;font-size:20px;padding:4px 8px;border-radius:10px}.vct.off{opacity:.3;filter:grayscale(1)}.vct:active{background:#0001}
 [data-pinfo]{cursor:pointer}.pnm[data-pinfo]{text-decoration:underline dotted 1px;text-underline-offset:4px}
 .cnt .cth{flex:none;margin-right:12px;align-self:center}
+.bitem{border-bottom:1px solid var(--line);padding:10px 0}.bno{flex:none;width:28px;height:28px;border-radius:50%;background:var(--red);color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+.bgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.bgrid .in{min-height:38px;padding:6px 8px}@media (max-width:520px){.bgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.warn{color:#E65100;font-weight:600}.bsum{padding:10px 12px;margin-bottom:10px;border-left:4px solid var(--green)}
+.bpg{display:flex;gap:10px;flex-wrap:wrap}.bpi{position:relative;width:110px;height:150px;border-radius:10px;overflow:hidden;background:#fff;border:1px solid var(--line)}.bpi img{width:100%;height:100%;object-fit:cover}.bpi span{position:absolute;left:0;right:0;bottom:0;background:#000a;color:#fff;font-size:12px;text-align:center;padding:2px}.bpi button{all:unset;position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;background:#000a;color:#fff;text-align:center;line-height:26px;cursor:pointer}.bpi button.up{right:auto;left:4px}
 .item.cnt.flash{animation:cflash 1.2s ease-out}@keyframes cflash{0%,30%{background:rgba(227,24,55,.25)}100%{}}
 
 .rs-why{cursor:help;border-bottom:1px dotted var(--ink3);touch-action:manipulation}.rs-why i{font-style:normal;color:var(--blue,#2563EB);font-size:.95em}
@@ -462,7 +466,7 @@ html.dark .sclr{background:#5A5D63}
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.7.6';
+const APP_VER = '2.7.7';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -1746,40 +1750,221 @@ function matchProduct(name, code) {
   return bs >= .45 ? { p: best, score: bs } : null;
 }
 function parseReceiptText(text) {
+  // v2.7.7: อ่านข้อความ OCR (สำรองเมื่อไม่มี Gemini) — รองรับบิลตาราง (แม็คโคร), ใบส่งของ (จำนวนนำหน้า/บาร์โค้ดบรรทัดถัดไป), รถเงินสด (ลัง/ขวด, ของแถม (P)), *ลัง *โหล *ชิ้น
   const lines = String(text).split(/\n+/).map(l => l.trim()).filter(Boolean);
   const res = { supplier: lines[0] || '', supplierTaxId: '', docNo: '', date: '', items: [], total: 0, vat: 0 };
   const NUM = /-?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|-?\d+\.\d{1,2}|-?\d+/g;
-  const SKIP = /รวม|ทั้งสิ้น|total|vat|ภาษี|เงินสด|เงินทอน|ทอน|change|cash|ส่วนลด|discount|ยอด|ชำระ|บัตร|สมาชิก|tel|โทร|เลขที่|วันที่|date|ใบกำกับ|ใบเสร็จ|สาขา|pos|ขอบคุณ/i;
+  const SKIP = /รวม|ทั้งสิ้น|total|vat|ภาษี|เงินสด|เงินทอน|ทอน|change|cash|ยอด|ชำระ|บัตร|สมาชิก|tel|โทร|เลขที่|วันที่|date|ใบกำกับ|ใบเสร็จ|สาขา|ขอบคุณ|ที่อยู่|ลูกค้า|ผู้รับ|ผู้ส่ง|ราคาต่อหน่วย|description|quantity|unit price|รายละเอียด|จำนวนเงิน/i;
+  const FREE = /\(\s*p\s*\)|\(?แถม\)?|ฟรี/i;
   lines.forEach(l => {
     const tax = l.match(/(?<!\d)\d{13}(?!\d)/); if (tax && /ภาษี|tax|เลขประจำ/i.test(l)) res.supplierTaxId = tax[0];
     const dm = l.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (dm && !res.date) { let y = +dm[3]; if (y < 100) y += y > 50 ? 2500 : 2000; if (y > 2400) y -= 543; const m = +dm[2], d = +dm[1]; if (m >= 1 && m <= 12 && d >= 1 && d <= 31) res.date = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
     const dn = l.match(/(?:เลขที่|no\.?|inv|เอกสาร)\s*[:#]?\s*([A-Z0-9\-\/]{4,})/i); if (dn && !res.docNo) res.docNo = dn[1];
-    if (/รวมทั้งสิ้น|ยอดสุทธิ|grand\s*total|net\s*total|total/i.test(l)) { const ns = (l.match(NUM) || []).map(num); if (ns.length) res.total = Math.max(res.total, ...ns); }
+    if (/รวมทั้งสิ้น|ยอดสุทธิ|ยอดเงินรวม|ยอดรวมสุทธิ|รวมสุทธิ|ยอดเรียกเก็บ|grand\s*total|net\s*(?:total|amount)|total/i.test(l)) { const ns = (l.match(NUM) || []).map(num); if (ns.length) res.total = Math.max(res.total, ...ns); }
     if (/vat|ภาษีมูลค่าเพิ่ม/i.test(l) && !/รวม/.test(l)) { const ns = (l.match(NUM) || []).map(num).filter(n => n !== 7); if (ns.length) res.vat = ns[ns.length - 1]; }
   });
-  let pendingName = '';
-  lines.forEach(l => {
-    if (SKIP.test(l)) { pendingName = ''; return; }
+  // ต่อบรรทัด "0*ลัง 0*โหล 6*ชิ้น ..." เข้ากับบรรทัดชื่อสินค้าก่อนหน้า
+  const L2 = []; lines.forEach(l => { if (L2.length && /^\S{0,3}\s*\*\s*ลัง/.test(l)) L2[L2.length - 1] += ' ' + l; else L2.push(l); });
+  let pendingName = '', last = null;
+  L2.forEach(l0 => {
+    let l = l0.replace(/\b(EACH|PCS|EA)\b/gi, ' ');
+    const flat = l.replace(/\s/g, '');
+    if (/^\d{8,14}$/.test(flat)) { if (last && !last.code) last.code = flat; return; }           // บาร์โค้ดอยู่บรรทัดถัดจากชื่อ
+    if (SKIP.test(l) && !FREE.test(l)) { pendingName = ''; last = null; return; }
+    if (last && !/\d+\.\d{2}/.test(l) && /^(?:[ก-๙a-z.]{0,8}\s*)?[x×]\s*\d{1,3}\b|^(?:ก\.|กรัม|มล\.?|ml|กก\.?)(?:\s|$)|^\d{1,3}\s*(?:ถ้วย|ซอง|ขวด)?$/i.test(l.trim())) { last.name += ' ' + l.trim(); return; }   // ชื่อยาวขึ้นบรรทัดใหม่ (เช่น "เม็ด x 12")
+    const free = FREE.test(l); l = l.replace(/^\s*\(?แถม\)?\s*/, ' ');
+    let lq = null, lunit = '', code = '';
+    const k3 = l.match(/(\d+)\s*\*\s*ลัง\s*(\d+)\s*\*\s*โหล\s*(\d+)\s*\*\s*ชิ้น/);
+    if (k3) { const a = +k3[1], b = +k3[2], c = +k3[3]; l = l.replace(k3[0], ' '); if (a && !b && !c) { lq = a; lunit = 'ลัง'; } else if (!a) { lq = b * 12 + c; lunit = 'ชิ้น'; } }
+    let m;
+    if ((m = l.match(/^\s*(\d{1,3})\s+(\d{4,8})\s+(?=[ก-๙a-z])/i))) { code = m[2]; l = l.slice(m[0].length); }                       // ลำดับ + รหัสสินค้า (แม็คโคร)
+    else if ((m = l.match(/^\s*(\d{9,11})\s+(?=[ก-๙a-z])/i))) { code = m[1]; l = l.slice(m[0].length); }                             // รหัสสินค้ายาวนำหน้า
+    else if (lq == null && (m = l.match(/^\s*(-|\d+(?:\.\d+)?)\s*(ลัง|สัง|แพ็ค|แพค|ขวด|ชิ้น|กล่อง|โหล|ถุง|ซอง|ห่อ|กระป๋อง|แผง)?\s+(?=\S)/))) {
+      if (m[1] !== '-') { lq = +m[1]; lunit = (m[2] || '').replace('สัง', 'ลัง'); } else lq = 0; l = l.slice(m[0].length);
+      l = l.replace(/^\s*(?:-|\d)\s+(?=[ก-๙a-z])/i, '');                                                              // เลขกลุ่ม/ขีดหน้าชื่อ
+    }
     const bc = (l.match(/(?<!\d)(\d{8}|\d{12,14})(?!\d)/) || [])[1] || '';
+    if (bc && !code) code = bc;
     let rest = bc ? l.replace(bc, ' ') : l;
-    const tailM = rest.match(/(?:\s+[-\d.,@x×X*=:|฿]+)+\s*$/);
-    const tail = tailM ? tailM[0] : (/^[\s\d.,@x×*=:|฿-]+$/.test(rest) ? rest : '');
-    const nums = (tail.match(NUM) || []).map(num).filter(n => n >= 0);
+    const tailM = rest.match(/(?:\s+[-\d.,@*=:|฿]+)+\s*$/);
+    const tail = tailM ? tailM[0] : (/^[\s\d.,@*=:|฿-]+$/.test(rest) ? rest : '');
+    let nums = (tail.match(NUM) || []).map(num).filter(n => n >= 0);
     let name = (tailM ? rest.slice(0, tailM.index) : tail ? '' : rest).replace(/\s+/g, ' ').trim();
+    if (/[x×]$/i.test(name) && nums.length > 2 && Number.isInteger(nums[0])) { const r2 = nums.slice(1), a2 = r2[r2.length - 1], p2 = r2.slice(0, -1); if (p2.some((q, i) => Number.isInteger(q) && q > 0 && p2.some((u, j) => j !== i && Math.abs(q * u - a2) < .6))) { name += ' ' + nums[0]; nums = r2; } }   // "330 มล. x 12 | 1 EACH 164.00" → x 12 อยู่ในชื่อ
     const hasText = /[ก-๙a-z]{2,}/i.test(name);
-    if (!nums.length) { if (hasText) pendingName = name; return; }
-    if (!hasText && pendingName) { name = pendingName; }
+    if (!nums.length) {
+      if (free && hasText && lq) { last = { code, name, qty: lq, unit: lunit, unitPrice: 0, amount: 0, free: true }; res.items.push(last); pendingName = ''; return; }
+      if (hasText) pendingName = name; return;
+    }
+    if (!hasText && pendingName) name = pendingName;
     if (!/[ก-๙a-z]{2,}/i.test(name)) return;
     pendingName = '';
-    let qty = 1, unit = 0, amt = nums[nums.length - 1];
-    if (nums.length >= 3) { const a = nums[nums.length - 3], b = nums[nums.length - 2]; if (Math.abs(a * b - amt) < .6) { qty = a; unit = b; } else if (Math.abs(b * a - amt) < .6) { qty = a; unit = b; } else { qty = a || 1; unit = amt / (qty || 1); } }
-    else if (nums.length === 2) { const a = nums[0]; if (a > 0 && a < 1000 && Number.isInteger(a) && amt / a >= 1) { qty = a; unit = amt / a; } else { unit = amt; } }
-    else unit = amt;
-    if (amt <= 0 || amt > 500000) return;
-    res.items.push({ code: bc, name, qty, unitPrice: Math.round(unit * 100) / 100, amount: amt });
+    const amt = nums[nums.length - 1], pre = nums.slice(0, -1);
+    let qty = lq, unit = 0, packSize = 0;
+    if (qty === 0) { if (!amt) return; qty = null; }                                                                     // "-" = ไม่ได้ส่ง
+    if (qty != null) {
+      const u = pre.find(u => Math.abs(qty * u - amt) < .6);
+      if (u != null) unit = u;
+      else { const pu = pre.find(u => u > 0 && qty > 0 && Math.abs(amt / (qty * u) - Math.round(amt / (qty * u))) < .01 && Math.round(amt / (qty * u)) >= 2 && Math.round(amt / (qty * u)) <= 200); // 1 ลัง @16.25 = 195 → 12 ชิ้น
+        unit = qty ? amt / qty : amt; if (pu) packSize = Math.round(amt / (qty * pu)); }
+    }
+    else {
+      let ok = false;
+      for (let i = 0; i < pre.length && !ok; i++) for (let j = 0; j < pre.length && !ok; j++) if (i !== j && Number.isInteger(pre[i]) && pre[i] > 0 && pre[i] < 1000 && Math.abs(pre[i] * pre[j] - amt) < .6) { qty = pre[i]; unit = pre[j]; ok = true; }
+      if (!ok) { if (pre.length === 1 && Number.isInteger(pre[0]) && pre[0] > 0 && pre[0] < 1000 && amt / pre[0] >= 1) { qty = pre[0]; unit = amt / qty; } else { qty = 1; unit = amt; } }
+    }
+    if (amt < 0 || amt > 500000) return;
+    if (!amt && !free && !(qty && pre.every(x => !x))) return;
+    last = { code, name, qty, unit: lunit, unitPrice: Math.round(unit * 100) / 100, amount: amt, free: free || (!amt), packSize };
+    res.items.push(last);
   });
   return res;
 }
+
+/* ---------- บิลซื้อสินค้า: หลายหน้า · PDF · อ่านทีละหน้า · แยกรายการสินค้า/ยกแพ็ค/ของแถม (v2.7.7) ---------- */
+const Bill = {
+  NONPROD: /ค่าจัดส่ง|ค่าขนส่ง|ค่าส่งสินค้า|ค่าบริการ|shipping|delivery|ส่วนลด|discount|^ลด\s*\d|ลด\s*\d+\s*บ|รวมเงิน|รวมทั้งสิ้น|ยอดรวม|ยอดสุทธิ|ยอดเงิน|ภาษีมูลค่าเพิ่ม|\bvat\b|มัดจำ|deposit|coupon|voucher|คูปอง|ปัดเศษ|เงินทอน|subtotal|\btotal\b|ค่าธรรมเนียม|ค่ามัดจำขวด/i,
+  FREE: /\(\s*p\s*\)|\(?แถม\)?|ฟรี|\bfree\b/i,
+  SINGLE: /^(ขวด|ชิ้น|ซอง|กระป๋อง|ถุง|อัน|แท่ง|หลอด|ก้อน|ตัว|ถ้วย|ห่อ|pcs?|ea)$/i,
+  PACKS: [2, 3, 4, 5, 6, 8, 10, 12, 15, 16, 18, 20, 24, 25, 30, 36, 40, 48, 50, 60, 72, 96, 100],
+  isBarcode: c => /^\d{8}$|^\d{12,14}$/.test(String(c || '')),
+  packFromName(nm) {
+    const s = String(nm || ''); let m, best = 0;
+    const re = /[x×*]\s*(\d{1,3})(?!\d)(?!\s*(?:ก\.|กรัม|g\b|มล|ml|ซีซี|cc|ล\.|ลิตร|กก|kg|แผ่น|เม็ด|ซม|cm|มม|mm|นิ้ว|วัตต์|w\b))/gi;
+    while ((m = re.exec(s))) best = +m[1];
+    if (!best && (m = s.match(/\dP(\d{1,2})N?(?![a-z\d])/i))) best = +m[1];                      // 280P6N · 370P6
+    if (!best && (m = s.match(/(?:^|\s)(\d{1,2})\s*S(?![a-z])/i))) best = +m[1];                  // 250 6S
+    if (!best && (m = s.match(/(?:แพ็ค|แพค|แพ็ก|pack|ลังละ)\s*(\d{1,3})/i))) best = +m[1];
+    return best > 1 && best <= 200 ? best : 1;
+  },
+  baseName: nm => String(nm || '').replace(/\(\s*p\s*\)|\(?แถม\)?|ฟรี/gi, '').replace(/\s+/g, ' ').trim(),
+  cleanName: nm => Bill.baseName(nm).replace(/\s*[x×*]\s*\d{1,3}\s*(ถ้วย|ซอง|ขวด|ชิ้น|กระป๋อง|ห่อ|แพ็ค)?\s*$/i, '').trim(),
+  supKey: s => norm(String(s || '')).replace(/บริษัท|จำกัด|มหาชน|สาขา.*$/g, '').slice(0, 14),
+  map() { return LS.get('billMap', {}); },
+  // จำการจับคู่/ชิ้นต่อแพ็คที่ผู้ใช้ยืนยัน → บิลร้านเดิมครั้งหน้าจับคู่เอง
+  learn(supplier, items) {
+    const M = this.map(), k = this.supKey(supplier);
+    items.forEach(it => { if (!it.sku) return; const nn = norm(this.baseName(it.name)); if (it.code && !this.isBarcode(it.code)) M['c:' + k + ':' + it.code] = it.sku; if (nn.length >= 3) M['n:' + k + ':' + nn] = it.sku; if (num(it.bq) > 0) M['p:' + k + ':' + (it.code || nn)] = num(it.pack) || 1; });
+    const ks = Object.keys(M); if (ks.length > 4000) ks.slice(0, ks.length - 4000).forEach(x => delete M[x]);
+    LS.set('billMap', M);
+  },
+  calc(it) { const paid = num(it.bq) * (num(it.pack) || 1); it.qty = Math.round((paid + num(it.free)) * 1000) / 1000; it.unitCost = paid && num(it.amount) ? Math.round(num(it.amount) / paid * 100) / 100 : 0; return it; },   // ทุน/ชิ้นคิดจากชิ้นที่ซื้อ (ของแถมเข้าสต็อกแต่ไม่กดทุนให้ต่ำผิดจริง)
+  // ข้อมูลจาก Gemini หรือ parseReceiptText → รายการสินค้าพร้อมจับคู่ · แยกค่าส่ง/ส่วนลดออก · คิดชิ้นต่อแพ็ค · รวมของแถม
+  normalize(data) {
+    const sup = data.supplier || '', k = this.supKey(sup), M = this.map(), skipped = [...(data.fees || []).map(f => ({ name: f.name, amount: num(f.amount) }))], out = [];
+    (data.items || []).forEach(x => {
+      const it = { name: String(x.name || '').replace(/\s+/g, ' ').trim(), code: String(x.code || x.articleNo || '').trim(), barcode: String(x.barcode || '').replace(/\D/g, ''), unit: String(x.unit || '').trim(), bq: num(x.qty), unitPrice: num(x.unitPrice), amount: x.amount === '' || x.amount == null ? NaN : num(x.amount), pack: num(x.packSize), free: !!x.free, freeQty: num(x.freeQty) };
+      if (!/[ก-๙a-z]{2,}/i.test(it.name)) return;
+      if (this.NONPROD.test(it.name) && !this.FREE.test(it.name)) { skipped.push({ name: it.name, amount: isNaN(it.amount) ? it.unitPrice * (it.bq || 1) : it.amount }); return; }
+      if (!it.barcode && this.isBarcode(it.code)) it.barcode = it.code;
+      if (isNaN(it.amount)) it.amount = Math.round(it.unitPrice * (it.bq || 1) * 100) / 100;
+      if (!it.bq) it.bq = it.unitPrice > 0 && it.amount > 0 ? Math.round(it.amount / it.unitPrice * 1000) / 1000 : 1;
+      it.isFree = it.free || this.FREE.test(it.name) || (!it.amount && !it.unitPrice);
+      out.push(it);
+    });
+    out.forEach(it => {
+      let p = null, how = '';
+      if (it.barcode) { const f = findByCode(it.barcode); if (f) { p = f.p; how = 'บาร์โค้ด'; } }
+      if (!p && it.code && M['c:' + k + ':' + it.code]) { p = IDX.bySku[M['c:' + k + ':' + it.code]]; if (p) how = 'รหัสร้านส่ง (จำไว้)'; }
+      const nn = norm(this.baseName(it.name));
+      if (!p && M['n:' + k + ':' + nn]) { p = IDX.bySku[M['n:' + k + ':' + nn]]; if (p) how = 'ชื่อในบิล (จำไว้)'; }
+      if (p) it.score = 1; else { const m = matchProduct(this.cleanName(it.name), ''); if (m) { p = m.p; it.score = m.score; how = 'ชื่อคล้าย'; } }
+      it.sku = p ? p.sku : ''; it.how = how;
+      const learned = M['p:' + k + ':' + (it.code || nn)];
+      let pack = 0, src = '';
+      if (learned) { pack = learned; src = 'จำไว้'; }
+      else if (this.SINGLE.test(it.unit)) pack = 1;
+      else if (it.pack > 1) { pack = it.pack; src = 'จากบิล'; }
+      else if (it.unitPrice > 0 && it.bq > 0 && it.amount > 0 && Math.abs(it.amount / (it.bq * it.unitPrice) - Math.round(it.amount / (it.bq * it.unitPrice))) < .01 && Math.round(it.amount / (it.bq * it.unitPrice)) >= 2) { pack = Math.round(it.amount / (it.bq * it.unitPrice)); src = 'จากราคาต่อชิ้น'; }
+      else { const pn = this.packFromName(it.name); if (pn > 1) { pack = pn; src = /ลัง|กล่อง|หีบ/.test(it.unit) ? 'เดาจากชื่อ (1 ลังอาจมีหลายแพ็ค)' : 'จากชื่อ'; } }
+      if (!pack) pack = 1;
+      const per = it.bq ? it.amount / it.bq : 0, strong = p && (it.score >= .75 || /บาร์โค้ด|จำไว้/.test(how)), c = strong ? num(p.cost) : 0, pr = strong ? num(p.price) : 0;
+      if (!it.isFree && per > 0 && src !== 'จำไว้' && src !== 'จากราคาต่อชิ้น') {
+        if (c > 0 && Math.abs(per / pack - c) / c > .3) {                              // ทุนต่อชิ้นห่างจากทุนเดิมมาก → หาจำนวนชิ้นที่ทำให้ทุนใกล้เดิม
+          let best = 0, bd = 1e9; [1, ...this.PACKS].forEach(x => { const d = Math.abs(per / x - c) / c; if (d < bd) { bd = d; best = x; } });
+          if (bd <= .25) { pack = best; src = 'เทียบทุนเดิม'; }
+        } else if (!c && pr > 0 && per / pack > pr * 1.02) {                          // ทุนต่อชิ้นแพงกว่าราคาขาย → น่าจะเป็นแพ็ค
+          let best = 0, bd = 1e9; this.PACKS.forEach(x => { const u = per / x; if (u < pr) { const d = Math.abs(u - pr * .75); if (d < bd) { bd = d; best = x; } } });
+          if (best) { pack = best; src = 'เดาจากราคาขาย'; }
+        }
+      }
+      it.pack = pack; it.packSrc = src;
+    });
+    const fin = [];
+    out.filter(it => !it.isFree).forEach(it => fin.push(it));
+    out.filter(it => it.isFree).forEach(it => {
+      const units = (it.freeQty || it.bq || 0) * (this.SINGLE.test(it.unit) || !it.unit ? 1 : (it.pack || 1));
+      const host = fin.find(x => !x.isFree && ((it.sku && x.sku === it.sku) || norm(this.baseName(x.name)) === norm(this.baseName(it.name)) || (it.code && x.code === it.code)));
+      if (host) { host.free = (num(host.free) || 0) + units; host.freeNote = 'แถม'; return; }
+      it.free = units; it.bq = 0; it.amount = 0; fin.push(it);
+    });
+    const items = fin.map(it => this.calc({ name: it.name, code: it.code, barcode: it.barcode, unit: it.unit, bq: it.bq, pack: it.pack, packSrc: it.packSrc, free: num(it.free) || 0, amount: Math.round(it.amount * 100) / 100, sku: it.sku, score: it.score || 0, how: it.how, updateCost: !!it.sku && it.amount > 0, addStock: !!it.sku, createNew: false }));
+    return { items, skipped };
+  },
+  merge(list) {
+    const r = { supplier: '', supplierTaxId: '', docNo: '', date: '', items: [], fees: [], total: 0, vat: 0, subtotal: 0, _raw: [], _engine: '' };
+    list.forEach((d, i) => { if (!d) return; ['supplier', 'supplierTaxId', 'docNo', 'date'].forEach(k => { if (!r[k] && d[k]) r[k] = d[k]; }); r.items.push(...(d.items || [])); r.fees.push(...(d.fees || []));
+      ['total', 'vat', 'subtotal'].forEach(k => { if (num(d[k])) r[k] = num(d[k]); }); if (d._raw) r._raw.push((list.length > 1 ? `--- หน้า ${i + 1} ---\n` : '') + d._raw); if (d._engine) r._engine = d._engine; });
+    r._raw = r._raw.join('\n'); return r;
+  },
+  // อ่านทีละหน้า แล้วรวม
+  async ocr(pages) {
+    const out = [];
+    for (let i = 0; i < pages.length; i++) {
+      busy(1, pages.length > 1 ? `กำลังอ่านบิล หน้า ${i + 1}/${pages.length}...` : 'กำลังอ่านรายการในบิล...');
+      try { const o = await api('ocr', { base64: pages[i].dataUrl, mime: pages[i].mime || 'image/jpeg' }); const d = o.data ? { ...o.data, items: (o.data.items || []).map(x => ({ ...x })) } : parseReceiptText(o.text || ''); d._raw = o.text || ''; d._engine = o.engine; out.push(d); }
+      catch (e) { toast(`อ่านหน้า ${i + 1} ไม่สำเร็จ: ${e.message}`, 1); out.push(null); }
+    }
+    return this.merge(out);
+  },
+  // หลายหน้า → PDF ไฟล์เดียว (หน้าละ 1 รูป) · หน้าเดียว = JPG เหมือนเดิม
+  async file(pages, date) {
+    if (pages.length === 1) return { name: `bill_${date}_${Date.now()}.jpg`, mime: pages[0].mime || 'image/jpeg', base64: pages[0].dataUrl };
+    const enc = new TextEncoder(), parts = [], offs = []; let len = 0;
+    const push = x => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); len += b.length; };
+    const dims = await Promise.all(pages.map(pg => new Promise(res => { const im = new Image(); im.onload = () => res([im.naturalWidth, im.naturalHeight]); im.onerror = () => res([1000, 1414]); im.src = pg.dataUrl; })));
+    const n = pages.length, kids = pages.map((_, i) => `${3 + i * 3} 0 R`).join(' ');
+    push('%PDF-1.4\n');
+    const obj = (id, f) => { offs[id] = len; push(`${id} 0 obj\n`); f(); push('\nendobj\n'); };
+    obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
+    obj(2, () => push(`<< /Type /Pages /Kids [${kids}] /Count ${n} >>`));
+    pages.forEach((pg, i) => {
+      const [w, h] = dims[i], W = 595, H = Math.round(595 * h / w), id = 3 + i * 3;
+      const bin = atob(pg.dataUrl.split(',')[1]), bytes = new Uint8Array(bin.length); for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+      const cs = `q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+      obj(id, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${id + 2} 0 R >> >> /Contents ${id + 1} 0 R >>`));
+      obj(id + 1, () => push(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+      obj(id + 2, () => { push(`<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`); push(bytes); push('\nendstream'); });
+    });
+    const xo = len, cnt = 3 + n * 3;
+    push(`xref\n0 ${cnt}\n0000000000 65535 f \n` + Array.from({ length: cnt - 1 }, (_, i) => String(offs[i + 1]).padStart(10, '0') + ' 00000 n \n').join(''));
+    push(`trailer\n<< /Size ${cnt} /Root 1 0 R >>\nstartxref\n${xo}\n%%EOF`);
+    const all = new Uint8Array(len); let o = 0; parts.forEach(b => { all.set(b, o); o += b.length; });
+    let b64 = ''; for (let j = 0; j < all.length; j += 0x8000) b64 += String.fromCharCode.apply(null, all.subarray(j, j + 0x8000));
+    return { name: `bill_${date}_${n}p_${Date.now()}.pdf`, mime: 'application/pdf', base64: 'data:application/pdf;base64,' + btoa(b64) };
+  },
+  // หน้าเก็บบิลหลายหน้า: ถ่าย/เลือกรูปทีละหน้า (ตัดขอบอัตโนมัติ) → ✔ ใช้ N หน้า
+  collect(first) {
+    return new Promise(resolve => {
+      const pages = []; let done = false;
+      const ov = sheet('บิลหลายหน้า', `<div class="small muted" style="margin-bottom:8px">ถ่ายทีละหน้าตามลำดับ (เช่น บิลแม็คโคร 3 หน้า) — ระบบรวมเป็นไฟล์เดียว และอ่านรายการทุกหน้า</div><div id="bp" class="bpg"></div>
+        <div class="row" style="gap:8px;margin-top:10px"><label class="btn grow">${I(IC.cam, 18)} ถ่ายหน้าถัดไป<input type="file" accept="image/*" capture="environment" class="hidden" data-f></label><label class="btn ghost grow">${I(IC.image || IC.file, 18)} เลือกรูป<input type="file" accept="image/*" multiple class="hidden" data-f></label></div>`,
+        `<button class="btn green block" id="bok" disabled>✔ ใช้บิลนี้</button>`, { sticky: true });
+      const draw = () => {
+        $('#bp', ov).innerHTML = pages.length ? pages.map((pg, i) => `<div class="bpi"><img src="${pg.dataUrl}"><span>หน้า ${i + 1}</span><button data-rm="${i}">✕</button>${i ? `<button class="up" data-up="${i}">◀</button>` : ''}</div>`).join('') : '<div class="empty small">ยังไม่มีหน้า</div>';
+        $$('[data-rm]', ov).forEach(b => b.onclick = () => { pages.splice(+b.dataset.rm, 1); draw(); });
+        $$('[data-up]', ov).forEach(b => b.onclick = () => { const i = +b.dataset.up; [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; draw(); });
+        const ok = $('#bok', ov); ok.disabled = !pages.length; ok.textContent = pages.length ? `✔ ใช้บิลนี้ (${pages.length} หน้า)` : '✔ ใช้บิลนี้';
+      };
+      const add = async f => { const img = window.DocScan && /^image\//.test(f.type || '') ? await DocScan.open(f) : await compressImage(f, 1600, .78); if (img) { pages.push(img); draw(); } };
+      $$('[data-f]', ov).forEach(inp => inp.onchange = async e => { const fs = [...e.target.files]; e.target.value = ''; for (const f of fs) await add(f); });
+      $('#bok', ov).onclick = () => { done = true; ov.remove(); resolve(pages); };
+      const iv = setInterval(() => { if (!ov.isConnected) { clearInterval(iv); if (!done) resolve(null); } }, 300);
+      draw(); if (first) add(first);
+    });
+  }
+};
+window.Bill = Bill;
 
 /* =========================================================
    APP SHELL
@@ -2499,27 +2684,18 @@ function newReceipt() {
   $('#fi', ov).onchange = async e => {
     const f = e.target.files[0]; if (!f) return; ov.remove();
     try {
-      // ตัดขอบ/ปรับภาพให้เหมือนสแกนก่อน → อ่านรายการได้แม่นขึ้น
-      let img = window.DocScan && /^image\//.test(f.type || '') ? await DocScan.open(f) : null;
-      if (window.DocScan && /^image\//.test(f.type || '') && !img) return;
-      busy(1, 'กำลังย่อรูป...'); if (!img) img = await compressImage(f);
-      busy(1, 'กำลังอัปโหลดรูปเก็บใน Google Drive...');
-      const up = await api('upload', { kind: 'receipt', name: `receipt_${todayISO()}_${Date.now()}.jpg`, mime: img.mime, base64: img.dataUrl });
-      busy(1, 'กำลังอ่านรายการในใบเสร็จ...');
-      let data;
-      try {
-        const o = await api('ocr', { base64: img.dataUrl, mime: img.mime });
-        data = o.data ? { ...o.data, items: (o.data.items || []).map(i => ({ ...i })) } : parseReceiptText(o.text || '');
-        data._raw = o.text || ''; data._engine = o.engine;
-      } catch (err) { data = { items: [] }; toast('อ่านข้อความไม่สำเร็จ: ' + err.message + ' — กรอกเองได้', 1); }
+      // v2.7.7: บิลหลายหน้า — ถ่าย/เลือกทีละหน้า (ตัดขอบเป็นภาพสแกน) → รวมเป็นไฟล์เดียว → อ่านทุกหน้า
+      const pages = /^image\//.test(f.type || '') ? await Bill.collect(f) : [await compressImage(f)];
+      if (!pages || !pages.length) return;
+      busy(1, 'กำลังอัปโหลดบิลเก็บใน Google Drive...');
+      const fl = await Bill.file(pages, todayISO());
+      const up = await api('upload', { kind: 'receipt', name: fl.name, mime: fl.mime, base64: fl.base64 });
+      const data = await Bill.ocr(pages);
       if (!S.products.length) await loadProducts(true);
       buildIndex();
-      const items = (data.items || []).map(it => {
-        const m = matchProduct(it.name, it.code);
-        return { name: it.name, code: it.code || '', qty: num(it.qty) || 1, unitCost: num(it.unitPrice) || (num(it.amount) / (num(it.qty) || 1)), amount: num(it.amount), sku: m ? m.p.sku : '', score: m ? m.score : 0, updateCost: !!m, addStock: false, createNew: false };
-      });
+      const nz = Bill.normalize(data);
       busy(0);
-      receiptForm({ id: uid('R'), date: data.date || todayISO(), supplier: data.supplier || '', supplierTaxId: data.supplierTaxId || '', docNo: data.docNo || '', type: 'สินค้า', vat: data.vat || '', total: data.total || '', subtotal: data.subtotal || '', fileId: up.fileId, fileUrl: up.fileUrl, items: JSON.stringify(items), _raw: data._raw, _engine: data._engine, _img: img.dataUrl }, true);
+      receiptForm({ id: uid('R'), date: data.date || todayISO(), supplier: data.supplier || '', supplierTaxId: data.supplierTaxId || '', docNo: data.docNo || '', type: 'สินค้า', vat: data.vat || '', total: data.total || '', subtotal: data.subtotal || '', fileId: up.fileId, fileUrl: up.fileUrl, items: JSON.stringify(nz.items), _skipped: nz.skipped, _pages: pages.length, _raw: data._raw, _engine: data._engine, _img: pages[0].dataUrl }, true);
     } catch (err) { busy(0); toast(err.message, 1); }
   };
 }
@@ -2533,7 +2709,8 @@ function receiptForm(r, isNew) {
     <label class="f"><span>ประเภท</span><select class="in" id="r_type"><option>สินค้า</option><option>ค่าใช้จ่าย</option></select></label></div>
     <label class="f"><span>ร้านค้าส่ง / ผู้ขาย</span><input class="in" id="r_supplier" list="supl" value="${esc(r.supplier)}"><datalist id="supl">${[...new Set(S.receipts.map(x => x.supplier).filter(Boolean))].map(s => `<option value="${esc(s)}">`).join('')}</datalist></label>
     <div class="grid2"><label class="f"><span>เลขที่เอกสาร</span><input class="in" id="r_docNo" value="${esc(r.docNo)}"></label><label class="f"><span>เลขผู้เสียภาษีผู้ขาย</span><input class="in" id="r_supplierTaxId" inputmode="numeric" value="${esc(r.supplierTaxId)}"></label></div>
-    <div class="card" style="padding:10px"><div class="row" style="margin-bottom:6px"><b class="grow">รายการสินค้า (${items.length})</b><button class="btn ghost sm" id="addi">${I(IC.plus, 16)} เพิ่มแถว</button></div><div id="items"></div></div>
+    <div id="bsum"></div>
+    <div class="card" style="padding:10px"><div class="row" style="margin-bottom:6px"><b class="grow" id="icnt">รายการสินค้า (${items.length})</b><button class="btn ghost sm" id="addi">${I(IC.plus, 16)} เพิ่มแถว</button></div><div id="items"></div></div>
     <div class="grid3"><label class="f"><span>ก่อน VAT</span><input class="in" id="r_subtotal" type="number" step="any" value="${esc(r.subtotal)}"></label><label class="f"><span>VAT</span><input class="in" id="r_vat" type="number" step="any" value="${esc(r.vat)}"></label><label class="f"><span>ยอดรวม *</span><input class="in" id="r_total" type="number" step="any" value="${esc(r.total)}"></label></div>
     <div class="small muted" id="chk"></div>
     <label class="f"><span>ชำระโดย</span><select class="in" id="r_payMethod"><option>เงินสด</option><option>โอน</option><option>เครดิต</option><option>บัตร</option></select></label>
@@ -2542,37 +2719,63 @@ function receiptForm(r, isNew) {
     ${!isNew && isOwner() ? `<button class="btn ghost sm" id="del" style="color:var(--red);margin-top:10px">${I(IC.trash, 16)} ลบใบเสร็จ</button>` : ''}`,
     `<button class="btn grow green" id="sv">${applied ? 'บันทึกการแก้ไข' : 'ยืนยัน นำเข้าระบบ'}</button>`, { sticky: true });
   $('#r_type', ov).value = r.type || 'สินค้า'; $('#r_payMethod', ov).value = r.payMethod || 'เงินสด';
+  items.forEach(it => { if (it.bq == null) { it.bq = num(it.qty) || 0; it.pack = 1; it.free = 0; } });
+  const skipped = r._skipped || [];
+  const drawSum = () => {
+    const b = $('#bsum', ov); if (!b || !isNew) return;
+    const matched = items.filter(it => it.sku).length, nw = items.filter(it => !it.sku && it.createNew).length, un = items.length - matched - nw, pk = items.filter(it => num(it.pack) > 1).length, fr = items.filter(it => num(it.free) > 0).length;
+    b.innerHTML = `<div class="card bsum"><div style="font-weight:700;font-size:16px;margin-bottom:4px">📄 อ่านบิล${r._pages > 1 ? ` ${r._pages} หน้า` : ''} ได้ ${items.length} รายการสินค้า</div>
+      <div class="small">✅ จับคู่สินค้าแล้ว <b>${matched}</b>${nw ? ` · 🆕 สร้างใหม่ <b>${nw}</b>` : ''}${un ? ` · <span style="color:var(--red)">❗ ยังไม่จับคู่ <b>${un}</b></span>` : ''}${pk ? ` · 📦 ยกแพ็ค→ชิ้น <b>${pk}</b>` : ''}${fr ? ` · 🎁 มีของแถม <b>${fr}</b>` : ''}</div>
+      ${skipped.length ? `<details class="small" style="margin-top:4px"><summary class="muted">ไม่นำเข้า ${skipped.length} บรรทัด (ไม่ใช่สินค้า: ค่าส่ง ส่วนลด ยอดรวม)</summary>${skipped.map(x => `<div class="kv"><span>${esc(x.name)}</span><span>${num(x.amount) ? money(x.amount) : ''}</span></div>`).join('')}</details>` : ''}
+      <div class="tiny muted" style="margin-top:4px">จำนวนเข้าสต็อกคิดเป็น <b>ชิ้น</b> = จำนวนในบิล × ชิ้นต่อแพ็ค + แถม · ทุน/ชิ้น = ยอดเงิน ÷ ชิ้นที่ซื้อ (ไม่รวมของแถม) · ยืนยันแล้วระบบจำการจับคู่/ชิ้นต่อแพ็คของร้านนี้ไว้ใช้ครั้งหน้า</div></div>`;
+  };
   const drawItems = () => {
+    $('#icnt', ov).textContent = `รายการสินค้า (${items.length})`;
     $('#items', ov).innerHTML = items.length ? items.map((it, i) => {
-      const p = it.sku ? IDX.bySku[it.sku] : null;
-      return `<div style="border-bottom:1px solid var(--line);padding:8px 0">
-        <div class="row"><input class="in grow" data-k="name" data-i="${i}" value="${esc(it.name)}" placeholder="ชื่อในใบเสร็จ" style="min-height:38px"><button class="iconbtn" data-del="${i}">${I(IC.x, 18)}</button></div>
-        <div class="row tiny" style="margin:6px 0">${p ? `<span class="tag ${it.score >= .75 ? 'green' : 'amber'}">จับคู่: ${esc(p.name)}</span>` : it.createNew ? '<span class="tag blue">จะสร้างสินค้าใหม่</span>' : '<span class="tag red">ยังไม่จับคู่สินค้า</span>'}<button class="btn ghost sm" data-match="${i}" style="min-height:28px;padding:2px 8px">${p ? 'เปลี่ยน' : 'เลือกสินค้า'}</button></div>
-        <div class="grid3"><label class="tiny muted">จำนวน<input class="in" type="number" step="any" data-k="qty" data-i="${i}" value="${it.qty}"></label><label class="tiny muted">ทุน/หน่วย<input class="in" type="number" step="any" data-k="unitCost" data-i="${i}" value="${it.unitCost}"></label><label class="tiny muted">รวม<input class="in" type="number" step="any" data-k="amount" data-i="${i}" value="${it.amount}"></label></div>
-        ${p || it.createNew ? `<div class="row tiny" style="margin-top:6px;gap:12px"><label class="row"><input type="checkbox" data-c="updateCost" data-i="${i}" ${it.updateCost ? 'checked' : ''}> อัปเดตต้นทุน${p && num(p.cost) ? ` (เดิม ${money(p.cost)})` : ''}</label><label class="row"><input type="checkbox" data-c="addStock" data-i="${i}" ${it.addStock ? 'checked' : ''}> เพิ่มสต็อก</label></div>` : ''}
+      const p = it.sku ? IDX.bySku[it.sku] : null, pk = num(it.pack) || 1;
+      return `<div class="bitem">
+        <div class="row" style="gap:6px"><span class="bno">${i + 1}</span><input class="in grow" data-k="name" data-i="${i}" value="${esc(it.name)}" placeholder="ชื่อในใบเสร็จ" style="min-height:38px"><button class="iconbtn" data-del="${i}">${I(IC.x, 18)}</button></div>
+        ${it.code || it.barcode ? `<div class="tiny muted" style="margin:2px 0 0 34px">${it.barcode ? `บาร์โค้ด ${esc(it.barcode)}` : `รหัสร้านส่ง ${esc(it.code)}`}${it.unit ? ` · หน่วยในบิล ${esc(it.unit)}` : ''}</div>` : ''}
+        <div class="row tiny" style="margin:6px 0 6px 34px;gap:6px;flex-wrap:wrap">${p ? `<span class="tag ${it.score >= .75 ? 'green' : 'amber'}">จับคู่: ${esc(p.name)}</span>${it.how ? `<span class="muted">(${esc(it.how)})</span>` : ''}` : it.createNew ? '<span class="tag blue">จะสร้างสินค้าใหม่</span>' : '<span class="tag red">ยังไม่จับคู่สินค้า</span>'}<button class="btn ghost sm" data-match="${i}" style="min-height:28px;padding:2px 8px">${p ? 'เปลี่ยน' : 'เลือกสินค้า'}</button></div>
+        <div class="bgrid" style="margin-left:34px">
+          <label class="tiny muted">จำนวนในบิล<input class="in" type="number" step="any" data-k="bq" data-i="${i}" value="${num(it.bq)}"></label>
+          <label class="tiny muted">ชิ้น/แพ็ค${it.packSrc ? ` <span class="${/เดา/.test(it.packSrc) ? 'warn' : ''}">· ${esc(it.packSrc)}</span>` : ''}<input class="in" type="number" step="1" min="1" data-k="pack" data-i="${i}" value="${pk}"></label>
+          <label class="tiny muted">แถม (ชิ้น)<input class="in" type="number" step="any" data-k="free" data-i="${i}" value="${num(it.free)}"></label>
+          <label class="tiny muted">ยอดเงิน<input class="in" type="number" step="any" data-k="amount" data-i="${i}" value="${num(it.amount)}"></label>
+        </div>
+        <div class="row small" style="margin:6px 0 0 34px;gap:10px;flex-wrap:wrap"><span>เข้าสต็อก <b style="font-size:16px">${num(it.qty)}</b> ชิ้น</span><label class="row tiny muted" style="gap:4px">ทุน/ชิ้น<input class="in" type="number" step="any" data-k="unitCost" data-i="${i}" value="${num(it.unitCost)}" style="width:90px;min-height:32px"></label>${p && num(p.cost) ? `<span class="tiny ${Math.abs(num(it.unitCost) - num(p.cost)) / num(p.cost) > .3 && num(it.unitCost) ? 'warn' : 'muted'}">ทุนเดิม ${money(p.cost)} · ขาย ${money(p.price)}</span>` : p && num(p.price) ? `<span class="tiny muted">ราคาขาย ${money(p.price)}</span>` : ''}</div>
+        ${p || it.createNew ? `<div class="row tiny" style="margin:6px 0 0 34px;gap:12px"><label class="row"><input type="checkbox" data-c="updateCost" data-i="${i}" ${it.updateCost ? 'checked' : ''}> อัปเดตต้นทุน</label><label class="row"><input type="checkbox" data-c="addStock" data-i="${i}" ${it.addStock ? 'checked' : ''}> เพิ่มสต็อก ${num(it.qty)} ชิ้น</label></div>` : ''}
       </div>`;
     }).join('') : '<div class="empty small">ไม่มีรายการ</div>';
-    $$('[data-k]', ov).forEach(inp => inp.onchange = () => { const it = items[+inp.dataset.i], k = inp.dataset.k; it[k] = k === 'name' ? inp.value : num(inp.value); if (k === 'qty' || k === 'unitCost') it.amount = Math.round(num(it.qty) * num(it.unitCost) * 100) / 100; if (k === 'amount') it.unitCost = Math.round(num(it.amount) / (num(it.qty) || 1) * 100) / 100; drawItems(); });
+    $$('#items [data-k]', ov).forEach(inp => inp.onchange = () => {
+      const it = items[+inp.dataset.i], k = inp.dataset.k;
+      if (k === 'name') it.name = inp.value;
+      else if (k === 'unitCost') { it.unitCost = num(inp.value); it.amount = Math.round(it.unitCost * num(it.bq) * (num(it.pack) || 1) * 100) / 100; }
+      else { it[k] = k === 'pack' ? Math.max(1, Math.round(num(inp.value)) || 1) : num(inp.value); if (k === 'pack') it.packSrc = 'แก้เอง'; Bill.calc(it); }
+      drawItems(); drawSum();
+    });
     $$('[data-c]', ov).forEach(c => c.onchange = () => items[+c.dataset.i][c.dataset.c] = c.checked);
-    $$('[data-del]', ov).forEach(b => b.onclick = () => { items.splice(+b.dataset.del, 1); drawItems(); });
-    $$('[data-match]', ov).forEach(b => b.onclick = () => matchDlg(items[+b.dataset.match], drawItems));
-    const sum = items.reduce((s, it) => s + num(it.amount), 0); const tot = num($('#r_total', ov).value);
-    $('#chk', ov).innerHTML = items.length ? `รวมรายการ ${money(sum)} ${tot ? (Math.abs(sum - tot) < 1 ? '<span class="tag green">ตรงกับยอดรวม</span>' : Math.abs(sum + num($('#r_vat', ov).value) - tot) < 1 ? '<span class="tag green">ตรง (รวม VAT)</span>' : `<span class="tag amber">ต่างจากยอดรวม ${money(tot - sum)}</span>`) : ''}` : '';
+    $$('[data-del]', ov).forEach(b => b.onclick = () => { items.splice(+b.dataset.del, 1); drawItems(); drawSum(); });
+    $$('[data-match]', ov).forEach(b => b.onclick = () => matchDlg(items[+b.dataset.match], () => { const it = items[+b.dataset.match]; if (it.sku) it.addStock = true; drawItems(); drawSum(); }));
+    const sum = items.reduce((s, it) => s + num(it.amount), 0), tot = num($('#r_total', ov).value), ex = skipped.reduce((s, x) => s + (/ส่วนลด|discount|^ลด|ลด\s*\d/i.test(x.name) ? -Math.abs(num(x.amount)) : /ค่าจัดส่ง|ค่าขนส่ง|ค่าส่ง|ค่าบริการ|shipping|delivery|ค่าธรรมเนียม|มัดจำ/i.test(x.name) ? num(x.amount) : 0), 0);
+    $('#chk', ov).innerHTML = items.length ? `รวมรายการ ${money(sum)}${ex ? ` ${ex > 0 ? '+' : '−'} ค่าส่ง/ส่วนลด ${money(Math.abs(ex))} = ${money(sum + ex)}` : ''} ${tot ? (Math.abs(sum + ex - tot) < 1 ? '<span class="tag green">ตรงกับยอดรวม</span>' : Math.abs(sum + ex + num($('#r_vat', ov).value) - tot) < 1 ? '<span class="tag green">ตรง (รวม VAT)</span>' : `<span class="tag amber">ต่างจากยอดรวม ${money(tot - sum - ex)}</span>`) : ''}` : '';
   };
-  $('#addi', ov).onclick = () => { items.push({ name: '', qty: 1, unitCost: 0, amount: 0, sku: '', updateCost: true, addStock: false }); drawItems(); };
+  $('#addi', ov).onclick = () => { items.push({ name: '', bq: 1, pack: 1, free: 0, qty: 1, unitCost: 0, amount: 0, sku: '', updateCost: true, addStock: false }); drawItems(); drawSum(); };
   $('#r_total', ov).onchange = drawItems;
-  drawItems();
+  drawItems(); drawSum();
   $('#sv', ov).onclick = async () => {
     const rc = { id: r.id, fileId: r.fileId || '', fileUrl: /^data:/.test(r.fileUrl || '') && r.fileUrl.length > 400000 ? '' : (r.fileUrl || ''), createdAt: r.createdAt, createdBy: r.createdBy, cat: r.cat || '' };
     ['date', 'type', 'supplier', 'docNo', 'supplierTaxId', 'subtotal', 'vat', 'total', 'payMethod', 'note'].forEach(k => rc[k] = $('#r_' + k, ov).value.trim());
     if (!rc.total) rc.total = String(items.reduce((s, it) => s + num(it.amount), 0));
     if (!rc.date) return toast('กรุณาใส่วันที่', 1);
-    rc.items = JSON.stringify(items.map(({ score, ...it }) => it));
+    items.forEach(it => { if (it.createNew && it.name && num(it.pack) > 1) it.name = Bill.cleanName(it.name); });   // สินค้าใหม่จากบรรทัดยกแพ็ค → ชื่อไม่ติด "x 6"
+    rc.items = JSON.stringify(items.map(({ score, how, packSrc, ...it }) => it));
     try {
       busy(1, 'กำลังบันทึก...');
       if (applied) { rc.stockApplied = 'Y'; await api('upsert', { table: 'Receipts', rows: [rc] }); }
       else { const res = await api('applyReceipt', { receipt: rc }); toast(`บันทึกแล้ว · อัปเดตสินค้า ${res.updated} รายการ${res.created ? ` · สร้างใหม่ ${res.created}` : ''}`); await loadProducts(true); }
       if (rc.type === 'สินค้า' && (!rc.cat || rc.cat === 'อื่น ๆ')) rc.cat = 'ซื้อสินค้ามาขาย';
+      try { Bill.learn(rc.supplier, items); } catch (e) { }
       { S.receipts = S.receipts || []; const k = S.receipts.findIndex(x => x.id === rc.id); if (k >= 0) S.receipts[k] = { ...S.receipts[k], ...rc, stockApplied: 'Y', _new: Date.now() }; else S.receipts.push({ ...rc, stockApplied: 'Y', _new: Date.now() }); window.rcLocalSave && rcLocalSave(); }
       busy(0); ov.remove(); if (r._done) r._done(); else if (S.view === 'receipts' || S.view === 'ledger') go(S.view);
     } catch (e) { busy(0); toast(e.message, 1); }
@@ -3404,23 +3607,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.7.6"></script>
-<script src="logic.js?v=2.7.6"></script>
-<script src="cache.js?v=2.7.6"></script>
-<script src="offline.js?v=2.7.6"></script>
-<script src="scanner.js?v=2.7.6"></script>
-<script src="printer.js?v=2.7.6"></script>
-<script src="pos.js?v=2.7.6"></script>
-<script src="idle.js?v=2.7.6"></script>
-<script src="display.js?v=2.7.6"></script>
-<script src="reports.js?v=2.7.6"></script>
-<script src="inventory.js?v=2.7.6"></script>
-<script src="people.js?v=2.7.6"></script>
-<script src="quality.js?v=2.7.6"></script>
-<script src="services.js?v=2.7.6"></script>
-<script src="owner.js?v=2.7.6"></script>
-<script src="books.js?v=2.7.6"></script>
-<script src="restock.js?v=2.7.6"></script>
+<script src="qr.js?v=2.7.7"></script>
+<script src="logic.js?v=2.7.7"></script>
+<script src="cache.js?v=2.7.7"></script>
+<script src="offline.js?v=2.7.7"></script>
+<script src="scanner.js?v=2.7.7"></script>
+<script src="printer.js?v=2.7.7"></script>
+<script src="pos.js?v=2.7.7"></script>
+<script src="idle.js?v=2.7.7"></script>
+<script src="display.js?v=2.7.7"></script>
+<script src="reports.js?v=2.7.7"></script>
+<script src="inventory.js?v=2.7.7"></script>
+<script src="people.js?v=2.7.7"></script>
+<script src="quality.js?v=2.7.7"></script>
+<script src="services.js?v=2.7.7"></script>
+<script src="owner.js?v=2.7.7"></script>
+<script src="books.js?v=2.7.7"></script>
+<script src="restock.js?v=2.7.7"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

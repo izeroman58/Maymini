@@ -754,7 +754,7 @@ function ledgerBook(D, L, h) {
 function expenseForm(r0, done) {
   if (!isOwner()) return toast('เฉพาะเจ้าของกิจการ', 1);
   const isNew = !r0, r = r0 ? { ...r0 } : { id: uid('R'), date: todayISO(), type: 'ค่าใช้จ่าย', cat: ExpCats.list().some(c => c.n === LS.get('lastExpCat', '')) ? LS.get('lastExpCat', '') : ExpCats.BUY, items: '[]', payMethod: 'เงินสด' };
-  let cat = expCat(r), shot = null;
+  let cat = expCat(r), pages = [];   // v2.7.7: บิลหลายหน้า
   const sups = [...new Set((S.receipts || []).map(x => x.supplier).filter(Boolean))].slice(0, 200);
   const ov = sheet(isNew ? 'บันทึกรายจ่าย' : 'รายจ่าย', `
     <div class="lg-ph" id="ph"></div>
@@ -778,54 +778,54 @@ function expenseForm(r0, done) {
     const m = $('#cm', ov); if (m) m.onclick = () => { showAll = !showAll; drawCats(); };
     $('#cg', ov).onclick = () => expCatsDlg(() => { if (!ExpCats.list().some(c => c.n === cat) && cat !== expCat(r)) cat = ExpCats.BUY; drawCats(); drawStk(); });
   };
-  const imgSrc = () => shot ? shot.dataUrl : /^data:image/.test(r.fileUrl || '') ? r.fileUrl : '';
+  const imgSrc = () => pages.length ? pages[0].dataUrl : /^data:image/.test(r.fileUrl || '') ? r.fileUrl : '';
   const drawPh = () => {
-    const src = imgSrc();
-    $('#ph', ov).innerHTML = `${src ? `<img src="${src}" alt="บิล">` : r.fileUrl ? `<div style="padding:12px"><a class="btn ghost sm" href="${esc(r.fileUrl)}" target="_blank" rel="noopener">${I(IC.file, 16)} เปิดรูปบิลที่แนบไว้</a></div>` : `<div class="center muted small" style="padding:14px 10px 2px">${I(IC.file, 30)}<div>ถ่ายรูปบิล/ใบเสร็จ — ระบบตัดขอบให้เป็นภาพสแกนอัตโนมัติ</div></div>`}
-      <div class="pb"><label class="btn ${src || r.fileUrl ? 'ghost' : ''}">${I(IC.cam, 20)} ${src || r.fileUrl ? 'ถ่ายใหม่' : 'ถ่ายรูปบิล'}<input type="file" accept="image/*" capture="environment" class="hidden" data-f></label><label class="btn ghost">${I(IC.image || IC.file, 20)} เลือกรูป<input type="file" accept="image/*" class="hidden" data-f></label></div>
-      ${src ? `<div class="row" style="padding:0 10px 10px"><button class="btn ghost sm grow" id="ocr">อ่านยอด/วันที่จากบิลอัตโนมัติ</button></div>` : ''}`;
+    const src = imgSrc(), has = src || r.fileUrl;
+    $('#ph', ov).innerHTML = `${pages.length ? `<div class="bpg" style="padding:10px">${pages.map((pg, i) => `<div class="bpi"><img src="${pg.dataUrl}"><span>หน้า ${i + 1}</span><button data-rm="${i}">✕</button></div>`).join('')}</div>` : src ? `<img src="${src}" alt="บิล">` : r.fileUrl ? `<div style="padding:12px"><a class="btn ghost sm" href="${esc(r.fileUrl)}" target="_blank" rel="noopener">${I(IC.file, 16)} เปิดบิลที่แนบไว้</a></div>` : `<div class="center muted small" style="padding:14px 10px 2px">${I(IC.file, 30)}<div>ถ่ายรูปบิล/ใบเสร็จ — ระบบตัดขอบให้เป็นภาพสแกนอัตโนมัติ · บิลหลายหน้า (เช่น แม็คโคร) ถ่ายทีละหน้า รวมเป็นไฟล์เดียว</div></div>`}
+      <div class="pb"><label class="btn ${has ? 'ghost' : ''}">${I(IC.cam, 20)} ${pages.length ? `ถ่ายหน้า ${pages.length + 1}` : has ? 'ถ่ายใหม่' : 'ถ่ายรูปบิล'}<input type="file" accept="image/*" capture="environment" class="hidden" data-f></label><label class="btn ghost">${I(IC.image || IC.file, 20)} ${pages.length ? 'เพิ่มหน้าจากรูป' : 'เลือกรูป'}<input type="file" accept="image/*" multiple class="hidden" data-f></label></div>
+      ${pages.length ? `<div class="row" style="padding:0 10px 10px;gap:8px"><span class="small muted grow">บิล ${pages.length} หน้า${pages.length > 1 ? ' → บันทึกเป็น PDF ไฟล์เดียว' : ''}</span><button class="btn ghost sm" id="ocr">อ่านยอด/วันที่จากบิล</button></div>` : ''}`;
+    $$('[data-rm]', ov).forEach(x => x.onclick = () => { pages.splice(+x.dataset.rm, 1); drawPh(); });
     $$('[data-f]', ov).forEach(inp => inp.onchange = async e => {
-      const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-      const res = await DocScan.open(f); if (!res) return;
-      shot = res; drawPh();
-      if (S.apiUrl && !num($('#e_total', ov).value)) readBill();
+      const fs = [...e.target.files]; e.target.value = ''; if (!fs.length) return;
+      const n0 = pages.length;
+      for (const f of fs) { const res = await DocScan.open(f); if (res) pages.push(res); }
+      drawPh();
+      if (pages.length > n0 && S.apiUrl && !num($('#e_total', ov).value) && n0 === 0 && pages.length === 1) readBill();
     });
     const ob = $('#ocr', ov); if (ob) ob.onclick = readBill;
   };
   const readBill = async () => {
-    const src = imgSrc(); if (!src) return;
+    if (!pages.length) return;
     try {
-      busy(1, 'กำลังอ่านข้อมูลจากบิล...');
-      const o = await api('ocr', { base64: src, mime: 'image/jpeg' }), d = o.data || parseReceiptText(o.text || '');
-      busy(0);
+      const d = await Bill.ocr(pages); busy(0);
       const set = (id, v) => { if (v && !$('#' + id, ov).value) $('#' + id, ov).value = v; };
       if (num(d.total)) $('#e_total', ov).value = num(d.total);
       if (d.date && /^\d{4}-\d\d-\d\d$/.test(d.date)) $('#e_date', ov).value = d.date;
       set('e_supplier', d.supplier); set('e_docNo', d.docNo);
-      r._ocr = d; toast(num(d.total) ? `อ่านยอดได้ ${baht(d.total)} — ตรวจสอบก่อนบันทึก` : 'อ่านยอดไม่ได้ — กรอกเอง');
+      r._ocr = d; toast(num(d.total) ? `อ่านยอดได้ ${baht(d.total)}${pages.length > 1 ? ` (${pages.length} หน้า)` : ''} — ตรวจสอบก่อนบันทึก` : 'อ่านยอดไม่ได้ — กรอกเอง');
     } catch (e) { busy(0); toast('อ่านอัตโนมัติไม่สำเร็จ: ' + e.message + ' — กรอกเองได้', 1); }
   };
   const drawStk = () => {
     const b = $('#stk', ov); if (!b) return;
     b.innerHTML = cat !== ExpCats.BUY ? '' : r.stockApplied === 'Y' ? `<div class="alert green small">${I(IC.check, 18)}<div>บิลนี้ลงสต๊อก/ต้นทุนแล้ว</div></div>`
       : `<div class="alert blue small" style="align-items:center">${I(IC.box, 18)}<div class="grow">บิลซื้อสินค้า — เพิ่มสต๊อกและอัปเดตต้นทุนจากรายการในบิลได้</div></div>${isNew ? '<div class="tiny muted" style="margin:-4px 2px 8px">บันทึกแล้วกด “เพิ่มสต๊อกจากบิลนี้” ได้ทันที หรือทำภายหลังที่หน้าเพิ่มสต๊อก</div>' : `<button class="btn block" id="tostk" style="margin-bottom:8px">${I(IC.box, 18)} เพิ่มสต๊อกจากบิลนี้ (อ่านรายการอัตโนมัติ)</button>`}`;
-    const t2 = $('#tostk', ov); if (t2) t2.onclick = () => { ov.remove(); stockFromBill(r, done); };
+    const t2 = $('#tostk', ov); if (t2) t2.onclick = () => { ov.remove(); stockFromBill(pages.length ? { ...r, _pages: pages, _ocr: r._ocr } : r, done); };
   };
   drawCats(); drawPh(); drawStk();
   $('#sv', ov).onclick = async () => {
-    const rc = { ...r }; delete rc._ocr;
+    const rc = { ...r }, ocrd = r._ocr; delete rc._ocr; delete rc._pages;
     ['date', 'total', 'supplier', 'docNo', 'payMethod', 'note'].forEach(k => rc[k] = $('#e_' + k, ov).value.trim());
     if (!num(rc.total)) return toast('ใส่จำนวนเงิน', 1); if (!rc.date) return toast('ใส่วันที่', 1);
     rc.cat = cat; rc.type = cat === ExpCats.BUY ? 'สินค้า' : 'ค่าใช้จ่าย'; if (!rc.items) rc.items = '[]';
     try {
       busy(1, 'กำลังบันทึก...');
-      if (shot) { const up = await api('upload', { kind: 'receipt', name: `bill_${rc.date}_${Date.now()}.jpg`, mime: shot.mime, base64: shot.dataUrl }); rc.fileId = up.fileId || ''; rc.fileUrl = up.fileUrl || ''; }
+      if (pages.length) { busy(1, pages.length > 1 ? `กำลังรวม ${pages.length} หน้าเป็น PDF และอัปโหลด...` : 'กำลังอัปโหลดรูปบิล...'); const fl = await Bill.file(pages, rc.date); const up = await api('upload', { kind: 'receipt', name: fl.name, mime: fl.mime, base64: fl.base64 }); rc.fileId = up.fileId || ''; rc.fileUrl = up.fileUrl || ''; }
       if (!rc.createdAt) { rc.createdAt = new Date().toISOString(); rc.createdBy = S.user.username || S.user.name || ''; }
       await api('upsert', { table: 'Receipts', rows: [rc] });
       LS.set('lastExpCat', cat);
       const i = (S.receipts || []).findIndex(x => x.id === rc.id); if (i >= 0) S.receipts[i] = { ...rc, _new: Date.now() }; else (S.receipts = S.receipts || []).push({ ...rc, _new: Date.now() }); rcLocalSave();
       busy(0); ov.remove(); toast(`บันทึกรายจ่าย ${baht(rc.total)} แล้ว`);
-      if (isNew && rc.type === 'สินค้า' && (rc.fileUrl || rc.fileId) && await confirmDlg('เพิ่มสต๊อก/อัปเดตต้นทุนจากรายการในบิลนี้เลยไหม?', 'เพิ่มสต๊อกเลย')) return stockFromBill(rc, done);
+      if (isNew && rc.type === 'สินค้า' && (rc.fileUrl || rc.fileId) && await confirmDlg(`เพิ่มสต๊อก/อัปเดตต้นทุนจากรายการในบิลนี้เลยไหม?${pages.length > 1 ? ` (อ่านทั้ง ${pages.length} หน้า)` : ''}`, 'เพิ่มสต๊อกเลย')) return stockFromBill({ ...rc, _pages: pages.length ? pages : null, _ocr: ocrd }, done);
       done && done();
     } catch (e) { busy(0); toast(e.message, 1); }
   };
@@ -834,15 +834,18 @@ function expenseForm(r0, done) {
 // เพิ่มสต๊อกจากบิลที่แนบไว้ในบัญชีรายจ่าย: อ่านรายการสินค้า (OCR) → จับคู่สินค้า → ใช้ฟอร์มตรวจใบเสร็จเดิม (บันทึกทับบิลเดิม ไม่สร้างซ้ำ)
 async function stockFromBill(r, done) {
   try {
-    if (!(r.fileUrl || r.fileId)) throw new Error('บิลนี้ยังไม่มีรูป');
-    busy(1, 'กำลังอ่านรายการสินค้าจากบิล...');
-    const o = /^data:/.test(r.fileUrl || '') ? await api('ocr', { base64: r.fileUrl, mime: 'image/jpeg' }) : await api('ocr', { fileId: r.fileId });
-    const data = o.data ? { ...o.data, items: (o.data.items || []).map(i => ({ ...i })) } : parseReceiptText(o.text || '');
+    if (!(r.fileUrl || r.fileId || (r._pages && r._pages.length))) throw new Error('บิลนี้ยังไม่มีรูป');
+    let data;
+    // ใช้ผลอ่านเดิมถ้ามีรายการแล้ว · มีรูปทุกหน้าในเครื่อง → อ่านทีละหน้า · ไม่มี → อ่านจากไฟล์ใน Drive (รูป/PDF หลายหน้า)
+    if (r._ocr && (r._ocr.items || []).length) data = r._ocr;
+    else if (r._pages && r._pages.length) data = await Bill.ocr(r._pages);
+    else if (/^data:/.test(r.fileUrl || '')) data = await Bill.ocr([{ dataUrl: r.fileUrl, mime: 'image/jpeg' }]);
+    else { busy(1, 'กำลังอ่านรายการสินค้าจากบิล...'); const o = await api('ocr', { fileId: r.fileId }); data = Bill.merge([{ ...(o.data ? { ...o.data, items: (o.data.items || []).map(i => ({ ...i })) } : parseReceiptText(o.text || '')), _raw: o.text || '', _engine: o.engine }]); }
     if (!S.products.length) await loadProducts(true); buildIndex();
-    const items = (data.items || []).map(it => { const m = matchProduct(it.name, it.code); return { name: it.name, code: it.code || '', qty: num(it.qty) || 1, unitCost: num(it.unitPrice) || (num(it.amount) / (num(it.qty) || 1)), amount: num(it.amount), sku: m ? m.p.sku : '', score: m ? m.score : 0, updateCost: !!m, addStock: !!m, createNew: false }; });
+    const nz = Bill.normalize({ ...data, supplier: r.supplier || data.supplier });
     busy(0);
-    if (!items.length) toast('อ่านรายการสินค้าไม่ได้ — เพิ่มแถวเองได้', 1);
-    receiptForm({ ...r, type: 'สินค้า', items: JSON.stringify(items), supplier: r.supplier || data.supplier || '', supplierTaxId: r.supplierTaxId || data.supplierTaxId || '', docNo: r.docNo || data.docNo || '', subtotal: r.subtotal || data.subtotal || '', vat: r.vat || data.vat || '', total: r.total || data.total || '', _raw: o.text || '', _engine: o.engine, _img: /^data:/.test(r.fileUrl || '') ? r.fileUrl : '', _done: done }, true);
+    if (!nz.items.length) toast('อ่านรายการสินค้าไม่ได้ — เพิ่มแถวเองได้', 1);
+    receiptForm({ ...r, _pages: (r._pages || []).length || 0, _ocr: undefined, type: 'สินค้า', items: JSON.stringify(nz.items), _skipped: nz.skipped, supplier: r.supplier || data.supplier || '', supplierTaxId: r.supplierTaxId || data.supplierTaxId || '', docNo: r.docNo || data.docNo || '', subtotal: r.subtotal || data.subtotal || '', vat: r.vat || data.vat || '', total: r.total || data.total || '', _raw: data._raw || '', _engine: data._engine, _img: r._pages && r._pages.length ? r._pages[0].dataUrl : /^data:/.test(r.fileUrl || '') ? r.fileUrl : '', _done: done }, true);
   } catch (e) { busy(0); toast(e.message, 1); }
 }
 
