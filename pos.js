@@ -171,8 +171,9 @@ const Img = {
     while (d.length > 30000 && q > .35) { q -= .1; d = cv.toDataURL('image/jpeg', q); }
     return d;
   },
-  async save(sku, data) { await api('upsert', { table: 'Images', rows: [{ sku, data }] }); this.map[sku] = data; this.persist(); },
-  async remove(sku) { await api('remove', { table: 'Images', ids: [sku] }); delete this.map[sku]; this.persist(); }
+  // v2.7.8: เก็บในเครื่องทันที ส่ง Google เบื้องหลัง (คิวสินค้า)
+  async save(sku, data) { this.map[sku] = data; this.persist(); if (window.ProdQ) ProdQ.add([{ k: 'img', sku, data }]); else await api('upsert', { table: 'Images', rows: [{ sku, data }] }); try { document.dispatchEvent(new Event('mm:images')); } catch (e) { } },
+  async remove(sku) { delete this.map[sku]; this.persist(); if (window.ProdQ) ProdQ.add([{ k: 'imgDel', sku }]); else await api('remove', { table: 'Images', ids: [sku] }); }
 };
 
 /* ---------- คิวส่งบิลขึ้นเซิร์ฟเวอร์ (ขายได้แม้เน็ตหลุด) ---------- */
@@ -181,13 +182,14 @@ const Sync = {
   get box() { return LS.get('outbox', []); },
   add(order) { const b = this.box; b.push(order); LS.set('outbox', b); this.badge(); this.flush(); },
   badge() {
-    let el = $('#obx'); const nb = this.box.length, nc = window.CustQ ? CustQ.list.length : 0, n = nb + nc;
+    let el = $('#obx'); const nb = this.box.length, nc = window.CustQ ? CustQ.list.length : 0, np = (window.ProdQ ? ProdQ.n() : 0) + (window.StkQ ? StkQ.n() : 0), n = nb + nc + np;
     if (!n) { el && el.remove(); return; }
     if (!el) { el = document.createElement('div'); el.id = 'obx'; el.className = 'outbox'; el.onclick = () => this.panel(); document.body.appendChild(el); }
-    el.textContent = nc ? `รอส่ง ${nb ? nb + ' บิล · ' : ''}${nc} รายการลูกค้า` : `รอส่ง ${n} บิล`;
+    el.textContent = 'รอส่ง ' + [nb && nb + ' บิล', nc && nc + ' รายการลูกค้า', np && np + ' รายการสินค้า'].filter(Boolean).join(' · ');
   },
   async flush(manual) {
     if (window.Clock) Clock.flush().catch(() => { });
+    if (window.ProdQ && ProdQ.n()) ProdQ.flush(); if (window.StkQ && StkQ.n()) StkQ.flush();
     if (this.busy || !S.user) { if (manual && this.busy) toast('กำลังส่งอยู่…'); return; } const b = this.box; if (!b.length) { await CustQ.flush(); if (manual) toast(CustQ.list.length ? `ส่งรายการลูกค้าไม่สำเร็จ — ค้าง ${CustQ.list.length} รายการ (ตรวจเน็ต)` : '✓ ไม่มีบิลค้าง ส่งครบแล้ว', CustQ.list.length ? 1 : 0); this.lastOk = Date.now(); this.lastErr = ''; this.ping(); return this.badge(); }
     this.busy = true;
     try {
@@ -213,7 +215,7 @@ const Sync = {
     const body = () => {
       const b = this.box, nc = (window.CustQ && CustQ.list.length) || 0, on = navigator.onLine;
       const st = this.busy ? `<span class="spin dark" style="width:14px;height:14px;vertical-align:-2px"></span> กำลังส่ง…` : this.lastErr ? `<span style="color:var(--red)">⚠ ${esc(this.lastErr)}</span>` : this.lastOk ? `✓ ส่งล่าสุด ${new Date(this.lastOk).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '';
-      return `<div class="row" style="gap:10px;margin-bottom:10px"><div class="grow"><div style="font-size:22px;font-weight:700">${b.length ? `รอส่ง ${b.length} บิล` : '✓ ไม่มีบิลค้าง'}</div><div class="small muted">${nc ? `รายการลูกค้ารอส่ง ${nc} รายการ · ` : ''}เน็ต: ${on ? '<b style="color:var(--green)">เชื่อมต่อ</b>' : '<b style="color:var(--red)">ไม่มีเน็ต</b>'} · ระบบส่งเองทุก 20 วินาที</div><div class="small" style="margin-top:4px">${st}</div></div></div>
+      return `<div class="row" style="gap:10px;margin-bottom:10px"><div class="grow"><div style="font-size:22px;font-weight:700">${b.length ? `รอส่ง ${b.length} บิล` : '✓ ไม่มีบิลค้าง'}</div><div class="small muted">${nc ? `รายการลูกค้ารอส่ง ${nc} รายการ · ` : ''}${window.ProdQ && (ProdQ.n() + (window.StkQ ? StkQ.n() : 0)) ? `ข้อมูลสินค้ารอส่ง ${ProdQ.n() + (window.StkQ ? StkQ.n() : 0)} รายการ · ` : ''}เน็ต: ${on ? '<b style="color:var(--green)">เชื่อมต่อ</b>' : '<b style="color:var(--red)">ไม่มีเน็ต</b>'} · ระบบส่งเองทุก 20 วินาที</div><div class="small" style="margin-top:4px">${st}</div></div></div>
         ${b.length ? `<div class="list">${b.slice().reverse().slice(0, 60).map(o => { const its = Logic.J(o.items, []); return `<div class="item" style="cursor:default"><div class="grow"><b>${esc(o.id)}</b><div class="small muted">${esc(String(o.date || '').replace('T', ' ').slice(0, 16))} · ${its.length} รายการ · ${esc(o.cashierName || o.cashier || '')}${its.some(i => i.job) ? ' · <span style="color:var(--amber,#e0a000)">มีงานโอน/บิล</span>' : ''}</div></div><b>${money(o.total)}</b></div>`; }).join('')}</div>` : '<div class="empty small">บิลทุกใบในเครื่องนี้ขึ้น Google แล้ว</div>'}
         <div class="tiny muted" style="margin-top:10px">⚠ อย่าล้างข้อมูลเบราว์เซอร์ (Clear data) ระหว่างที่ยังมีบิลรอส่ง บิลจะหายถาวร</div>`;
     };

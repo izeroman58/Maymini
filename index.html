@@ -466,7 +466,7 @@ html.dark .sclr{background:#5A5D63}
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.7.7';
+const APP_VER = '2.7.8';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -1174,7 +1174,7 @@ const nextSku = prods => Logic.nextSku(prods);
 async function loadProducts(force) {
   if (!force && S.products.length && Date.now() - LS.get('productsAt', 0) < 60e3) return S.products;
   const r = await api('list', { table: 'Products' });
-  S.products = r.rows; LS.set('products', S.products); LS.set('productsAt', Date.now()); buildIndex(); return S.products;
+  S.products = window.ProdQ ? ProdQ.overlay(r.rows) : r.rows; LS.set('products', S.products); LS.set('productsAt', Date.now()); buildIndex(); return S.products;
 }
 async function loadSettings() {
   try {
@@ -2311,7 +2311,7 @@ function productCard(p, embeddedPrice) {
       <div class="kv"><span class="muted">แก้ไขล่าสุด</span><span class="small">${esc(p.updatedAt ? String(p.updatedAt).replace('T', ' ').slice(0, 16) : '-')} ${esc(p.updatedBy || '')}</span></div>
     </div>`,
     `${isOwner() ? `<button class="btn ghost" id="dl" style="color:var(--red)" title="ลบสินค้านี้">${I(IC.trash, 18)}</button>` : ''}<button class="btn ghost grow" id="lb">${I(IC.print, 18)} ฉลาก</button><button class="btn ghost grow" id="st">± สต็อก</button><button class="btn grow" id="ed">${I(IC.edit, 18)} แก้ไข</button>`);
-  const dl = $('#dl', ov); if (dl) dl.onclick = async () => { if (!(await confirmDlg(`ลบ “${esc(p.name)}” (${esc(p.sku)}) ?`, 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Products', ids: [p.sku] }); S.products = S.products.filter(x => x.sku !== p.sku); LS.set('products', S.products); buildIndex(); busy(0); ov.remove(); toast('ลบแล้ว'); if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); } };
+  const dl = $('#dl', ov); if (dl) dl.onclick = async () => { if (!(await confirmDlg(`ลบ “${esc(p.name)}” (${esc(p.sku)}) ?`, 'ลบ', true))) return; removeProductLocal(p.sku); ov.remove(); toast('ลบแล้ว'); if (S.view === 'products') go('products'); };
   $('#ed', ov).onclick = () => { ov.remove(); editProduct(p); };
   $('#lb', ov).onclick = () => { ov.remove(); go('labels', [p]); };
   $('#st', ov).onclick = () => { ov.remove(); stockDlg(p); };
@@ -2323,6 +2323,7 @@ function stockDlg(p) {
   $('#qq', ov).focus();
   $('#ok', ov).onclick = async () => {
     const q = num($('#qq', ov).value); const cur = num(p.stock); const v = m === 'add' ? cur + q : m === 'sub' ? cur - q : q;
+    if (window.StkQ) { StkQ.set(p, v); LS.set('products', S.products); ov.remove(); toast('✔ บันทึกสต็อกแล้ว: ' + v); if (S.view === 'products') go('products'); return; }   // ในเครื่องทันที ส่งเบื้องหลัง
     try { busy(1); await adjustStock([{ sku: p.sku, stock: v }]); busy(0); ov.remove(); toast('บันทึกสต็อกแล้ว: ' + v); if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); }
   };
 }
@@ -2330,12 +2331,57 @@ async function adjustStock(rows) {
   const r = await api('adjustStock', { rows });
   r.rows.forEach(x => { const p = IDX.bySku[x.sku]; if (p) { p.stock = x.stock; p.trackStock = 'Y'; } }); LS.set('products', S.products);
 }
+// v2.7.8: บันทึก/แก้ไข/ลบสินค้า = ในเครื่องทันที (ใช้ได้แม้ออฟไลน์) แล้วส่ง Google เบื้องหลัง (คิว prodQ · ส่งซ้ำได้ไม่ซ้ำซ้อน)
 async function saveProducts(rows) {
-  const clean = rows.map(r => { const o = {}; Object.keys(r).forEach(k => { if (k[0] !== '_') o[k] = r[k]; }); return o; });
-  await api('upsert', { table: 'Products', rows: clean });
+  const clean = rows.map(r => { const o = {}; Object.keys(r).forEach(k => { if (k[0] !== '_') o[k] = r[k]; }); o.updatedAt = new Date().toISOString(); return o; });
   clean.forEach(r => { const i = S.products.findIndex(p => p.sku === r.sku); if (i >= 0) S.products[i] = { ...S.products[i], ...r }; else S.products.unshift(r); });
   LS.set('products', S.products); buildIndex();
+  ProdQ.add(clean.map(r => ({ k: 'u', sku: r.sku, row: r })));
 }
+const ProdQ = {
+  get list() { return LS.get('prodQ', []); }, set list(v) { LS.set('prodQ', v); },
+  busy: false, t: null, rt: null,
+  add(items) {
+    const L = this.list;
+    items.forEach(it => {
+      if (it.k === 'u') { const j = L.findIndex(x => x.k === 'u' && x.sku === it.sku); if (j >= 0) { L[j].row = { ...L[j].row, ...it.row }; L[j].v = (L[j].v || 0) + 1; return; } }
+      if (it.k === 'img' || it.k === 'imgDel') { for (let j = L.length - 1; j >= 0; j--) if ((L[j].k === 'img' || L[j].k === 'imgDel') && L[j].sku === it.sku) L.splice(j, 1); }
+      if (it.k === 'del') { for (let j = L.length - 1; j >= 0; j--) if (L[j].sku === it.sku && L[j].k !== 'del') L.splice(j, 1); }
+      L.push({ ...it, v: 1, at: Date.now() });
+    });
+    this.list = L; this.kick(600);
+  },
+  n() { return this.list.length; },
+  kick(ms) { clearTimeout(this.t); this.t = setTimeout(() => this.flush(), ms || 600); try { window.Sync && Sync.badge(); } catch (e) { } },
+  // ข้อมูลใหม่จาก Google ยังไม่มีการแก้ที่รอส่ง → ทับด้วยของในเครื่อง ไม่ให้ค่าที่เพิ่งแก้เด้งกลับ
+  overlay(rows) {
+    const L = this.list; if (!L.length && !(window.StkQ && StkQ.n())) return rows;
+    const by = {}; rows.forEach(r => by[r.sku] = r);
+    L.forEach(it => { if (it.k === 'u') { if (by[it.sku]) Object.assign(by[it.sku], it.row); else { const r = { ...it.row }; by[it.sku] = r; rows.unshift(r); } } else if (it.k === 'del' && by[it.sku]) by[it.sku]._gone = 1; });
+    try { if (window.StkQ) Object.entries(StkQ.q()).forEach(([sku, v]) => { if (by[sku]) { by[sku].stock = String(v); by[sku].trackStock = 'Y'; } }); } catch (e) { }
+    return rows.filter(r => !r._gone);
+  },
+  async flush() {
+    if (this.busy || !S.user) return; let L = this.list; if (!L.length) return;
+    this.busy = true; clearTimeout(this.rt); this.rt = null;
+    try {
+      const ups = L.filter(x => x.k === 'u');
+      for (let i = 0; i < ups.length; i += 200) { const part = ups.slice(i, i + 200); await api('upsert', { table: 'Products', rows: part.map(x => x.row) }); this.done(part); }
+      for (const x of this.list.filter(x => x.k === 'cat')) { try { await api('renameCategory', { from: '', to: x.name }); } catch (e) { if (e.offline) throw e; } this.done([x]); }
+      for (const x of this.list.filter(x => x.k === 'img')) { await api('upsert', { table: 'Images', rows: [{ sku: x.sku, data: x.data }] }); this.done([x]); }
+      for (const x of this.list.filter(x => x.k === 'imgDel')) { await api('remove', { table: 'Images', ids: [x.sku] }); this.done([x]); }
+      for (const x of this.list.filter(x => x.k === 'del')) { await api('remove', { table: 'Products', ids: [x.sku] }); this.done([x]); }
+      this.err = '';
+    } catch (e) { this.err = e.message; this.rt = setTimeout(() => this.flush(), e.offline ? 20000 : 30000); if (!e.offline) toast('ส่งข้อมูลสินค้าไม่สำเร็จ จะลองใหม่: ' + e.message, 1); }
+    this.busy = false; try { window.Sync && Sync.badge(); } catch (e) { }
+    if (this.n() && !this.rt) this.kick(1500);
+  },
+  done(items) { const L = this.list.filter(x => !items.some(d => d.k === x.k && d.sku === x.sku && d.at === x.at && (d.v || 1) === (x.v || 1) && (d.name || '') === (x.name || ''))); this.list = L; }
+};
+window.ProdQ = ProdQ;
+addEventListener('online', () => ProdQ.flush()); document.addEventListener('mm:booted', () => setTimeout(() => ProdQ.flush(), 1500)); setInterval(() => { if (ProdQ.n() && !ProdQ.busy && !ProdQ.rt) ProdQ.flush(); }, 30000);
+// ลบสินค้าในเครื่องทันที แล้วส่งเบื้องหลัง
+function removeProductLocal(sku) { S.products = S.products.filter(x => x.sku !== sku); LS.set('products', S.products); buildIndex(); ProdQ.add([{ k: 'del', sku }]); }
 async function editProduct(p0) {
   if (!(await gate('editProducts'))) return; // รหัสเจ้าของครั้งเดียว แล้วแก้ต่อได้จนกว่าจะออกจากหน้าจัดการสินค้า
   const isNew = !p0 || !p0.sku;
@@ -2406,13 +2452,13 @@ async function editProduct(p0) {
   };
   const save = async print => {
     let o; try { o = collect(); } catch (e) { return toast(e.message, 1); }
-    try { busy(1, 'กำลังบันทึก...'); await saveProducts([o]);
+    try { await saveProducts([o]);   // ในเครื่องทันที ไม่รอเน็ต
       if (newImg) await Img.save(o.sku, newImg); else if (rmImg && curImg) await Img.remove(o.sku);
-      if (o.category && !S.categories.some(c => c.name === o.category)) { await api('renameCategory', { from: '', to: o.category }); loadSettings(); }
-      busy(0); ov.remove(); toast('บันทึกแล้ว'); if (print) go('labels', [o]); else if (S.view === 'products') go('products'); } catch (e) { busy(0); toast(e.message, 1); }
+      if (o.category && !S.categories.some(c => c.name === o.category)) { S.categories.push({ name: o.category, sort: String(S.categories.length + 1) }); LS.set('categories', S.categories); ProdQ.add([{ k: 'cat', sku: '', name: o.category }]); }
+      ov.remove(); toast(navigator.onLine ? '✔ บันทึกแล้ว' : '✔ บันทึกในเครื่องแล้ว — จะส่งขึ้น Google เมื่อมีเน็ต'); if (print) go('labels', [o]); else if (S.view === 'products') go('products'); } catch (e) { toast(e.message, 1); }
   };
   $('#sv', ov).onclick = () => save(false); $('#svp', ov).onclick = () => save(true);
-  const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg(`ลบ “${esc(p.name)}” ?`, 'ลบ', true))) return; try { busy(1); await api('remove', { table: 'Products', ids: [p.sku] }); S.products = S.products.filter(x => x.sku !== p.sku); LS.set('products', S.products); buildIndex(); busy(0); ov.remove(); go('products'); } catch (e) { busy(0); toast(e.message, 1); } };
+  const d = $('#del', ov); if (d) d.onclick = async () => { if (!(await confirmDlg(`ลบ “${esc(p.name)}” ?`, 'ลบ', true))) return; removeProductLocal(p.sku); ov.remove(); toast('ลบแล้ว'); go('products'); };
   if (isNew && !p.barcode) setTimeout(() => $('#f_name', ov).focus(), 200);
 }
 
@@ -3607,23 +3653,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.7.7"></script>
-<script src="logic.js?v=2.7.7"></script>
-<script src="cache.js?v=2.7.7"></script>
-<script src="offline.js?v=2.7.7"></script>
-<script src="scanner.js?v=2.7.7"></script>
-<script src="printer.js?v=2.7.7"></script>
-<script src="pos.js?v=2.7.7"></script>
-<script src="idle.js?v=2.7.7"></script>
-<script src="display.js?v=2.7.7"></script>
-<script src="reports.js?v=2.7.7"></script>
-<script src="inventory.js?v=2.7.7"></script>
-<script src="people.js?v=2.7.7"></script>
-<script src="quality.js?v=2.7.7"></script>
-<script src="services.js?v=2.7.7"></script>
-<script src="owner.js?v=2.7.7"></script>
-<script src="books.js?v=2.7.7"></script>
-<script src="restock.js?v=2.7.7"></script>
+<script src="qr.js?v=2.7.8"></script>
+<script src="logic.js?v=2.7.8"></script>
+<script src="cache.js?v=2.7.8"></script>
+<script src="offline.js?v=2.7.8"></script>
+<script src="scanner.js?v=2.7.8"></script>
+<script src="printer.js?v=2.7.8"></script>
+<script src="pos.js?v=2.7.8"></script>
+<script src="idle.js?v=2.7.8"></script>
+<script src="display.js?v=2.7.8"></script>
+<script src="reports.js?v=2.7.8"></script>
+<script src="inventory.js?v=2.7.8"></script>
+<script src="people.js?v=2.7.8"></script>
+<script src="quality.js?v=2.7.8"></script>
+<script src="services.js?v=2.7.8"></script>
+<script src="owner.js?v=2.7.8"></script>
+<script src="books.js?v=2.7.8"></script>
+<script src="restock.js?v=2.7.8"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

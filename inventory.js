@@ -15,7 +15,7 @@ const StkQ = {
     this.rt = null; if (!rows.length) return; this.busy = true;
     try { await api('adjustStock', { rows }); const now = this.q(); rows.forEach(r => { if (now[r.sku] === r.stock) delete now[r.sku]; }); LS.set('stkQ', now); }
     catch (e) { clearTimeout(this.rt); this.rt = setTimeout(() => this.flush(), 20000); if (!e.offline) toast('ส่งยอดสต็อกไม่สำเร็จ จะลองใหม่: ' + e.message, 1); }
-    this.busy = false; this.onchange && this.onchange();
+    this.busy = false; this.onchange && this.onchange(); try { window.Sync && Sync.badge(); } catch (e) { }
     if (this.n() && !this.rt) this.t = setTimeout(() => this.flush(), 1500);
   }
 };
