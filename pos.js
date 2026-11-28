@@ -529,6 +529,7 @@ window.Calc = Calc;
 .kpi-v::after{content:'';width:3px;height:46px;background:#E31837;margin-left:3px;animation:kpc 1s steps(1) infinite}.kpov.kfresh .kpi-v::after{display:none}.kpov.kfresh .kpi-v{background:rgba(227,24,55,.14)}
 @keyframes kpc{50%{opacity:0}}
 .kpov.dk .kptop{background:#2B2D31;color:#F2F2F2}
+.kptop{flex-wrap:wrap}.kptop .pth{flex:none}.kseg{flex-basis:100%;display:flex;gap:4px;margin:0 0 4px;background:#0000000f;border-radius:10px;padding:3px}.kseg button{flex:1;border:0;background:transparent;color:inherit;font:inherit;font-size:16px;font-weight:700;padding:10px 4px;border-radius:8px;cursor:pointer;touch-action:manipulation}.kseg button.on{background:#E31837;color:#fff}.kpov.dk .kseg{background:#ffffff14}
 .kpov.dk .kpbox{background:#2B2D31;color:#F2F2F2}.kpov.dk .kph,.kpov.dk .kpvr{border-color:#ffffff14}.kpov.dk .kpg{background:#ffffff1f}.kpov.dk .kpg button{background:#3A3D42}.kpov.dk .kpg button.dn,.kpov.dk .kpg button:active{background:#55595F}.kpov.dk .kpg .kok{color:#8BE28F}.kpov.dk .sndt,.kpov.dk .kpx{color:#fff}`;
   document.head.appendChild(st);
 })();
@@ -1317,7 +1318,8 @@ const TSync = {
       } catch (e) { }
     }
     // ยังไม่เคยเห็นอีกเครื่อง → ถามห่าง ๆ (10 วิ) แทนทุก 2 วิ · เจออีกเครื่องแล้วค่อยถามถี่
-    this.pt = setTimeout(() => this.pull(), document.hidden ? 15000 : this.direct ? 6000 : this.live() ? 1200 : 10000);
+    // v2.7.9: ลดความถี่ถาม Google (เครื่องร้อน/แบตหมดไว): อยู่หน้าอื่นที่ไม่ใช่หน้าขาย = 20 วิ · ยังไม่เชื่อมตรง = 2.5 วิ
+    this.pt = setTimeout(() => this.pull(), document.hidden ? 15000 : S.view !== 'pos' ? 20000 : this.direct ? 6000 : this.live() ? 2500 : 10000);
   },
   // ---- เชื่อมตรง WebRTC ระหว่างเครื่อง (ใช้ช่องส่งสัญญาณเดียวกับจอลูกค้า) ----
   wire(ch) {
@@ -1358,7 +1360,7 @@ const TSync = {
         }
       } catch (e) { }
     }
-    this.st = setTimeout(() => this.rtc(), document.hidden ? 20000 : open ? 8000 : this.own ? (this.live() ? 1500 : 6000) : this.live() ? 3000 : 15000);
+    this.st = setTimeout(() => this.rtc(), document.hidden ? 20000 : open ? 8000 : S.view !== 'pos' ? 30000 : this.own ? (this.live() ? 4000 : 8000) : this.live() ? 5000 : 15000);
   },
   start() { if (this.started) return; if (!feat('tksync')) return; this.started = true; this.pull(); setTimeout(() => this.rtc(), 800); document.addEventListener('visibilitychange', () => { if (!document.hidden) { this.pull(); this.rtc(); } }); setInterval(() => this.badge(), 15000); }
 };

@@ -20,6 +20,27 @@ const StkQ = {
   }
 };
 window.StkQ = StkQ;
+// v2.7.9: บันทึกความเคลื่อนไหวสต็อก (นับ/รับเข้า/เบิก-เสีย/ตั้งค่า) → ประวัติการตรวจนับ (1 รายการต่อวันต่อผู้ใช้ ส่งขึ้น Google เบื้องหลัง)
+const StkLog = {
+  ML: { count: 'นับ', set: 'ตั้งค่า', add: 'รับเข้า', sub: 'เบิก/เสีย' },
+  day: at => new Date(at + 7 * 3600e3).toISOString().slice(0, 10),
+  list() { return LS.get('stkLog', []); },
+  add(p, before, after, mode, qty) {
+    const u = S.user || {}, e = { at: Date.now(), sku: p.sku, name: p.name, b: num(before), a: num(after), m: mode, q: num(qty), by: u.name || u.username || '' };
+    const L = [e, ...this.list()].slice(0, 800); LS.set('stkLog', L);
+    const day = todayISO(), un = u.username || 'x', id = 'QC-' + day.replace(/-/g, '') + '-' + un;
+    const T = L.filter(x => this.day(x.at) === day && (x.byU || un) === un).reverse();
+    const sk = new Set(T.map(x => x.sku)), cnt = k => T.filter(x => x.m === k).length;
+    let dq = 0, dv = 0; const last = {}; T.forEach(x => { if (!(x.sku in last)) last[x.sku] = { b: x.b }; last[x.sku].a = x.a; });
+    Object.entries(last).forEach(([s2, v]) => { const pp = IDX.bySku[s2]; dq += v.a - v.b; dv += (v.a - v.b) * num(pp && pp.cost); });
+    const parts = [['count', 'นับ'], ['set', 'ตั้งค่า'], ['add', 'รับเข้า'], ['sub', 'เบิก/เสีย']].filter(([k]) => cnt(k)).map(([k, t]) => `${t} ${cnt(k)}`);
+    const row = { id, name: 'นับ/ปรับสต็อกระหว่างวัน ' + thDate(day), date: day, scope: JSON.stringify({ type: 'quick' }), status: 'done', items: JSON.stringify(T.map(x => [x.sku, x.b, x.a, x.m, x.q, x.at])).slice(0, 45000), by: un, finishedAt: new Date().toISOString(),
+      note: `${sk.size} รายการ · ${parts.join(' · ')} · ส่วนต่าง ${Math.round(dq * 100) / 100} ชิ้น · มูลค่าทุน ${Math.round(dv * 100) / 100} บาท` };
+    const R = LS.get('qcRows', {}); R[id] = row; Object.keys(R).sort().slice(0, -20).forEach(k => delete R[k]); LS.set('qcRows', R);
+    if (window.ProdQ) ProdQ.add([{ k: 'sc', sku: id, row }]);
+  }
+};
+window.StkLog = StkLog;
 addEventListener('online', () => StkQ.flush()); document.addEventListener('mm:booted', () => StkQ.flush());
 VIEWS.inventory = el => {
   const it = [
@@ -41,7 +62,10 @@ VIEWS.stockcount = async el => {
   if (!S.products.length) await loadProducts(true).catch(() => { });
   const d = CNT.d;
   if (!d) {
-    let hist = []; try { hist = (await loadTable('StockCounts')).slice().sort((a, b) => String(b.finishedAt).localeCompare(a.finishedAt)); } catch (e) { }
+    let hist = []; try { hist = (await loadTable('StockCounts')).slice(); } catch (e) { }
+    Object.values(LS.get('qcRows', {})).forEach(r => { const i = hist.findIndex(h => h.id === r.id); if (i >= 0) { if (String(r.finishedAt) >= String(hist[i].finishedAt)) hist[i] = r; } else hist.push(r); });
+    hist.sort((a, b) => String(b.finishedAt).localeCompare(String(a.finishedAt)));
+    const mv = StkLog.list().slice(0, 40), tod = todayISO();
     el.innerHTML = vhead('ตรวจนับสต็อก', '', 'inventory') + `
      <div class="card"><h3>เริ่มตรวจนับใหม่</h3>
        <div class="list menu">
@@ -49,7 +73,15 @@ VIEWS.stockcount = async el => {
         <div class="item" id="sc"><div class="av">${I(IC.grid, 20)}</div><div class="grow"><div class="t">นับตามหมวดหมู่</div><div class="m">เลือกได้หลายหมวด</div></div></div>
         <div class="item" id="ss"><div class="av">${I(IC.scan, 20)}</div><div class="grow"><div class="t">นับบางส่วน (เฉพาะที่สแกน/เลือก)</div><div class="m">สแกนสินค้าทีละชิ้นแล้วใส่จำนวน</div></div></div>
        </div><button class="btn ghost block" style="margin-top:10px" onclick="go('barcodesheet')">${I(IC.print, 18)} พิมพ์ใบตรวจนับ (มีบาร์โค้ด)</button></div>
-     <div class="card"><h3>ประวัติการตรวจนับ</h3>${hist.length ? hist.slice(0, 30).map(h => `<div class="kv"><span><b>${esc(h.name)}</b><div class="tiny muted">${thDate(h.date)} · ${esc(h.by)}</div></span><span class="tiny right" style="max-width:60%">${esc(h.note)}</span></div>`).join('') : '<div class="muted small">ยังไม่มี</div>'}</div>`;
+     <div class="card"><div class="row"><h3 class="grow">ความเคลื่อนไหวสต็อกล่าสุด</h3><span class="tiny muted">นับ · รับเข้า · เบิก/เสีย · ตั้งค่า (เครื่องนี้)</span></div>
+       ${mv.length ? `<div class="list">${mv.map(x => { const pp = IDX.bySku[x.sku] || { sku: x.sku, name: x.name }, df = Math.round((x.a - x.b) * 1000) / 1000; return `<div class="item smv"><span data-pinfo="${esc(x.sku)}">${pthumb(pp, 44)}</span><div class="grow" style="min-width:0"><div class="t pnm" data-pinfo="${esc(x.sku)}">${esc(pp.name || x.name)}</div><div class="m"><span class="tag ${x.m === 'add' ? 'green' : x.m === 'sub' ? 'red' : 'blue'}">${StkLog.ML[x.m] || x.m}</span> ${StkLog.day(x.at) === tod ? 'วันนี้' : thDate(StkLog.day(x.at))} ${new Date(x.at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${esc(x.by)}</div></div><div class="right"><div style="font-size:18px;font-weight:700">${x.b} → ${x.a}</div><div class="tiny" style="color:${df > 0 ? 'var(--green)' : df < 0 ? 'var(--red)' : 'var(--ink3)'}">${df > 0 ? '+' : ''}${df}</div></div></div>`; }).join('')}</div>` : '<div class="muted small">ยังไม่มี — นับสต็อก หรือกด ± สต็อก ที่หน้ารายละเอียดสินค้า แล้วรายการจะขึ้นที่นี่</div>'}</div>
+     <div class="card"><h3>ประวัติการตรวจนับ</h3>${hist.length ? hist.slice(0, 40).map((h, i) => `<div class="kv hrow" data-h="${i}" style="cursor:pointer"><span><b>${esc(h.name)}</b><div class="tiny muted">${thDate(h.date)} · ${esc(h.by)}</div></span><span class="tiny right" style="max-width:60%">${esc(h.note)} ›</span></div>`).join('') : '<div class="muted small">ยังไม่มี</div>'}</div>`;
+    $$('[data-h]', el).forEach(r => r.onclick = () => {
+      const h = hist[+r.dataset.h]; let it = []; try { it = JSON.parse(h.items || '[]'); } catch (e) { }
+      const q = (() => { try { return JSON.parse(h.scope || '{}').type === 'quick'; } catch (e) { return false; } })();
+      sheet(esc(h.name), `<div class="small muted" style="margin-bottom:8px">${esc(h.note || '')} · ${esc(h.by)}</div>${it.length ? `<div class="list">${it.map(x => { const pp = IDX.bySku[x[0]] || { sku: x[0], name: x[0] }, b = q ? x[1] : x[1], a = q ? x[2] : x[2], df = Math.round((num(a) - num(b)) * 1000) / 1000; return `<div class="item smv"><span data-pinfo="${esc(x[0])}">${pthumb(pp, 40)}</span><div class="grow" style="min-width:0"><div class="t pnm" data-pinfo="${esc(x[0])}">${esc(pp.name)}</div><div class="m">${q ? `<span class="tag ${x[3] === 'add' ? 'green' : x[3] === 'sub' ? 'red' : 'blue'}">${StkLog.ML[x[3]] || ''}</span> ${x[5] ? new Date(x[5]).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : ''}` : 'นับได้'}</div></div><div class="right"><b>${num(b)} → ${num(a)}</b><div class="tiny" style="color:${df > 0 ? 'var(--green)' : df < 0 ? 'var(--red)' : 'var(--ink3)'}">${df > 0 ? '+' : ''}${df}</div></div></div>`; }).join('')}</div>` : '<div class="empty small">ไม่มีรายละเอียดรายการ</div>'}`);
+    });
+    const onPc = () => { if (!el.isConnected || CNT.d || !$('[data-h], .smv', el) && !$('#sa', el)) return removeEventListener('mm:pclose', onPc); if (S.view === 'stockcount' && !CNT.d) go('stockcount'); }; if (window._scPc) removeEventListener('mm:pclose', window._scPc); window._scPc = onPc; addEventListener('mm:pclose', onPc);
     const start = (scope, name) => { CNT.d = { id: Logic.uid('SC'), name, scope, counts: {}, started: LocalDB.now(), mode: 'inc' }; go('stockcount'); };
     $('#sa', el).onclick = () => start({ type: 'all' }, 'นับทั้งร้าน ' + thDate(todayISO()));
     $('#ss', el).onclick = () => start({ type: 'selected', skus: [] }, 'นับบางส่วน ' + thDate(todayISO()));
@@ -74,7 +106,7 @@ VIEWS.stockcount = async el => {
   // รายการที่เพิ่งนับ/แก้ ขึ้นบนสุด (ล่าสุดก่อน)
   d.recent = d.recent || []; d.mode = 'inc';
   // ใส่จำนวน = ปรับสต็อกให้ตรงทันที (ในเครื่องก่อน แล้วส่ง Google เบื้องหลัง · ไม่มีเน็ตก็เข้าคิวส่งเอง)
-  const setCount = (p, v) => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); const cur = d.counts[p.sku]; d.counts[p.sku] = { c: v, e: cur ? cur.e : num(p.stock) }; d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); StkQ.set(p, v); };
+  const setCount = (p, v) => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); const cur = d.counts[p.sku], before = num(p.stock); d.counts[p.sku] = { c: v, e: cur ? cur.e : num(p.stock) }; d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); StkQ.set(p, v); try { StkLog.add(p, before, v, 'count', v); } catch (e) { } };
   const touch = p => { if (d.scope.type === 'selected' && !d.scope.skus.includes(p.sku)) d.scope.skus.push(p.sku); d.recent = [p.sku].concat(d.recent.filter(x => x !== p.sku)).slice(0, 200); save(); };
   // แตะตัวเลข = แป้นตัวเลขใหญ่มีเสียง · หัวแป้นแสดงชื่อสินค้า ในระบบ และนับแล้ว · ✔ = บันทึกทันที
   const edit = (p, btn) => {
