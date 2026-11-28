@@ -466,7 +466,7 @@ html.dark .sclr{background:#5A5D63}
    May MiniMart — แอปจัดการร้าน (ไฟล์เดียว)
    ========================================================= */
 'use strict';
-const APP_VER = '2.7.9';
+const APP_VER = '2.7.10';
 /* โลโก้ร้าน: ตั้งได้ที่ ตั้งค่า › โลโก้ร้าน (เก็บในฐานข้อมูล) · ไม่ตั้ง = ใช้ไฟล์ logo.png / logo-white.png */
 const Brand = {
   color() { return (window.S && S.settings && S.settings.brandLogo) || 'logo.png'; },      // พื้นสว่าง
@@ -1347,7 +1347,7 @@ const NB = {
     this.dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'B1' }, { namePrefix: 'B21' }, { namePrefix: 'B2' }, { namePrefix: 'B3' }, { namePrefix: 'D' }, { services: [this.SVC] }], optionalServices: [this.SVC] });
     await this.attach();
     const name = this.dev.name || ''; LS.set('nbName', name);
-    LS.set('printerModel', /^B21/i.test(name) ? 'B21' : /^B1/i.test(name) ? 'B1' : LS.get('printerModel', 'B1'));
+    if (!LS.get('printerModelSet', false)) LS.set('printerModel', 'B1');   // v2.7.10: ค่าเริ่มต้นแบบใหม่ (B21 รุ่นใหม่ใช้ชุดเดียวกับ B1) · ผู้ใช้เลือกเองแล้วไม่เปลี่ยนให้
     return name;
   },
   // v2.7.9: ต่อ GATT ซ้ำได้ 3 ครั้ง (Android มักพลาดครั้งแรก "GATT operation failed")
@@ -1398,41 +1398,42 @@ const NB = {
     return { uuid, barcode, serial, total, used, left: total - used, type };
   },
   /* rows: Array<Uint8Array> (ขาว=0 ดำ=1, bit สูงอยู่ซ้าย) */
-  async print(rows, cols, { copies = 1, density = 3, labelType = 1, model = 'B1', onProgress } = {}) {
-    const H = rows.length, hi = n => (n >> 8) & 0xff, lo = n => n & 0xff;
-    await this.send(0x21, [density]);
-    await this.send(0x23, [labelType]);
-    if (model === 'B1') {
-      await this.send(0x01, [hi(copies), lo(copies), 0, 0, 0, 0, 0]);
-      await this.send(0x03, [1]);
-      await this.send(0x13, [hi(H), lo(H), hi(cols), lo(cols), hi(copies), lo(copies)]);
-    } else {
-      await this.send(0x01, [1]);
-      await this.send(0x03, [1]);
-      await this.send(0x13, [hi(H), lo(H), hi(cols), lo(cols)]);
-      await this.send(0x15, [hi(copies), lo(copies)]);
-    }
-    const third = Math.ceil(rows[0].length / 3);
+  async sendImage(rows, onProgress, base, span) {
+    const H = rows.length, hi = n => (n >> 8) & 0xff, lo = n => n & 0xff, third = Math.ceil(rows[0].length / 3);
     for (let y = 0; y < H;) {
       const row = rows[y];
-      if (row.every(b => b === 0)) {
-        let n = 1; while (y + n < H && n < 255 && rows[y + n].every(b => b === 0)) n++;
-        await this.send(0x84, [hi(y), lo(y), n], false); y += n;
-      } else {
+      if (row.every(b => b === 0)) { let n = 1; while (y + n < H && n < 255 && rows[y + n].every(b => b === 0)) n++; await this.send(0x84, [hi(y), lo(y), n], false); y += n; }
+      else {
         let n = 1; while (y + n < H && n < 255 && rows[y + n].every((b, i) => b === row[i])) n++;
         const cnt = [0, 1, 2].map(k => { let c = 0; row.slice(k * third, (k + 1) * third).forEach(b => { for (; b; b &= b - 1) c++; }); return Math.min(255, c); });
         await this.send(0x85, [hi(y), lo(y), ...cnt, n, ...row], false); y += n;
       }
-      await sleep(6); onProgress && onProgress(y / H * .8);
+      await sleep(6); onProgress && onProgress(base + span * y / H);
     }
-    await this.send(0xE3, [1]);
+  },
+  // v2.7.10: พิมพ์ทุกฉลากใน "งานเดียว" (เริ่มงาน 1 ครั้ง → หลายหน้า → จบงาน 1 ครั้ง) · เครื่องไม่ป้อนแผ่นว่างแยกทุกรายการ
+  // model 'B1' = ชุดคำสั่งแบบใหม่ (B1 · B21 รุ่นใหม่) · 'B21' = แบบเดิม (B21 เฟิร์มแวร์เก่า)
+  async printJob(pages, { density = 3, labelType = 1, model = 'B1', onProgress } = {}) {
+    const hi = n => (n >> 8) & 0xff, lo = n => n & 0xff, total = pages.reduce((s, p) => s + (p.copies || 1), 0);
+    await this.send(0x21, [density]);
+    await this.send(0x23, [labelType]);
+    if (model === 'B1') await this.send(0x01, [hi(total), lo(total), 0, 0, 0, 0, 0]); else await this.send(0x01, [1]);
+    for (let i = 0; i < pages.length; i++) {
+      const pg = pages[i], H = pg.rows.length, cp = pg.copies || 1;
+      await this.send(0x03, [1]);
+      if (model === 'B1') await this.send(0x13, [hi(H), lo(H), hi(pg.cols), lo(pg.cols), hi(cp), lo(cp)]);
+      else { await this.send(0x13, [hi(H), lo(H), hi(pg.cols), lo(pg.cols)]); await this.send(0x15, [hi(cp), lo(cp)]); }
+      await this.sendImage(pg.rows, onProgress, i / pages.length * .8, .8 / pages.length);
+      await this.send(0xE3, [1]);
+    }
     const t0 = Date.now();
-    while (Date.now() - t0 < 25000) {
+    while (Date.now() - t0 < 20000 + total * 4000) {
       await sleep(400);
-      try { const st = await this.send(0xA3, [1], true, 1500); const page = (st.data[0] << 8) | st.data[1]; onProgress && onProgress(.8 + .2 * Math.min(1, page / copies)); if (page >= copies) break; } catch (e) { }
+      try { const st = await this.send(0xA3, [1], true, 1500); const page = (st.data[0] << 8) | st.data[1]; onProgress && onProgress(.8 + .2 * Math.min(1, page / total)); if (page >= total) break; } catch (e) { }
     }
     for (let i = 0; i < 5; i++) { try { const r = await this.send(0xF3, [1], true, 1500); if (r.data[0] === 1) break; } catch (e) { } await sleep(300); }
-  }
+  },
+  async print(rows, cols, o = {}) { return this.printJob([{ rows, cols, copies: o.copies || 1 }], o); }
 };
 /* แปลง canvas -> แถว bitmap 1-bit */
 function canvasToRows(cv, rotate) {
@@ -2368,7 +2369,8 @@ async function adjustStock(rows) {
 // v2.7.8: บันทึก/แก้ไข/ลบสินค้า = ในเครื่องทันที (ใช้ได้แม้ออฟไลน์) แล้วส่ง Google เบื้องหลัง (คิว prodQ · ส่งซ้ำได้ไม่ซ้ำซ้อน)
 async function saveProducts(rows) {
   const clean = rows.map(r => { const o = {}; Object.keys(r).forEach(k => { if (k[0] !== '_') o[k] = r[k]; }); o.updatedAt = new Date().toISOString(); return o; });
-  clean.forEach(r => { const i = S.products.findIndex(p => p.sku === r.sku); if (i >= 0) S.products[i] = { ...S.products[i], ...r }; else S.products.unshift(r); });
+  // แก้ในวัตถุเดิม (ไม่สร้างใหม่) → ทุกที่ที่ถือสินค้าตัวนี้อยู่ (คิวพิมพ์ฉลาก ตั๋วขาย ฯลฯ) เห็นราคา/ชื่อล่าสุดทันที
+  clean.forEach(r => { const i = S.products.findIndex(p => p.sku === r.sku); if (i >= 0) Object.assign(S.products[i], r); else S.products.unshift(r); });
   LS.set('products', S.products); buildIndex();
   ProdQ.add(clean.map(r => ({ k: 'u', sku: r.sku, row: r })));
 }
@@ -2560,7 +2562,8 @@ VIEWS.scan = el => {
 /* ---------- LABELS (NIIMBOT) ---------- */
 let LQ = [];
 VIEWS.labels = (el, items) => {
-  if (Array.isArray(items)) items.forEach(p => { if (!LQ.some(x => x.p.sku === p.sku)) LQ.push({ p, copies: 1 }); });
+  LQ.forEach(x => { const f = IDX.bySku[x.p.sku]; if (f) x.p = f; });   // คิวค้างจากครั้งก่อน → ใช้ชื่อ/ราคาล่าสุด
+  if (Array.isArray(items)) items.forEach(p => { const f = IDX.bySku[p.sku] || p, x = LQ.find(x => x.p.sku === p.sku); if (x) x.p = f; else LQ.push({ p: f, copies: 1 }); });
   const cfg = LS.get('labelCfg', { paper: '40x30', tpl: 'price', density: 3, labelType: 1, rotate: false, model: LS.get('printerModel', 'B1') });
   cfg.layout = lblLayout(cfg.layout); cfg.layout2 = lblLayout(cfg.layout2 || { ...cfg.layout, v: 0 }, LBL_LAYOUT_DEF2); // แยกผังของ 1 ชุด / 2 ชุด
   // v2.7.9: จำผังการจัดวาง (ตำแหน่ง/ขนาดชื่อ ราคา บาร์โค้ด · ชื่อร้าน · จำนวนบรรทัด · เลื่อนภาพ) แยกตามขนาดกระดาษ
@@ -2577,7 +2580,7 @@ VIEWS.labels = (el, items) => {
    <div class="card">
      <div class="grid2"><label class="f"><span>ขนาดกระดาษ</span><select class="in" id="paper">${PAPERS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select></label>
      <label class="f"><span>รูปแบบฉลาก</span><select class="in" id="tpl">${TEMPLATES.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</select></label></div>
-     <div class="grid3"><label class="f"><span>รุ่น</span><select class="in" id="model"><option value="B1">B1</option><option value="B21">B21</option></select></label>
+     <div class="grid3"><label class="f"><span>รุ่น</span><select class="in" id="model"><option value="B1">B1 / B21 รุ่นใหม่ (แนะนำ)</option><option value="B21">B21 รุ่นเก่า (คำสั่งแบบเดิม)</option></select></label>
      <label class="f"><span>ความเข้ม</span><select class="in" id="density">${[1, 2, 3, 4, 5].map(n => `<option>${n}</option>`).join('')}</select></label>
      <label class="f"><span>ชนิดกระดาษ</span><select class="in" id="labelType"><option value="1">มีช่องว่าง</option><option value="2">แถบดำ</option><option value="3">ต่อเนื่อง</option></select></label></div>
      <div id="cust" class="grid2" style="margin-top:6px"><label class="f"><span>กว้าง (มม.)</span><input class="in" type="number" id="cw" min="15" max="80" value="${cfg.cw || 50}"></label><label class="f"><span>สูง (มม.)</span><input class="in" type="number" id="ch" min="10" max="120" value="${cfg.ch || 50}"></label></div>
@@ -2607,6 +2610,7 @@ VIEWS.labels = (el, items) => {
          <button class="btn ghost sm" data-off="y,-0.5">▲</button><button class="btn ghost sm" data-off="y,0.5">▼</button><span class="small" style="min-width:92px">ขึ้น/ลง <b id="v_oy"></b> มม.</span></div>
        <button class="btn ghost sm" id="tst" style="margin-top:8px">พิมพ์ทดสอบตำแหน่ง 1 ดวง</button></details></div>
    <div class="row" style="gap:8px"><button class="btn ghost grow" id="png">บันทึกรูป PNG</button><button class="btn grow" id="pr" style="min-height:52px">${I(IC.print)} พิมพ์ทั้งหมด</button></div>`;
+  if (!cfg.v10) { cfg.v10 = 1; if (!LS.get('printerModelSet', false)) cfg.model = 'B1'; }
   cfg.font = cfg.font || 'Prompt'; cfg.nameW = cfg.nameW || '600'; cfg.priceW = cfg.priceW || '800'; $('#lf', el).value = cfg.font; $('#lnw', el).value = cfg.nameW; $('#lpw', el).value = cfg.priceW;
   ['paper', 'tpl', 'model', 'density', 'labelType'].forEach(k => $('#' + k, el).value = cfg[k]); $('#rotate', el).checked = !!cfg.rotate; $('#n_l', el).value = LY.name.lines;
   const save = () => {
@@ -2620,7 +2624,7 @@ VIEWS.labels = (el, items) => {
     cfg.cw = +$('#cw', el).value || 50; cfg.ch = +$('#ch', el).value || 50; LY = cfg.tpl === 'price2' ? cfg.layout2 : cfg.layout;
     BOTH().forEach(L => { L.shop = $('#lshop', el).checked; L.name.lines = +$('#n_l', el).value; L.code.txt = $('#c_t', el).checked ? 1 : 0; L.ox = LY.ox; L.oy = LY.oy; });
     $('#v_ox', el).textContent = (LY.ox > 0 ? '+' : '') + LY.ox; $('#v_oy', el).textContent = (LY.oy > 0 ? '+' : '') + LY.oy; cfg.byPaper[curKey] = { layout: cfg.layout, layout2: cfg.layout2 }; LS.set('labelCfg', cfg); LS.set('printerModel', cfg.model); };
-  const opts = it => ({ font: cfg.font, nameW: cfg.nameW, priceW: cfg.priceW, paper: cfg.paper, cw: cfg.cw, ch: cfg.ch, layout: LY, rotate: cfg.rotate, tpl: cfg.tpl, product: it.p, price: it.price, packDate: $('#packDate', el).value, shelfDays: $('#shelfDays', el).value, weight: $('#weight', el).value || it.weight, embedPrice: $('#embedPrice', el).checked });
+  const opts = it => ({ ...(it.p && it.p.sku && IDX.bySku[it.p.sku] ? (it.p = IDX.bySku[it.p.sku], {}) : {}), font: cfg.font, nameW: cfg.nameW, priceW: cfg.priceW, paper: cfg.paper, cw: cfg.cw, ch: cfg.ch, layout: LY, rotate: cfg.rotate, tpl: cfg.tpl, product: it.p, price: it.price, packDate: $('#packDate', el).value, shelfDays: $('#shelfDays', el).value, weight: $('#weight', el).value || it.weight, embedPrice: $('#embedPrice', el).checked });
   const preview = () => {
     save(); $('#freshOpt', el).style.display = cfg.tpl === 'fresh' ? '' : 'none'; $('#embedRow', el).style.display = cfg.tpl === 'fresh' || cfg.tpl === 'price' || cfg.tpl === 'price2' ? '' : 'none';
     $('#cust', el).style.display = cfg.paper === 'custom' ? '' : 'none'; const editable = cfg.tpl === 'price' || cfg.tpl === 'price2'; $('#lay', el).style.display = $('#lay2', el).style.display = editable ? '' : 'none';
@@ -2645,6 +2649,7 @@ VIEWS.labels = (el, items) => {
   // ม้วนที่อ่านชิปได้: เปลี่ยนขนาด/ชนิดกระดาษเอง = จำให้ม้วนนี้ (ครั้งหน้าเลือกถูกเอง)
   const remember = () => { if (!NB.roll) return; const P = LS.get('papers', {}); const v = { paper: $('#paper', el).value, labelType: +$('#labelType', el).value, cw: +$('#cw', el).value || 0, ch: +$('#ch', el).value || 0 }; const o2 = P[NB.roll] || {}; if (o2.paper === v.paper && o2.labelType === v.labelType && o2.cw === v.cw && o2.ch === v.ch) return; P[NB.roll] = v; LS.set('papers', P); toast(`จำขนาด ${(PAPERS.find(x => x.id === v.paper) || {}).name || v.paper} ให้ม้วน ${NB.roll} แล้ว`); paintRoll(); };
   ['#paper', '#labelType', '#cw', '#ch'].forEach(id => $(id, el).addEventListener('change', remember));
+  $('#model', el).addEventListener('change', () => LS.set('printerModelSet', true));
   const paintRoll = () => { const i = NB.rollInfo; if (!i) return; const k = (LS.get('papers', {})[i.barcode] || {}).paper || cfg.paper, nm = (PAPERS.find(x => x.id === k) || {}).name || k;
     $('#pinfo', el).innerHTML = `ม้วน ${esc(i.barcode)} · เหลือ ${i.left}/${i.total} ดวง · ใช้ขนาด <b>${esc(nm)}</b> <button class="btn ghost sm" id="chp" style="min-height:28px;padding:2px 8px">เปลี่ยน</button>`;
     $('#chp', el).onclick = () => { const sp = $('#paper', el); sp.scrollIntoView({ block: 'center', behavior: 'smooth' }); sp.focus(); toast('เลือกขนาดที่ถูกต้อง (ดูข้างม้วนกระดาษ เช่น 40×40) — ระบบจะจำให้ม้วนนี้'); }; };
@@ -2730,19 +2735,18 @@ VIEWS.labels = (el, items) => {
   $('#pr', el).onclick = async () => {
     if (!LQ.length) return toast('ยังไม่มีรายการ', 1);
     if (!NB.connected) { try { busy(1, 'กำลังเชื่อมต่อเครื่องพิมพ์...'); await NB.reconnect(); busy(0); renderPrinterBadge(); if (!NB.rollInfo) readPaper().catch(() => { }); } catch (e) { busy(0); return e.name !== 'NotFoundError' && toast(e.message, 1); } }
-    save(); const total = LQ.length;
+    save(); const total = LQ.length, nLbl = LQ.reduce((s, it) => s + (it.copies || 1), 0);
     try {
-      for (let i = 0; i < total; i++) {
-        const it = LQ[i]; const c = document.createElement('canvas'); renderLabel(c, opts(it));
-        let src = c; const maxW = 384;
-        const w = cfg.rotate ? c.height : c.width;
-        if (w > maxW) { const s = document.createElement('canvas'); const k = maxW / w; s.width = Math.floor(c.width * (cfg.rotate ? 1 : k)); s.height = Math.floor(c.height * (cfg.rotate ? k : 1)); const x = s.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, s.width, s.height); x.drawImage(c, 0, 0, s.width, s.height); src = s; }
-        const { rows, cols } = canvasToRows(src, cfg.rotate);
-        busy(1, `กำลังพิมพ์ ${i + 1}/${total}: ${it.p.name}`);
-        await NB.print(rows, cols, { copies: it.copies, density: cfg.density, labelType: cfg.labelType, model: cfg.model });
-      }
-      busy(0); toast('พิมพ์เสร็จ ' + total + ' รายการ'); LQ = []; drawQ(); preview();
-    } catch (e) { busy(0); toast('พิมพ์ไม่สำเร็จ: ' + e.message + ' — ลองสลับรุ่น B1/B21 หรือใช้ “บันทึกรูป PNG”', 1); }
+      busy(1, `กำลังเตรียม ${nLbl} ดวง...`);
+      const pages = LQ.map(it => {
+        const c = document.createElement('canvas'); renderLabel(c, opts(it));
+        let src = c; const maxW = 384, w = cfg.rotate ? c.height : c.width;
+        if (w > maxW) { const sc = document.createElement('canvas'), k = maxW / w; sc.width = Math.floor(c.width * (cfg.rotate ? 1 : k)); sc.height = Math.floor(c.height * (cfg.rotate ? k : 1)); const x = sc.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, sc.width, sc.height); x.drawImage(c, 0, 0, sc.width, sc.height); src = sc; }
+        const { rows, cols } = canvasToRows(src, cfg.rotate); return { rows, cols, copies: it.copies || 1 };
+      });
+      await NB.printJob(pages, { density: cfg.density, labelType: cfg.labelType, model: cfg.model, onProgress: f => busy(1, `กำลังพิมพ์ ${total} รายการ (${nLbl} ดวง) · ${Math.round(f * 100)}%`) });
+      busy(0); toast(`พิมพ์เสร็จ ${total} รายการ · ${nLbl} ดวง`); LQ = []; drawQ(); preview();
+    } catch (e) { busy(0); toast('พิมพ์ไม่สำเร็จ: ' + e.message + ' — ลองเปลี่ยน "รุ่น" เป็นอีกแบบ หรือใช้ “บันทึกรูป PNG”', 1); }
   };
   drawQ(); document.fonts.ready.then(preview);
   if (!S.products.length) loadProducts(true).catch(() => { });
@@ -3718,23 +3722,23 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js', 'JsBarcode').catch(() => { });
 </script>
 <!-- ไฟล์ js ใส่ ?v=เวอร์ชัน เพื่อให้เบราว์เซอร์โหลดของใหม่ทันทีที่อัปเดต (ต้องตรงกับ APP_VER) -->
-<script src="qr.js?v=2.7.9"></script>
-<script src="logic.js?v=2.7.9"></script>
-<script src="cache.js?v=2.7.9"></script>
-<script src="offline.js?v=2.7.9"></script>
-<script src="scanner.js?v=2.7.9"></script>
-<script src="printer.js?v=2.7.9"></script>
-<script src="pos.js?v=2.7.9"></script>
-<script src="idle.js?v=2.7.9"></script>
-<script src="display.js?v=2.7.9"></script>
-<script src="reports.js?v=2.7.9"></script>
-<script src="inventory.js?v=2.7.9"></script>
-<script src="people.js?v=2.7.9"></script>
-<script src="quality.js?v=2.7.9"></script>
-<script src="services.js?v=2.7.9"></script>
-<script src="owner.js?v=2.7.9"></script>
-<script src="books.js?v=2.7.9"></script>
-<script src="restock.js?v=2.7.9"></script>
+<script src="qr.js?v=2.7.10"></script>
+<script src="logic.js?v=2.7.10"></script>
+<script src="cache.js?v=2.7.10"></script>
+<script src="offline.js?v=2.7.10"></script>
+<script src="scanner.js?v=2.7.10"></script>
+<script src="printer.js?v=2.7.10"></script>
+<script src="pos.js?v=2.7.10"></script>
+<script src="idle.js?v=2.7.10"></script>
+<script src="display.js?v=2.7.10"></script>
+<script src="reports.js?v=2.7.10"></script>
+<script src="inventory.js?v=2.7.10"></script>
+<script src="people.js?v=2.7.10"></script>
+<script src="quality.js?v=2.7.10"></script>
+<script src="services.js?v=2.7.10"></script>
+<script src="owner.js?v=2.7.10"></script>
+<script src="books.js?v=2.7.10"></script>
+<script src="restock.js?v=2.7.10"></script>
 <script>
 boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

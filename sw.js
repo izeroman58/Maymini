@@ -1,5 +1,5 @@
 /* May MiniMart service worker: เปิดแอปได้แม้เน็ตหลุด (ข้อมูลยังซิงก์เมื่อกลับมาออนไลน์) */
-const V = '2.7.9', C = 'maymart-v' + V;
+const V = '2.7.10', C = 'maymart-v' + V;
 const JS = ['qr', 'logic', 'cache', 'offline', 'scanner', 'printer', 'pos', 'idle', 'display', 'reports', 'inventory', 'people', 'quality', 'services', 'owner', 'books', 'restock'].map(n => './' + n + '.js?v=' + V);
 const CORE = ['./', './index.html', './manifest.webmanifest', './display.webmanifest', './icon-192.png', './favicon.png', './logo.png', './logo-white.png'].concat(JS);
 // ติดตั้ง: โหลดของใหม่จากเซิร์ฟเวอร์จริงเสมอ (ไม่ใช้แคชของเบราว์เซอร์) กันได้ไฟล์เก่าปนไฟล์ใหม่
